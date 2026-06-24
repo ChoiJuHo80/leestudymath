@@ -7,7 +7,7 @@ const chromeProcess = spawn('C:\\Program Files\\Google\\Chrome\\Application\\chr
     '--headless',
     '--disable-gpu',
     '--remote-debugging-port=9223',
-    '--user-data-dir=C:\\Users\\Administrator\\Documents\\WORK\\chrome_profile',
+    '--user-data-dir=C:\\Users\\Administrator\\AppData\\Local\\Temp\\chrome_profile_test_gcs',
     'about:blank'
 ]);
 

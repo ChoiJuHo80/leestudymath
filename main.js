@@ -86,6 +86,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return start || end || '';
     };
 
+    // Helper to update unified login button label/state
+    const updateLoginButton = () => {
+        const btnLoginToggle = document.getElementById('btn-login-toggle');
+        if (!btnLoginToggle) return;
+
+        if (isAdmin || isStudent) {
+            btnLoginToggle.classList.add('active-admin');
+            btnLoginToggle.querySelector('span:last-child').textContent = '로그아웃';
+            const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
+            if (iconWrapper) {
+                iconWrapper.innerHTML = '<i data-lucide="log-out"></i>';
+            }
+        } else {
+            btnLoginToggle.classList.remove('active-admin');
+            btnLoginToggle.querySelector('span:last-child').textContent = '로그인';
+            const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
+            if (iconWrapper) {
+                iconWrapper.innerHTML = '<i data-lucide="log-in"></i>';
+            }
+        }
+        safeCreateIcons();
+    };
+
     // ==========================================================================
     // Mobile Navigation Drawer Toggle
     // ==========================================================================
@@ -2219,96 +2242,56 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // Admin Toggle & Authentication Actions
     // ==========================================================================
-    if (btnAdminToggle && adminAuthModal && adminPasswordInput && authErrorMsg && btnAdminWrite) {
-        btnAdminToggle.addEventListener('click', async () => {
-            if (isAdmin) {
-                // Logout
-                try {
-                    await supabase.auth.signOut();
-                } catch(e) {
-                    console.error('Signout error:', e);
+    // Admin login form submit (inside main login modal)
+    const adminLoginFormElement = document.getElementById('admin-login-form');
+    const adminLoginPassword = document.getElementById('admin-login-password');
+    const adminLoginAuthErrorMsg = document.getElementById('admin-login-auth-error-msg');
+
+    if (adminLoginFormElement && adminLoginPassword) {
+        adminLoginFormElement.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const password = adminLoginPassword.value.trim();
+
+            if (password === '9999') {
+                isAdmin = true;
+                isStudent = false;
+                loggedInStudentId = null;
+
+                if (studentLoginModal) {
+                    studentLoginModal.classList.remove('open');
                 }
-                isAdmin = false;
-                btnAdminToggle.classList.remove('active-admin');
-                btnAdminToggle.querySelector('span').textContent = '관리자 로그인';
-                const iconWrapper = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                if (iconWrapper) {
-                    iconWrapper.innerHTML = '<i data-lucide="lock"></i>';
-                }
-                btnAdminWrite.style.display = 'none';
                 
-                // Hide private student layout and links
-                if (studentSection) studentSection.style.display = 'none';
-                if (navLinkStudents) navLinkStudents.style.display = 'none';
-                if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
-                
+                updateLoginButton();
+
+                if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
+                if (studentSection) studentSection.style.display = 'block';
+                if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
+                if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+
+                if (myclassSection) myclassSection.style.display = 'none';
+                if (navLinkMyclass) navLinkMyclass.style.display = 'none';
+                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+
                 renderNotices();
-                showToast('관리자 모드가 해제되었습니다.');
+                renderStudents();
+                renderConsultList();
+                renderAdminCurriculumList();
+                showToast('관리자 모드가 성공적으로 활성화되었습니다.');
             } else {
-                // Open login modal
-                adminPasswordInput.value = '';
-                authErrorMsg.style.display = 'none';
-                adminAuthModal.classList.add('open');
-                adminPasswordInput.focus();
+                if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
+                const authBox = studentLoginModal ? studentLoginModal.querySelector('.modal-box') : null;
+                if (authBox) {
+                    authBox.classList.add('shake');
+                    adminLoginPassword.value = '';
+                    adminLoginPassword.focus();
+
+                    setTimeout(() => {
+                        authBox.classList.remove('shake');
+                    }, 400);
+                }
             }
             safeCreateIcons();
         });
-
-        if (btnAuthClose) {
-            btnAuthClose.addEventListener('click', () => {
-                adminAuthModal.classList.remove('open');
-            });
-        }
-
-        adminAuthModal.addEventListener('click', (e) => {
-            if (e.target === adminAuthModal) {
-                adminAuthModal.classList.remove('open');
-            }
-        });
-
-        // Password verification form submit
-        if (adminAuthForm) {
-            adminAuthForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const password = adminPasswordInput.value.trim();
-
-                if (password === '9999') {
-                    isAdmin = true;
-                    adminAuthModal.classList.remove('open');
-                    btnAdminToggle.classList.add('active-admin');
-                    btnAdminToggle.querySelector('span').textContent = '관리자 로그아웃';
-                    const iconWrapper = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                    if (iconWrapper) {
-                        iconWrapper.innerHTML = '<i data-lucide="unlock"></i>';
-                    }
-                    btnAdminWrite.style.display = 'inline-flex';
-                    
-                    // Show private student layout and links
-                    if (studentSection) studentSection.style.display = 'block';
-                    if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
-                    if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
-                    
-                    renderNotices();
-                    renderStudents();
-                    renderConsultList();
-                    renderAdminCurriculumList();
-                    showToast('관리자 모드가 성공적으로 활성화되었습니다.');
-                } else {
-                    authErrorMsg.style.display = 'block';
-                    const authBox = adminAuthModal.querySelector('.modal-box');
-                    if (authBox) {
-                        authBox.classList.add('shake');
-                        adminPasswordInput.value = '';
-                        adminPasswordInput.focus();
-
-                        setTimeout(() => {
-                            authBox.classList.remove('shake');
-                        }, 400);
-                    }
-                }
-                safeCreateIcons();
-            });
-        }
     }
 
     // ==========================================================================
@@ -2731,7 +2714,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggle Student/Parent Login Modal
     if (btnStudentLoginToggle && studentLoginModal && studentLoginForm && studentLoginNameInput && studentLoginPhoneInput && studentAuthErrorMsg) {
         btnStudentLoginToggle.addEventListener('click', async () => {
-            if (isStudent) {
+            if (isAdmin || isStudent) {
                 // Logout
                 try {
                     await supabase.auth.signOut();
@@ -2739,15 +2722,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('Signout error:', e);
                 }
 
+                isAdmin = false;
                 isStudent = false;
                 loggedInStudentId = null;
-                btnStudentLoginToggle.classList.remove('active-admin');
-                btnStudentLoginToggle.querySelector('span').textContent = '학생/학부모 로그인';
                 
+                updateLoginButton();
+
+                // Hide all private layouts/links
+                if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+                if (studentSection) studentSection.style.display = 'none';
+                if (navLinkStudents) navLinkStudents.style.display = 'none';
+                if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
                 if (myclassSection) myclassSection.style.display = 'none';
                 if (navLinkMyclass) navLinkMyclass.style.display = 'none';
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-                
+
+                renderNotices();
                 showToast('로그아웃 되었습니다.');
             } else {
                 // Open login modal
@@ -2762,17 +2752,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (loginPasswordInput) loginPasswordInput.value = '';
                 if (studentEmailAuthErrorMsg) studentEmailAuthErrorMsg.style.display = 'none';
 
-                // Reset tab to easy login as default
-                if (btnTabEasy && btnTabEmail && easyLoginForm && emailLoginForm) {
+                const adminLoginPassword = document.getElementById('admin-login-password');
+                const adminLoginAuthErrorMsg = document.getElementById('admin-login-auth-error-msg');
+                if (adminLoginPassword) adminLoginPassword.value = '';
+                if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'none';
+
+                // Reset tabs to easy login as default
+                if (btnTabEasy && btnTabEmail && btnTabAdmin && easyLoginForm && emailLoginForm && adminLoginForm) {
                     btnTabEasy.classList.add('active');
                     btnTabEmail.classList.remove('active');
+                    btnTabAdmin.classList.remove('active');
                     easyLoginForm.style.display = 'block';
                     emailLoginForm.style.display = 'none';
+                    adminLoginForm.style.display = 'none';
+                    if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+                    if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+                    if (signupPrompt) signupPrompt.style.display = 'block';
                 }
 
                 studentLoginModal.classList.add('open');
                 studentLoginNameInput.focus();
             }
+            safeCreateIcons();
         });
 
         if (btnStudentLoginClose) {
@@ -2861,12 +2862,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         isAdmin = true;
                         studentLoginModal.classList.remove('open');
                         
-                        if (btnAdminToggle) {
-                            btnAdminToggle.classList.add('active-admin');
-                            btnAdminToggle.querySelector('span').textContent = '관리자 로그아웃';
-                            const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                            if (adminIcon) adminIcon.innerHTML = '<i data-lucide="unlock"></i>';
-                        }
+                        updateLoginButton();
                         if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
                         if (studentSection) studentSection.style.display = 'block';
                         if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
