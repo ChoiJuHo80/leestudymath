@@ -530,6 +530,34 @@ a {
     color: var(--text-secondary);
 }
 
+/* Notice Filter Styles */
+.notice-filter-tab {
+    border: none;
+    background: none;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    transition: var(--transition-smooth);
+}
+
+.notice-filter-tab.active {
+    background: #ffffff !important;
+    color: var(--primary-color) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+}
+
+.notice-filter-tab:hover:not(.active) {
+    color: var(--text-primary);
+}
+
+.notice-search-box input:focus {
+    border-color: var(--primary-hover) !important;
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+}
+
 /* Feed Section: 공지사항 */
 .notice-list {
     display: flex;
@@ -2043,6 +2071,47 @@ a {
     border-color: #fada0a;
     box-shadow: 0 2px 4px rgba(254, 229, 0, 0.3);
 }
+
+/* Header Login Relocation Styles */
+.header-right-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.header-auth-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Responsive circular icon layout for header auth buttons on mobile */
+@media (max-width: 768px) {
+    .header-right-group {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 576px) {
+    .header-auth-toolbar .btn-admin-mode span:last-child {
+        display: none; /* Hide button text */
+    }
+    .header-auth-toolbar .btn-admin-mode {
+        padding: 8px;
+        border-radius: 50%;
+        width: 34px;
+        height: 34px;
+        justify-content: center;
+    }
+    .header-auth-toolbar .btn-admin-mode .student-icon-wrapper,
+    .header-auth-toolbar .btn-admin-mode .admin-icon-wrapper {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
 
 
 

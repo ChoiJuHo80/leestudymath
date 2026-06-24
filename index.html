@@ -26,14 +26,26 @@
                     <span class="status-text">모의 모드</span>
                 </span>
             </a>
-            <nav class="blog-nav">
-                <a href="#notice" class="blog-nav-link active">공지사항</a>
-                <a href="#curriculum" class="blog-nav-link">커리큘럼 소개</a>
-                <a href="#schedule" class="blog-nav-link">스케줄</a>
-                <a href="#resources" class="blog-nav-link">자료공유</a>
-                <a href="#students" class="blog-nav-link admin-nav-link" id="nav-link-students" style="display: none;">학생 관리</a>
-                <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
-            </nav>
+            <div class="header-right-group" style="display: flex; align-items: center; gap: 20px;">
+                <nav class="blog-nav">
+                    <a href="#notice" class="blog-nav-link active">공지사항</a>
+                    <a href="#curriculum" class="blog-nav-link">커리큘럼 소개</a>
+                    <a href="#schedule" class="blog-nav-link">스케줄</a>
+                    <a href="#resources" class="blog-nav-link">자료공유</a>
+                    <a href="#students" class="blog-nav-link admin-nav-link" id="nav-link-students" style="display: none;">학생 관리</a>
+                    <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
+                </nav>
+                <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-admin-mode" id="btn-student-login-toggle">
+                        <span class="student-icon-wrapper"><i data-lucide="user"></i></span>
+                        <span>학생/학부모 로그인</span>
+                    </button>
+                    <button class="btn-admin-mode" id="btn-admin-toggle">
+                        <span class="admin-icon-wrapper"><i data-lucide="lock"></i></span>
+                        <span>관리자 로그인</span>
+                    </button>
+                </div>
+            </div>
             <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="메뉴 열기">
                 <span class="menu-icon-wrapper"><i data-lucide="menu"></i></span>
             </button>
@@ -157,20 +169,27 @@
                             <span class="section-subtext">공부방의 최신 뉴스 및 모집 안내입니다.</span>
                         </div>
                         <div class="admin-toolbar" id="admin-toolbar">
-                            <button class="btn-admin-mode" id="btn-student-login-toggle" style="margin-right: 8px;">
-                                <span class="student-icon-wrapper"><i data-lucide="user"></i></span>
-                                <span>학생/학부모 로그인</span>
-                            </button>
-                            <button class="btn-admin-mode" id="btn-admin-toggle">
-                                <span class="admin-icon-wrapper"><i data-lucide="lock"></i></span>
-                                <span>관리자 로그인</span>
-                            </button>
                             <button class="btn-admin-write" id="btn-admin-write" style="display: none;">
                                 <i data-lucide="plus"></i>
                                 <span>새 공지 등록</span>
                             </button>
                         </div>
                     </div>
+                    
+                    <!-- Notice Filter Bar -->
+                    <div class="notice-filter-bar" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                        <div class="notice-tags-filter" style="display: flex; gap: 4px; background: #f4f4f5; padding: 4px; border-radius: 8px;">
+                            <button type="button" class="notice-filter-tab active" data-tag="all">전체</button>
+                            <button type="button" class="notice-filter-tab" data-tag="공지">공지</button>
+                            <button type="button" class="notice-filter-tab" data-tag="이벤트">이벤트</button>
+                            <button type="button" class="notice-filter-tab" data-tag="안내">안내</button>
+                        </div>
+                        <div class="notice-search-box" style="position: relative; width: 220px;">
+                            <input type="text" id="notice-search-input" placeholder="공지 제목/내용 검색..." style="width: 100%; padding: 8px 12px 8px 32px; border-radius: var(--border-radius-base); border: 1px solid var(--border-color); outline: none; font-size: 0.85rem; background: #ffffff;">
+                            <i data-lucide="search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted);"></i>
+                        </div>
+                    </div>
+
                     <div class="notice-list" id="notice-list-container">
                         <!-- Notice items will be dynamically generated by main.js -->
                     </div>

@@ -633,6 +633,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAdmin = false;
     let isStudent = false;
     let loggedInStudentId = null;
+    let currentNoticeTag = 'all';
+    let currentNoticeQuery = '';
 
     // Default homework dummy data
     const defaultHomework = [
@@ -933,8 +935,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderNotices = () => {
         if (!noticeListContainer) return;
 
+        // Apply filters
+        const query = (currentNoticeQuery || '').trim().toLowerCase();
+        const filteredNotices = notices.filter(notice => {
+            const matchesTag = currentNoticeTag === 'all' || notice.tag === currentNoticeTag;
+            const matchesQuery = !query || 
+                                 notice.title.toLowerCase().includes(query) || 
+                                 notice.content.toLowerCase().includes(query);
+            return matchesTag && matchesQuery;
+        });
+
         // Dynamic sorting: Pinned notices go first, then sorted by ID descending
-        notices.sort((a, b) => {
+        filteredNotices.sort((a, b) => {
             const aPinned = a.pinned ? 1 : 0;
             const bPinned = b.pinned ? 1 : 0;
             if (aPinned !== bPinned) {
@@ -945,16 +957,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         noticeListContainer.innerHTML = '';
         
-        if (notices.length === 0) {
+        if (filteredNotices.length === 0) {
             noticeListContainer.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                    등록된 공지사항이 없습니다.
+                    검색 결과에 맞는 공지사항이 없습니다.
                 </div>
             `;
             return;
         }
 
-        notices.forEach(notice => {
+        filteredNotices.forEach(notice => {
             const article = document.createElement('article');
             article.className = `notice-card ${notice.pinned ? 'highlight' : ''}`;
             
@@ -1386,7 +1398,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="student-remarks-box">
-                    <h4><i data-lucide="file-edit" style="width: 14px; height: 14px; color: var(--text-secondary);"></i>특이사항 및 피드백</h4>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; flex-wrap: wrap;">
+                        <h4 style="margin: 0; display: flex; align-items: center; gap: 4px;"><i data-lucide="file-edit" style="width: 14px; height: 14px; color: var(--text-secondary);"></i>특이사항 및 피드백</h4>
+                        <div style="position: relative; width: 120px;">
+                            <input type="text" class="student-feedback-search" data-student-id="${student.id}" placeholder="피드백 검색..." style="width: 100%; padding: 4px 8px 4px 22px; border-radius: 4px; border: 1px solid var(--border-color); outline: none; font-size: 0.72rem; background: #ffffff;">
+                            <i data-lucide="search" style="position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; color: var(--text-muted);"></i>
+                        </div>
+                    </div>
                     <div class="student-remarks-list" style="max-height: 150px; overflow-y: auto; padding-right: 4px;">
                         ${feedbacksHtml}
                     </div>
@@ -2104,6 +2122,72 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Notice Realtime search & category tag filter
+    const noticeSearchInput = document.getElementById('notice-search-input');
+    const noticeFilterTabs = document.querySelectorAll('.notice-filter-tab');
+
+    if (noticeSearchInput) {
+        noticeSearchInput.addEventListener('input', () => {
+            currentNoticeQuery = noticeSearchInput.value;
+            renderNotices();
+        });
+    }
+
+    noticeFilterTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            noticeFilterTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentNoticeTag = tab.getAttribute('data-tag');
+            renderNotices();
+        });
+    });
+
+    // Realtime feedback filter for Admin Student Cards
+    if (studentGridContainer) {
+        studentGridContainer.addEventListener('input', (e) => {
+            if (e.target && e.target.classList.contains('student-feedback-search')) {
+                const query = e.target.value.trim().toLowerCase();
+                const card = e.target.closest('.student-card');
+                if (card) {
+                    const feedbackItems = card.querySelectorAll('.feedback-item');
+                    feedbackItems.forEach(item => {
+                        const span = item.querySelector('span');
+                        const div = item.querySelector('div');
+                        const dateText = span ? span.textContent.toLowerCase() : '';
+                        const contentText = div ? div.textContent.toLowerCase() : '';
+                        if (dateText.includes(query) || contentText.includes(query)) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    // Realtime feedback filter for Student/Parent Portal Info Widget
+    const infoWidget = document.getElementById('myclass-info-widget');
+    if (infoWidget) {
+        infoWidget.addEventListener('input', (e) => {
+            if (e.target && e.target.id === 'myclass-feedback-search') {
+                const query = e.target.value.trim().toLowerCase();
+                const feedbackItems = infoWidget.querySelectorAll('.myclass-feedback-item');
+                feedbackItems.forEach(item => {
+                    const span = item.querySelector('span');
+                    const div = item.querySelector('div');
+                    const dateText = span ? span.textContent.toLowerCase() : '';
+                    const contentText = div ? div.textContent.toLowerCase() : '';
+                    if (dateText.includes(query) || contentText.includes(query)) {
+                        item.style.display = '';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+
     // ==========================================================================
     // Admin Toggle & Authentication Actions
     // ==========================================================================
@@ -2486,7 +2570,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let feedbacksHtml = '';
             studentFeedbacks.forEach(fb => {
                 feedbacksHtml += `
-                    <div style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                    <div class="myclass-feedback-item" style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
                         <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-purple-bg); background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">${fb.date}</span>
                         <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${fb.content}</div>
                     </div>
@@ -2533,8 +2617,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     
                     <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
-                        <strong style="color: var(--text-primary); display: block; margin-bottom: 6px;">선생님 지도 피드백 기록:</strong>
-                        <div style="max-height: 120px; overflow-y: auto; padding-right: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px;">
+                            <strong style="color: var(--text-primary); margin: 0;">선생님 지도 피드백 기록:</strong>
+                            <div style="position: relative; width: 120px;">
+                                <input type="text" id="myclass-feedback-search" placeholder="피드백 검색..." style="width: 100%; padding: 4px 8px 4px 22px; border-radius: 4px; border: 1px solid var(--border-color); outline: none; font-size: 0.72rem; background: #ffffff;">
+                                <i data-lucide="search" style="position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; color: var(--text-muted);"></i>
+                            </div>
+                        </div>
+                        <div class="myclass-feedback-list" style="max-height: 120px; overflow-y: auto; padding-right: 4px;">
                             ${feedbacksHtml}
                         </div>
                     </div>
