@@ -128,6 +128,27 @@ if (isMock) {
         return { error: null };
       },
 
+      signInWithOAuth: async ({ provider, options }) => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        alert(`[모의 모드] ${provider} 소셜 로그인으로 로그인을 완료합니다.`);
+        
+        const mockUser = {
+          id: 'mock-' + provider + '-user-' + Date.now(),
+          email: `${provider}-student@example.com`,
+          user_metadata: {
+            name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} 사용자`,
+            phone: '010-0000-0000',
+            role: 'student'
+          },
+          created_at: new Date().toISOString()
+        };
+
+        const newSession = { user: mockUser, access_token: `mock-${provider}-token` };
+        notifyAuthStateChange('SIGNED_IN', newSession);
+
+        return { data: { provider, url: options?.redirectTo || window.location.origin }, error: null };
+      },
+
       getSession: async () => {
         return { data: { session }, error: null };
       },

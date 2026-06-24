@@ -171,6 +171,48 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Social Login (OAuth) handlers
+    const btnGoogleLogin = document.getElementById('btn-google-login');
+    const btnGithubLogin = document.getElementById('btn-github-login');
+
+    if (btnGoogleLogin) {
+        btnGoogleLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Google login error:', error.message);
+                    alert('Google 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Google login exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnGithubLogin) {
+        btnGithubLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'github',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('GitHub login error:', error.message);
+                    alert('GitHub 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('GitHub login exceptional error:', err);
+            }
+        });
+    }
+
     // Signup Modal toggles & Dynamic Children logic
     const linkGoSignup = document.getElementById('link-go-signup');
     const studentSignupModal = document.getElementById('student-signup-modal');
