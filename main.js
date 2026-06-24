@@ -3656,14 +3656,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // ==========================================================================
         const populateClassSelect = () => {
             const select = document.getElementById('student-class-select');
-            if (!select) return;
-            select.innerHTML = '<option value="">직접 입력 (반 없음)</option>';
-            classes.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.textContent = c.name;
-                select.appendChild(opt);
-            });
+            if (select) {
+                select.innerHTML = '<option value="">직접 입력 (반 없음)</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    select.appendChild(opt);
+                });
+            }
+
+            const batchSelect = document.getElementById('batch-progress-class-select');
+            if (batchSelect) {
+                batchSelect.innerHTML = '<option value="">-- 반 선택 --</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    batchSelect.appendChild(opt);
+                });
+            }
         };
 
         const populateClassFilter = () => {
@@ -4019,6 +4031,73 @@ document.addEventListener('DOMContentLoaded', () => {
         renderClassList();
         renderMainScheduleTable();
         updateTotalStudentsCount();
+
+        // Default date for batch progress input to today
+        const batchProgDateInput = document.getElementById('batch-progress-date-input');
+        if (batchProgDateInput) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            batchProgDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Batch Progress Registration Form Submit Listener
+        const classProgressBatchForm = document.getElementById('class-progress-batch-form');
+        if (classProgressBatchForm) {
+            classProgressBatchForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('batch-progress-class-select');
+                const dateInput = document.getElementById('batch-progress-date-input');
+                const contentInput = document.getElementById('batch-progress-content-input');
+                
+                if (!classSelect || !dateInput || !contentInput) return;
+
+                const classId = parseStudentId(classSelect.value);
+                const date = dateInput.value;
+                const content = contentInput.value.trim();
+
+                if (!classId) {
+                    showToast('진도를 등록할 반을 선택해 주세요.');
+                    return;
+                }
+
+                // Find all students in this class
+                const classStudents = students.filter(s => s.classId === classId);
+                if (classStudents.length === 0) {
+                    showToast('해당 반에 등록된 학생이 없습니다.');
+                    return;
+                }
+
+                // Add progress for each student
+                classStudents.forEach((student, index) => {
+                    const newProg = {
+                        id: Date.now() + Math.floor(Math.random() * 1000) + index,
+                        studentId: student.id,
+                        date: date,
+                        content: content
+                    };
+                    progressList.unshift(newProg);
+                });
+
+                saveProgressList();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+
+                // Re-render myclass if student portal is open
+                if (isStudent && loggedInStudentId) {
+                    const currentStudent = students.find(s => s.id === loggedInStudentId);
+                    if (currentStudent && currentStudent.classId === classId) {
+                        renderMyClass();
+                    }
+                }
+
+                // Reset content input but keep class and date selections for convenience
+                contentInput.value = '';
+                
+                const selectedClass = classes.find(c => c.id === classId);
+                showToast(`[진도 일괄 등록 완료] ${selectedClass ? selectedClass.name : '해당 반'} 원생 ${classStudents.length}명의 진도가 일괄 등록되었습니다.`);
+            });
+        }
 
         // ==========================================================================
         // 📞 상담 예약 문의 (Visitor Modal & Admin Management)

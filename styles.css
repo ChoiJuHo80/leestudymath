@@ -1943,6 +1943,11 @@ a {
         grid-template-columns: 1.1fr 0.9fr;
     }
 }
+@media (min-width: 1024px) {
+    .class-management-grid {
+        grid-template-columns: 1.1fr 0.8fr 1.1fr;
+    }
+}
 .class-form-container {
     border: 1px solid var(--border-color-split);
     border-radius: var(--border-radius-base);
