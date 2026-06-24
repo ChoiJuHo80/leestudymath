@@ -37,10 +37,10 @@ jobs:
     - name: Deploy files to GCS Bucket
       run: |
         # Sync build output (dist/) with the GCS bucket recursively, deleting deleted files from the bucket
-        gcloud storage rsync dist gs://leestudymath --recursive --delete-unmatched-destination-objects
+        gcloud storage rsync dist gs://www.leestudymath.co.kr --recursive --delete-unmatched-destination-objects
         
         # Set cache-control on index.html so browser/CDN never caches it (guarantees instant updates)
-        gcloud storage objects update gs://leestudymath/index.html --cache-control="no-cache, no-store, must-revalidate"
+        gcloud storage objects update gs://www.leestudymath.co.kr/index.html --cache-control="no-cache, no-store, must-revalidate"
         
         # Set long-term cache-control on assets (Vite assigns unique hash names, so they can be cached forever safely)
-        gcloud storage objects update gs://leestudymath/assets/** --recursive --cache-control="public, max-age=31536000, immutable"
+        gcloud storage objects update gs://www.leestudymath.co.kr/assets/** --recursive --cache-control="public, max-age=31536000, immutable"
