@@ -121,6 +121,8 @@ a {
     font-family: var(--ff-logo);
     font-size: 1.5rem;
     color: var(--primary-color);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .logo-icon {
@@ -1630,6 +1632,8 @@ a {
     background: rgba(0, 0, 0, 0.05);
     border: 1px solid var(--border-color);
     vertical-align: middle;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .supabase-status-badge.connected {
     background: rgba(16, 185, 129, 0.1);
@@ -2092,7 +2096,7 @@ a {
     }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 768px) {
     .header-auth-toolbar .btn-admin-mode span:last-child {
         display: none; /* Hide button text */
     }
