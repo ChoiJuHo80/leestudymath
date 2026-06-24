@@ -152,22 +152,49 @@ document.addEventListener('DOMContentLoaded', () => {
     // Login Type Tabs toggles
     const btnTabEasy = document.getElementById('btn-tab-easy');
     const btnTabEmail = document.getElementById('btn-tab-email');
+    const btnTabAdmin = document.getElementById('btn-tab-admin');
     const easyLoginForm = document.getElementById('student-login-form');
     const emailLoginForm = document.getElementById('student-email-login-form');
+    const adminLoginForm = document.getElementById('admin-login-form');
+    const socialLoginDivider = document.querySelector('.social-login-divider');
+    const socialLoginButtons = document.querySelector('.social-login-buttons');
+    const signupPrompt = document.querySelector('.signup-prompt');
 
-    if (btnTabEasy && btnTabEmail && easyLoginForm && emailLoginForm) {
+    if (btnTabEasy && btnTabEmail && btnTabAdmin && easyLoginForm && emailLoginForm && adminLoginForm) {
         btnTabEasy.addEventListener('click', () => {
             btnTabEasy.classList.add('active');
             btnTabEmail.classList.remove('active');
+            btnTabAdmin.classList.remove('active');
             easyLoginForm.style.display = 'block';
             emailLoginForm.style.display = 'none';
+            adminLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+            if (signupPrompt) signupPrompt.style.display = 'block';
         });
 
         btnTabEmail.addEventListener('click', () => {
             btnTabEmail.classList.add('active');
             btnTabEasy.classList.remove('active');
+            btnTabAdmin.classList.remove('active');
             emailLoginForm.style.display = 'block';
             easyLoginForm.style.display = 'none';
+            adminLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+            if (signupPrompt) signupPrompt.style.display = 'block';
+        });
+
+        btnTabAdmin.addEventListener('click', () => {
+            btnTabAdmin.classList.add('active');
+            btnTabEasy.classList.remove('active');
+            btnTabEmail.classList.remove('active');
+            adminLoginForm.style.display = 'block';
+            easyLoginForm.style.display = 'none';
+            emailLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'none';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'none';
+            if (signupPrompt) signupPrompt.style.display = 'none';
         });
     }
 
@@ -890,7 +917,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Elements
     const noticeListContainer = document.getElementById('notice-list-container');
-    const btnAdminToggle = document.getElementById('btn-admin-toggle');
+    const btnLoginToggle = document.getElementById('btn-login-toggle');
+    const btnAdminToggle = btnLoginToggle;
     const btnAdminWrite = document.getElementById('btn-admin-write');
     
     // Auth Modal Elements
@@ -2368,7 +2396,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     
     // DOM Elements for Student Portal
-    const btnStudentLoginToggle = document.getElementById('btn-student-login-toggle');
+    const btnStudentLoginToggle = btnLoginToggle;
     // studentLoginModal is already declared above
     const btnStudentLoginClose = document.getElementById('btn-student-login-close');
     const studentLoginForm = document.getElementById('student-login-form');
@@ -2777,14 +2805,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 loggedInStudentId = foundStudent.id;
                 
                 // Hide admin/teacher panels to avoid clash
+                // Hide admin/teacher panels to avoid clash
                 if (isAdmin) {
                     isAdmin = false;
-                    if (btnAdminToggle) {
-                        btnAdminToggle.classList.remove('active-admin');
-                        btnAdminToggle.querySelector('span').textContent = '관리자 로그인';
-                        const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                        if (adminIcon) adminIcon.innerHTML = '<i data-lucide="lock"></i>';
-                    }
                     if (btnAdminWrite) btnAdminWrite.style.display = 'none';
                     if (studentSection) studentSection.style.display = 'none';
                     if (navLinkStudents) navLinkStudents.style.display = 'none';
@@ -2792,8 +2815,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 studentLoginModal.classList.remove('open');
-                btnStudentLoginToggle.classList.add('active-admin');
-                btnStudentLoginToggle.querySelector('span').textContent = '마이클래스 로그아웃';
+                updateLoginButton();
 
                 if (myclassSection) myclassSection.style.display = 'block';
                 if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
@@ -2900,12 +2922,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Hide admin/teacher panels to avoid clash
                         if (isAdmin) {
                             isAdmin = false;
-                            if (btnAdminToggle) {
-                                btnAdminToggle.classList.remove('active-admin');
-                                btnAdminToggle.querySelector('span').textContent = '관리자 로그인';
-                                const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                                if (adminIcon) adminIcon.innerHTML = '<i data-lucide="lock"></i>';
-                            }
                             if (btnAdminWrite) btnAdminWrite.style.display = 'none';
                             if (studentSection) studentSection.style.display = 'none';
                             if (navLinkStudents) navLinkStudents.style.display = 'none';
@@ -2913,8 +2929,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         studentLoginModal.classList.remove('open');
-                        btnStudentLoginToggle.classList.add('active-admin');
-                        btnStudentLoginToggle.querySelector('span').textContent = '마이클래스 로그아웃';
+                        updateLoginButton();
 
                         if (myclassSection) myclassSection.style.display = 'block';
                         if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
@@ -3042,20 +3057,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Hide admin/teacher panels to avoid clash
                         if (isAdmin) {
                             isAdmin = false;
-                            if (btnAdminToggle) {
-                                btnAdminToggle.classList.remove('active-admin');
-                                btnAdminToggle.querySelector('span').textContent = '관리자 로그인';
-                                const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                                if (adminIcon) adminIcon.innerHTML = '<i data-lucide="lock"></i>';
-                            }
                             if (btnAdminWrite) btnAdminWrite.style.display = 'none';
                             if (studentSection) studentSection.style.display = 'none';
                             if (navLinkStudents) navLinkStudents.style.display = 'none';
                             if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
                         }
 
-                        btnStudentLoginToggle.classList.add('active-admin');
-                        btnStudentLoginToggle.querySelector('span').textContent = '마이클래스 로그아웃';
+                        updateLoginButton();
 
                         if (myclassSection) myclassSection.style.display = 'block';
                         if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
@@ -3476,12 +3484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isStudent = false;
                 loggedInStudentId = null;
                 
-                if (btnAdminToggle) {
-                    btnAdminToggle.classList.add('active-admin');
-                    btnAdminToggle.querySelector('span').textContent = '관리자 로그아웃';
-                    const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                    if (adminIcon) adminIcon.innerHTML = '<i data-lucide="unlock"></i>';
-                }
+                updateLoginButton();
                 if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
                 if (studentSection) studentSection.style.display = 'block';
                 if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
@@ -3490,10 +3493,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (myclassSection) myclassSection.style.display = 'none';
                 if (navLinkMyclass) navLinkMyclass.style.display = 'none';
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-                if (btnStudentLoginToggle) {
-                    btnStudentLoginToggle.classList.remove('active-admin');
-                    btnStudentLoginToggle.querySelector('span').textContent = '학생/학부모 로그인';
-                }
 
                 renderNotices();
                 renderStudents();
@@ -3587,20 +3586,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (childSelectContainer) childSelectContainer.style.display = 'none';
                 }
 
-                if (btnStudentLoginToggle) {
-                    btnStudentLoginToggle.classList.add('active-admin');
-                    btnStudentLoginToggle.querySelector('span').textContent = '마이클래스 로그아웃';
-                }
+                updateLoginButton();
                 if (myclassSection) myclassSection.style.display = 'block';
                 if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
 
-                if (btnAdminToggle) {
-                    btnAdminToggle.classList.remove('active-admin');
-                    btnAdminToggle.querySelector('span').textContent = '관리자 로그인';
-                    const adminIcon = btnAdminToggle.querySelector('.admin-icon-wrapper');
-                    if (adminIcon) adminIcon.innerHTML = '<i data-lucide="lock"></i>';
-                }
                 if (btnAdminWrite) btnAdminWrite.style.display = 'none';
                 if (studentSection) studentSection.style.display = 'none';
                 if (navLinkStudents) navLinkStudents.style.display = 'none';
@@ -3615,10 +3605,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isStudent = false;
                 loggedInStudentId = null;
                 
-                if (btnStudentLoginToggle) {
-                    btnStudentLoginToggle.classList.remove('active-admin');
-                    btnStudentLoginToggle.querySelector('span').textContent = '학생/학부모 로그인';
-                }
+                updateLoginButton();
                 if (myclassSection) myclassSection.style.display = 'none';
                 if (navLinkMyclass) navLinkMyclass.style.display = 'none';
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';

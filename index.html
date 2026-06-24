@@ -21,7 +21,7 @@
             <a href="#" class="blog-logo">
                 <i data-lucide="calculator" class="logo-icon"></i>
                 <span>이공 수학 공부방</span>
-                <span class="supabase-status-badge mock" id="supabase-status-badge">
+                <span class="supabase-status-badge mock" id="supabase-status-badge" style="display: none;">
                     <span class="status-dot"></span>
                     <span class="status-text">모의 모드</span>
                 </span>
@@ -36,13 +36,9 @@
                     <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
                 </nav>
                 <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
-                    <button class="btn-admin-mode" id="btn-student-login-toggle">
-                        <span class="student-icon-wrapper"><i data-lucide="user"></i></span>
-                        <span>학생/학부모 로그인</span>
-                    </button>
-                    <button class="btn-admin-mode" id="btn-admin-toggle">
-                        <span class="admin-icon-wrapper"><i data-lucide="lock"></i></span>
-                        <span>관리자 로그인</span>
+                    <button class="btn-admin-mode" id="btn-login-toggle">
+                        <span class="student-icon-wrapper"><i data-lucide="log-in"></i></span>
+                        <span>로그인</span>
                     </button>
                 </div>
             </div>
@@ -600,21 +596,7 @@
     <!-- Interactive Simulation Elements -->
     <div id="toast-container" class="toast-container"></div>
 
-    <!-- Admin Authentication Modal -->
-    <div class="modal-overlay" id="admin-auth-modal">
-        <div class="modal-box auth-box">
-            <button class="modal-close-btn" id="btn-auth-close"><i data-lucide="x"></i></button>
-            <h3 class="modal-title">관리자 모드 로그인</h3>
-            <p class="modal-desc">관리자 비밀번호를 입력해주세요.</p>
-            <form id="admin-auth-form" class="modal-form">
-                <div class="form-group-modal">
-                    <input type="password" id="admin-password-input" required placeholder="비밀번호 입력" autocomplete="off">
-                    <span class="auth-error-msg" id="auth-error-msg">비밀번호가 올바르지 않습니다.</span>
-                </div>
-                <button type="submit" class="btn-modal-submit">인증하기</button>
-            </form>
-        </div>
-    </div>
+    <!-- Admin Authentication Modal (Deprecated, unified into main login modal) -->
 
     <!-- Notice Form Modal (Add / Edit) -->
     <div class="modal-overlay" id="notice-form-modal">
@@ -785,12 +767,13 @@
     <div class="modal-overlay" id="student-login-modal">
         <div class="modal-box auth-box">
             <button class="modal-close-btn" id="btn-student-login-close"><i data-lucide="x"></i></button>
-            <h3 class="modal-title">학생/학부모 로그인</h3>
+            <h3 class="modal-title">로그인</h3>
             
             <!-- Login Type Tabs -->
             <div class="login-tabs">
                 <button type="button" class="login-tab-btn active" id="btn-tab-easy">간편 로그인</button>
                 <button type="button" class="login-tab-btn" id="btn-tab-email">이메일 로그인</button>
+                <button type="button" class="login-tab-btn" id="btn-tab-admin">관리자 로그인</button>
             </div>
 
             <!-- Tab 1: Easy Login (Name & Phone) -->
@@ -821,6 +804,17 @@
                     <span class="auth-error-msg" id="student-email-auth-error-msg">이메일 또는 비밀번호가 올바르지 않습니다.</span>
                 </div>
                 <button type="submit" class="btn-modal-submit">로그인</button>
+            </form>
+
+            <!-- Tab 3: Admin Login -->
+            <form id="admin-login-form" class="modal-form" style="display: none;">
+                <p class="modal-desc">관리자 비밀번호를 입력해주세요.</p>
+                <div class="form-group-modal">
+                    <label for="admin-login-password">비밀번호</label>
+                    <input type="password" id="admin-login-password" required placeholder="비밀번호 입력" autocomplete="off">
+                    <span class="auth-error-msg" id="admin-login-auth-error-msg">비밀번호가 올바르지 않습니다. (테스트용: 9999)</span>
+                </div>
+                <button type="submit" class="btn-modal-submit">인증하기</button>
             </form>
 
             <!-- Social Login Divider & Buttons -->
