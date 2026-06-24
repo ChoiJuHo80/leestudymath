@@ -213,6 +213,47 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnNaverLogin = document.getElementById('btn-naver-login');
+    const btnKakaoLogin = document.getElementById('btn-kakao-login');
+
+    if (btnNaverLogin) {
+        btnNaverLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'naver',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Naver login error:', error.message);
+                    alert('Naver 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Naver login exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnKakaoLogin) {
+        btnKakaoLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'kakao',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Kakao login error:', error.message);
+                    alert('Kakao 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Kakao login exceptional error:', err);
+            }
+        });
+    }
+
     // Signup Modal toggles & Dynamic Children logic
     const linkGoSignup = document.getElementById('link-go-signup');
     const studentSignupModal = document.getElementById('student-signup-modal');

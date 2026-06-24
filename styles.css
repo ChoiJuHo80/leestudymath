@@ -1969,13 +1969,13 @@ a {
 }
 
 .social-login-buttons {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
     margin-bottom: 20px;
 }
 
 .btn-social {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2018,6 +2018,30 @@ a {
     background-color: #1b1f23;
     border-color: #1b1f23;
     box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.btn-naver {
+    background-color: #03c75a;
+    border-color: #03c75a;
+    color: #ffffff;
+}
+
+.btn-naver:hover {
+    background-color: #02b14f;
+    border-color: #02b14f;
+    box-shadow: 0 2px 4px rgba(3, 199, 90, 0.2);
+}
+
+.btn-kakao {
+    background-color: #fee500;
+    border-color: #fee500;
+    color: #191919;
+}
+
+.btn-kakao:hover {
+    background-color: #fada0a;
+    border-color: #fada0a;
+    box-shadow: 0 2px 4px rgba(254, 229, 0, 0.3);
 }
 
 
