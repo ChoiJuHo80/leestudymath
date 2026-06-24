@@ -37,7 +37,7 @@ jobs:
     - name: Deploy files to GCS Bucket
       run: |
         # Sync build output (dist/) with the GCS bucket, deleting deleted files from the bucket
-        gcloud storage rsync dist gs://leestudymath --delete-unmatched
+        gcloud storage rsync dist gs://leestudymath --delete-unmatched-destination-objects
         
         # Set cache-control on index.html so browser/CDN never caches it (guarantees instant updates)
         gcloud storage objects update gs://leestudymath/index.html --cache-control="no-cache, no-store, must-revalidate"
