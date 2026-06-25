@@ -12,6 +12,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- KaTeX for rendering mathematical LaTeX expressions -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -475,6 +479,41 @@
                         </div>
                     </div>
 
+                    <!-- AI Query History Section (Admin Only) -->
+                    <div class="class-management-card" id="ai-query-management-card" style="margin-top: 30px;">
+                        <div class="class-management-header">
+                            <div>
+                                <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="sparkles" style="color: var(--primary-color); width: 22px; height: 22px;"></i> AI 질의 내역 관리
+                                </h3>
+                                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">원생들이 AI에게 물어본 풀이과정 질문 내역을 일자별/학생별로 확인합니다.</p>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 320px 1fr; gap: 24px; margin-top: 20px; min-height: 350px;">
+                            <!-- Left: Date & Student Names List -->
+                            <div style="border: 1px solid var(--border-color); border-radius: 12px; background: #fafafa; padding: 16px; overflow-y: auto; max-height: 450px;">
+                                <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="calendar" style="width: 16px; height: 16px; color: var(--text-secondary);"></i> 일자별 질의 목록
+                                </h4>
+                                <div id="ai-query-date-list" style="display: flex; flex-direction: column; gap: 14px;">
+                                    <!-- Populated dynamically with dates and student badges -->
+                                </div>
+                            </div>
+
+                            <!-- Right: Detailed Query Log -->
+                            <div style="border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; background: #ffffff;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); padding-bottom: 10px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="search" style="width: 18px; height: 18px; color: var(--text-secondary);"></i> 상세 질의 내역
+                                </h4>
+                                <div id="ai-query-detail-content" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--text-muted); font-size: 0.88rem; text-align: center; min-height: 250px;">
+                                    <i data-lucide="info" style="width: 32px; height: 32px; margin-bottom: 10px; color: #d9d9d9;"></i>
+                                    왼쪽 목록에서 일자별 학생의 이름을 클릭하면 해당 원생이 AI에게 물어본 질문과 풀이 상세 내역을 확인할 수 있습니다.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Curriculum Management Section (Admin Only) -->
                     <div class="class-management-card" id="curriculum-management-card" style="margin-top: 30px;">
                         <div class="class-management-header">
@@ -619,6 +658,39 @@
                                     <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
                                     <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
                                 </form>
+                            </div>
+
+                            <!-- AI Solver Widget -->
+                            <div class="widget ai-solver-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; margin-top: 24px; display: flex; flex-direction: column; gap: 16px; background-color: #fcfcfd;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--primary-color);">
+                                    <i data-lucide="sparkles" style="color: var(--primary-color); width: 20px; height: 20px;"></i> AI에게 풀이과정 물어보기
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">수학 문제의 풀이과정이 막힐 때 물어보세요. AI 선생님이 단계별로 친절하게 설명해 드립니다. (LaTeX 수식 지원)</p>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <textarea id="ai-query-input" placeholder="예: x^2 - 5x + 6 = 0의 풀이과정을 알려줘&#10;또는&#10;피타고라스 정리 공식이 뭐야?" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; height: 90px; resize: none; font-family: var(--ff-primary); font-size: 0.88rem; transition: var(--transition-smooth);"></textarea>
+                                    <button type="button" id="btn-ask-ai" class="btn-modal-submit" style="margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border-radius: 8px;">
+                                        <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기
+                                    </button>
+                                </div>
+                                
+                                <div id="ai-response-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; flex-direction: column; gap: 8px;">
+                                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="bot" style="color: var(--primary-color); width: 18px; height: 18px;"></i> AI 답변 결과:
+                                    </h4>
+                                    <div id="ai-response-content" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; font-size: 0.88rem; line-height: 1.6; color: var(--text-primary); overflow-x: auto; white-space: pre-wrap; font-family: var(--ff-primary);">
+                                        <!-- AI output goes here -->
+                                    </div>
+                                </div>
+
+                                <div id="myclass-ai-history-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 14px; flex-direction: column; gap: 8px;">
+                                    <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="history" style="width: 14px; height: 14px;"></i> 나의 최근 AI 질문 기록
+                                    </h4>
+                                    <div id="myclass-ai-history-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

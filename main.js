@@ -729,6 +729,37 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 902, name: '이순신 학부모', phone: '010-9876-5432', school: '이공중학교', grade: '중등 2학년', memo: '중등 서술형 문제 대비와 심화 서술 풀이 요령을 배우기 위해 수강 문의 드립니다.', date: '2026-06-23', status: 'completed' }
     ];
 
+    // Default AI Queries dummy data
+    const defaultAiQueries = [
+        {
+            id: 1719273600000,
+            studentId: 1,
+            studentName: '김민준',
+            question: 'x^2 - 5x + 6 = 0의 풀이과정을 알려줘',
+            answer: '이차방정식 \\(x^2 - 5x + 6 = 0\\)의 풀이과정입니다.\n\n**1. 인수분해를 이용한 풀이:**\n방정식을 인수분해하기 위해 곱해서 \\(+6\\), 더해서 \\(-5\\)가 되는 두 정수를 찾습니다. 두 수는 \\(-2\\)와 \\(-3\\)입니다.\n\\[(x - 2)(x - 3) = 0\\]\n따라서 해는 다음과 같습니다.\n\\[x = 2 \\quad \\text{또는} \\quad x = 3\\]\n\n**2. 근의 공식을 이용한 풀이:**\n이차방정식 근의 공식은 다음과 같습니다.\n\\[x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\\]\n여기서 \\(a = 1, b = -5, c = 6\\)을 대입합니다.\n\\[x = \\frac{5 \\pm \\sqrt{(-5)^2 - 4 \\cdot 1 \\cdot 6}}{2 \\cdot 1}\\]\n\\[x = \\frac{5 \\pm \\sqrt{25 - 24}}{2} = \\frac{5 \\pm 1}{2}\\]\n\\[x_1 = \\frac{6}{2} = 3, \\quad x_2 = \\frac{4}{2} = 2\\]\n결과는 동일하게 \\(x = 2\\) 또는 \\(x = 3\\)입니다.',
+            date: '2026-06-25',
+            timestamp: '09:12:44'
+        },
+        {
+            id: 1719273650000,
+            studentId: 1,
+            studentName: '김민준',
+            question: '피타고라스 정리 공식이 뭐야?',
+            answer: '**피타고라스 정리(Pythagorean Theorem)**는 직각삼각형에서 세 변의 길이 사이의 관계를 나타내는 기하학의 기본 정리입니다.\n\n**공식:**\n\\[a^2 + b^2 = c^2\\]\n- \\(a\\), \\(b\\): 직각을 끼고 있는 두 변의 길이 (밑변과 높이)\n- \\(c\\): 직각삼각형의 가장 긴 변인 **빗변**의 길이\n\n**설명:**\n직각삼각형에서 빗변의 길이를 제곱한 값은 나머지 두 변의 길이를 각각 제곱하여 더한 값과 같습니다.\n예를 들어, 두 변의 길이가 각각 \\(3\\text{cm}\\), \\(4\\text{cm}\\)인 직각삼각형의 빗변 길이 \\(c\\)는 다음과 같이 구합니다.\n\\[3^2 + 4^2 = c^2\\]\n\\[9 + 16 = c^2\\]\n\\[25 = c^2 \\implies c = 5\\text{cm}\\]',
+            date: '2026-06-25',
+            timestamp: '09:15:10'
+        },
+        {
+            id: 1719187200000,
+            studentId: 2,
+            studentName: '이서윤',
+            question: '삼각함수 sin(30도)의 값은?',
+            answer: '특수각인 30도(\\(\\frac{\\pi}{6}\\) 라디안)에 대한 삼각비의 값은 다음과 같습니다.\n\n\\[\\sin(30^\\circ) = \\frac{1}{2} = 0.5\\]\n\n**설명:**\n한 각이 \\(30^\\circ\\), 다른 각이 \\(60^\\circ\\)인 직각삼각형에서 세 변의 길이 비는 다음과 같습니다.\n\\[\\text{높이} : \\text{밑변} : \\text{빗변} = 1 : \\sqrt{3} : 2\\]\n사인(\\(\\sin\\))의 정의는 **빗변 분의 높이**이므로 다음과 같이 유도됩니다.\n\\[\\sin(30^\\circ) = \\frac{\\text{높이}}{\\text{빗변}} = \\frac{1}{2}\\]',
+            date: '2026-06-24',
+            timestamp: '16:45:12'
+        }
+    ];
+
     // Default curriculums dummy data
     const defaultCurriculums = [
         {
@@ -761,6 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let attendance = defaultAttendance;
     let consultations = defaultConsultations;
     let curriculums = defaultCurriculums;
+    let aiQueries = defaultAiQueries;
 
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
@@ -790,6 +822,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedCurriculum = localStorage.getItem('gongbubang_curriculums');
         if (storedCurriculum) curriculums = JSON.parse(storedCurriculum);
         else localStorage.setItem('gongbubang_curriculums', JSON.stringify(defaultCurriculums));
+
+        const storedAiQueries = localStorage.getItem('gongbubang_ai_queries');
+        if (storedAiQueries) aiQueries = JSON.parse(storedAiQueries);
+        else localStorage.setItem('gongbubang_ai_queries', JSON.stringify(defaultAiQueries));
     } catch (e) {
         console.error('localStorage is not accessible for state tables.', e);
     }
@@ -2350,6 +2386,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderStudents();
                 renderConsultList();
                 renderAdminCurriculumList();
+                renderAiQueryManagement();
                 showToast('관리자 모드가 성공적으로 활성화되었습니다.');
             } else {
                 if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
@@ -2781,6 +2818,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        renderMyClassAiHistory();
         renderStudentChat();
         safeCreateIcons();
     };
@@ -4617,6 +4655,389 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // ==========================================================================
+        // 🤖 AI Solver (Student Query & Admin History Viewer)
+        // ==========================================================================
+
+        const getMockAiResponse = (question) => {
+            const q = question.toLowerCase();
+            if (q.includes('x^2') || q.includes('이차방정식') || q.includes('근의 공식') || q.includes('근의공식')) {
+                return `이차방정식 풀이과정입니다.
+
+**1. 인수분해를 이용한 풀이:**
+이차방정식 \\(ax^2 + bx + c = 0\\)의 일반적인 풀이를 위해 인수분해를 시도합니다. 곱해서 \\(ac\\), 더해서 \\(b\\)가 되는 두 수 \\(p, q\\)를 찾아 다음과 같이 인수분해합니다.
+\\[(x - p)(x - q) = 0 \\implies x = p \\quad \\text{또는} \\quad x = q\\]
+
+**2. 근의 공식을 이용한 풀이:**
+인수분해가 어려운 경우 이차방정식 근의 공식을 적용합니다.
+\\[x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\\]
+
+예시로 \\(x^2 - 5x + 6 = 0\\)의 경우:
+\\(a = 1, b = -5, c = 6\\)을 근의 공식에 대입하면:
+\\[x = \\frac{-(-5) \\pm \\sqrt{(-5)^2 - 4 \\cdot 1 \\cdot 6}}{2 \\cdot 1}\\]
+\\[x = \\frac{5 \\pm \\sqrt{25 - 24}}{2} = \\frac{5 \\pm 1}{2}\\]
+따라서 구하는 해는 \\(x = 3\\) 또는 \\(x = 2\\)가 됩니다.`;
+            } else if (q.includes('피타고라스') || q.includes('직각삼각형') || q.includes('빗변')) {
+                return `**피타고라스 정리(Pythagorean Theorem)** 공식과 설명입니다.
+
+**1. 기본 정의:**
+직각삼각형에서 직각을 끼고 있는 두 변의 길이를 각각 \\(a, b\\)라 하고, 가장 긴 변(빗변)의 길이를 \\(c\\)라고 할 때 다음 공식이 항상 성립합니다.
+\\[a^2 + b^2 = c^2\\]
+
+**2. 변의 길이 구하기 예시:**
+- **빗변 \\(c\\) 구하기:** 두 변의 길이가 \\(3\\)과 \\(4\\)인 직각삼각형의 빗변 길이는:
+  \\[c = \\sqrt{a^2 + b^2} = \\sqrt{3^2 + 4^2} = \\sqrt{9 + 16} = \\sqrt{25} = 5\\]
+- **다른 한 변 \\(a\\) 구하기:** 빗변이 \\(10\\)이고 한 변이 \\(8\\)일 때 다른 변의 길이는:
+  \\[a = \\sqrt{c^2 - b^2} = \\sqrt{10^2 - 8^2} = \\sqrt{100 - 64} = \\sqrt{36} = 6\\]
+
+피타고라스 정리를 활용하면 직각삼각형의 두 변의 길이를 알 때 나머지 한 변의 길이를 아주 쉽게 계산할 수 있습니다.`;
+            } else if (q.includes('sin') || q.includes('cos') || q.includes('tan') || q.includes('삼각함수') || q.includes('삼각비')) {
+                return `**삼각함수(Trigonometric Functions)** 공식과 특수각의 값입니다.
+
+**1. 삼각비의 기본 정의:**
+직각삼각형에서 한 예각을 \\(\\theta\\), 밑변을 \\(x\\), 높이를 \\(y\\), 빗변을 \\(r\\)이라 할 때:
+- **사인 (Sine):** \\(\\sin\\theta = \\frac{\\text{높이}}{\\text{빗변}} = \\frac{y}{r}\\)
+- **코사인 (Cosine):** \\(\\cos\\theta = \\frac{\\text{밑변}}{\\text{빗변}} = \\frac{x}{r}\\)
+- **탄젠트 (Tangent):** \\(\\tan\\theta = \\frac{\\text{높이}}{\\text{밑변}} = \\frac{y}{x}\\)
+
+**2. 자주 쓰는 특수각의 삼각비 표:**
+\\[
+\\begin{array}{c|c|c|c}
+\\text{각도 } (\\theta) & 30^\\circ \\left(\\frac{\\pi}{6}\\right) & 45^\\circ \\left(\\frac{\\pi}{4}\\right) & 60^\\circ \\left(\\frac{\\pi}{3}\\right) \\\\ \\hline
+\\sin\\theta & \\frac{1}{2} & \\frac{\\sqrt{2}}{2} & \\frac{\\sqrt{3}}{2} \\\\ \\hline
+\\cos\\theta & \\frac{\\sqrt{3}}{2} & \\frac{\\sqrt{2}}{2} & \\frac{1}{2} \\\\ \\hline
+\\tan\\theta & \\frac{\\sqrt{3}}{3} & 1 & \\sqrt{3}
+\\end{array}
+\\]
+
+**3. 삼각함수의 기본 공식:**
+- \\(\\sin^2\\theta + \\cos^2\\theta = 1\\)
+- \\(\\tan\\theta = \\frac{\\sin\\theta}{\\cos\\theta}\\)`;
+            } else if (q.includes('미분') || q.includes('적분') || q.includes('도함수')) {
+                return `**미분과 적분(Calculus) 기본 공식**입니다.
+
+**1. 미분 공식 (Differentiation):**
+함수 \\(f(x)\\)의 변화율을 나타내는 도함수를 구하는 공식입니다.
+- **다항함수의 미분:** \\(\\frac{d}{dx}(x^n) = n x^{n-1}\\) (단, \\(n\\)은 실수)
+- **상수함수의 미분:** \\(\\frac{d}{dx}(c) = 0\\)
+- **곱의 미분법:** \\(\\{f(x)g(x)\\}' = f'(x)g(x) + f(x)g'(x)\\)
+
+*예시:* \\(f(x) = 3x^2 + 5x - 2\\)의 미분은:
+\\[f'(x) = 6x + 5\\]
+
+**2. 부정적분 공식 (Indefinite Integration):**
+미분의 역과정으로 원래 함수를 찾는 공식입니다. (\\(C\\)는 적분상수)
+- **다항함수의 적분:** \\(\\int x^n dx = \\frac{1}{n+1} x^{n+1} + C\\) (단, \\(n \\neq -1\\))
+- **상수함수의 적분:** \\(\\int a dx = ax + C\\)
+
+*예시:* \\(\\int (6x + 5) dx\\)의 적분은:
+\\[6 \\cdot \\frac{1}{2}x^2 + 5x + C = 3x^2 + 5x + C\\]`;
+            } else if (q.includes('인수분해') || q.includes('곱셈 공식') || q.includes('곱셈공식')) {
+                return `**인수분해(Factorization) 및 곱셈 공식**의 주요 양식입니다.
+
+**1. 주요 곱셈 공식 및 인수분해 공식:**
+- **완전제곱식:**
+  \\[(a + b)^2 = a^2 + 2ab + b^2 \\iff a^2 + 2ab + b^2 = (a + b)^2\\]
+  \\[(a - b)^2 = a^2 - 2ab + b^2 \\iff a^2 - 2ab + b^2 = (a - b)^2\\]
+- **합차 공식:**
+  \\[(a + b)(a - b) = a^2 - b^2 \\iff a^2 - b^2 = (a + b)(a - b)\\]
+- **이차식의 인수분해:**
+  \\[(x + a)(x + b) = x^2 + (a+b)x + ab \\iff x^2 + (a+b)x + ab = (x + a)(x + b)\\]
+
+**2. 인수분해 대입 예시:**
+다항식 \\(x^2 - 4\\)의 인수분해는 합차 공식을 사용하여 다음과 같이 나타냅니다.
+\\[x^2 - 4 = x^2 - 2^2 = (x + 2)(x - 2)\\]
+
+인수분해는 복잡한 다항식을 일차식들의 곱으로 표현하여 방정식의 해를 찾기 쉽게 해주는 아주 유용한 수학적 기법입니다.`;
+            } else {
+                return `안녕하세요! AI 수학 선생님입니다. 
+질문하신 **"${question}"** 문제에 대한 개념 분석 및 문제 해결을 위한 단계별 접근법입니다.
+
+**1단계: 문제 상황 파악 및 정의하기**
+질문하신 개념이나 문제는 주어진 조건과 구하고자 하는 목표값을 명확히 구분하는 것부터 시작합니다.
+- 주어진 조건: 질문에 포함된 수학적 개념
+- 해결 목표: 공식 유도 또는 문제 풀이 단계 도출
+
+**2단계: 수학적 성질 및 공식 떠올리기**
+이와 같은 유형의 문제는 아래의 기본 수학 공식을 기반으로 접근할 수 있습니다.
+\\[\\text{성질 또는 공식} : A \\cdot x + B = C\\]
+- 변수가 포함된 경우, 양변의 연산을 통해 하나의 문자(예: \\(x\\))로 식을 정리합니다.
+- 성질 설명: 관련 단원의 주요 정의 및 정리들을 대입해 봅니다.
+
+**3단계: 단계별 풀이 접근 방식**
+1. 식의 단순화: 괄호를 풀고 동류항끼리 묶어 식의 복잡도를 낮춥니다.
+2. 미지수 구하기: 상수를 반대편 항으로 이항하여 미지수의 계수로 나누어 줍니다.
+3. 검산: 도출된 임계값을 최초 수식에 대입하여 등호가 성립하는지 확인합니다.
+
+더 궁금하신 구체적인 수식이나 풀이를 적어주시면 더 자세하게 안내해 드리겠습니다!`;
+            }
+        };
+
+        const btnAskAi = document.getElementById('btn-ask-ai');
+        const aiQueryInput = document.getElementById('ai-query-input');
+        const aiResponseContainer = document.getElementById('ai-response-container');
+        const aiResponseContent = document.getElementById('ai-response-content');
+
+        if (btnAskAi && aiQueryInput && aiResponseContainer && aiResponseContent) {
+            btnAskAi.addEventListener('click', () => {
+                const queryText = aiQueryInput.value.trim();
+                if (!queryText) {
+                    showToast('질문할 수학 문제나 개념을 입력해 주세요.');
+                    return;
+                }
+
+                // Show loading state
+                btnAskAi.disabled = true;
+                btnAskAi.innerHTML = `AI 선생님 문제 해결 중...`;
+                aiResponseContainer.style.display = 'none';
+
+                setTimeout(() => {
+                    // Generate AI response
+                    const responseText = getMockAiResponse(queryText);
+                    
+                    // Format response text
+                    aiResponseContent.innerHTML = responseText.replace(/\n/g, '<br>');
+                    aiResponseContainer.style.display = 'flex';
+                    
+                    // Re-render LaTeX math expressions using KaTeX
+                    if (typeof renderMathInElement === 'function') {
+                        renderMathInElement(aiResponseContent, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\(', right: '\\)', display: false},
+                                {left: '\\[', right: '\\]', display: true}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+
+                    // Reset button
+                    btnAskAi.disabled = false;
+                    btnAskAi.innerHTML = `<i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기`;
+                    safeCreateIcons();
+
+                    // Save query in our localStorage database
+                    const currentStudent = students.find(s => s.id === loggedInStudentId);
+                    const name = currentStudent ? currentStudent.name : '학부모 자녀';
+                    
+                    const newQuery = {
+                        id: Date.now(),
+                        studentId: loggedInStudentId,
+                        studentName: name,
+                        question: queryText,
+                        answer: responseText,
+                        date: getFormattedDate().replace(/\.\s/g, '-').replace(/\.$/, ''), // YYYY-MM-DD
+                        timestamp: new Date().toTimeString().split(' ')[0] // HH:MM:SS
+                    };
+
+                    aiQueries.unshift(newQuery);
+                    localStorage.setItem('gongbubang_ai_queries', JSON.stringify(aiQueries));
+                    
+                    // Clear input
+                    aiQueryInput.value = '';
+
+                    // Refresh history and admin panel
+                    renderMyClassAiHistory();
+                    if (isAdmin) renderAiQueryManagement();
+                }, 1500);
+            });
+        }
+
+        const renderMyClassAiHistory = () => {
+            const historyList = document.getElementById('myclass-ai-history-list');
+            const historyContainer = document.getElementById('myclass-ai-history-container');
+            if (!historyList || !historyContainer) return;
+
+            // Find all queries for the logged-in student
+            const myQueries = aiQueries.filter(q => q.studentId === loggedInStudentId);
+
+            if (myQueries.length === 0) {
+                historyContainer.style.display = 'none';
+                return;
+            }
+
+            historyContainer.style.display = 'flex';
+            historyList.innerHTML = myQueries.slice(0, 3).map(q => {
+                return `
+                    <button type="button" class="btn-myclass-ai-history-item" data-id="${q.id}" style="text-align: left; background: none; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 4px;">
+                        <span style="font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 80%;">${q.question}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">${q.date}</span>
+                    </button>
+                `;
+            }).join('');
+
+            // Click listener for history items to restore them
+            historyList.querySelectorAll('.btn-myclass-ai-history-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = Number(btn.getAttribute('data-id'));
+                    const query = aiQueries.find(q => q.id === id);
+                    if (query && aiResponseContainer && aiResponseContent) {
+                        aiResponseContent.innerHTML = query.answer.replace(/\n/g, '<br>');
+                        aiResponseContainer.style.display = 'flex';
+                        
+                        if (typeof renderMathInElement === 'function') {
+                            renderMathInElement(aiResponseContent, {
+                                delimiters: [
+                                    {left: '$$', right: '$$', display: true},
+                                    {left: '$', right: '$', display: false},
+                                    {left: '\\(', right: '\\)', display: false},
+                                    {left: '\\[', right: '\\]', display: true}
+                                ],
+                                throwOnError: false
+                            });
+                        }
+                    }
+                });
+            });
+
+            safeCreateIcons();
+        };
+
+        const aiQueryDateList = document.getElementById('ai-query-date-list');
+        const aiQueryDetailContent = document.getElementById('ai-query-detail-content');
+
+        const renderAiQueryManagement = () => {
+            if (!aiQueryDateList) return;
+
+            // Group queries by date
+            const groupedByDate = {};
+            aiQueries.forEach(q => {
+                if (!groupedByDate[q.date]) {
+                    groupedByDate[q.date] = [];
+                }
+                groupedByDate[q.date].push(q);
+            });
+
+            // Get dates sorted descending
+            const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
+
+            if (sortedDates.length === 0) {
+                aiQueryDateList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 20px 0;">질의 기록이 없습니다.</div>`;
+                if (aiQueryDetailContent) {
+                    aiQueryDetailContent.innerHTML = `
+                        <div style="text-align: center; color: var(--text-muted); font-size: 0.88rem; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 250px;">
+                            <i data-lucide="info" style="width: 32px; height: 32px; margin-bottom: 10px; color: #d9d9d9;"></i>
+                            질문 내역이 비어 있습니다.
+                        </div>
+                    `;
+                    safeCreateIcons();
+                }
+                return;
+            }
+
+            // Render list of dates and student names
+            aiQueryDateList.innerHTML = sortedDates.map(date => {
+                const queriesForDate = groupedByDate[date];
+                const studentQueries = {};
+                queriesForDate.forEach(q => {
+                    if (!studentQueries[q.studentName]) {
+                        studentQueries[q.studentName] = [];
+                    }
+                    studentQueries[q.studentName].push(q);
+                });
+
+                const studentNamesHtml = Object.keys(studentQueries).map(name => {
+                    return `
+                        <button type="button" class="btn-view-ai-query-detail" data-date="${date}" data-name="${name}" style="border: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px; height: 28px; line-height: 1;">
+                            <i data-lucide="user" style="width: 12px; height: 12px; color: var(--text-secondary);"></i> ${name}
+                            <span style="font-size: 0.7rem; background: #f0f0f0; color: var(--text-secondary); border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; margin-left: 2px;">${studentQueries[name].length}</span>
+                        </button>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="ai-query-date-group" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); background: #f0f0f0; padding: 4px 10px; border-radius: 6px; display: inline-block; width: fit-content;">${date}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding-left: 4px;">
+                            ${studentNamesHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Click listener for buttons in the date list
+            const detailBtns = aiQueryDateList.querySelectorAll('.btn-view-ai-query-detail');
+            detailBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    detailBtns.forEach(b => {
+                        b.style.background = '#ffffff';
+                        b.style.borderColor = 'var(--border-color)';
+                        b.style.color = 'var(--text-primary)';
+                    });
+                    btn.style.background = '#e6f4ff';
+                    btn.style.borderColor = 'var(--primary-color)';
+                    btn.style.color = 'var(--primary-color)';
+
+                    const date = btn.getAttribute('data-date');
+                    const name = btn.getAttribute('data-name');
+                    showAiQueryDetails(date, name);
+                });
+            });
+
+            safeCreateIcons();
+        };
+
+        const showAiQueryDetails = (date, name) => {
+            if (!aiQueryDetailContent) return;
+
+            // Find all queries matching this date and name
+            const matchingQueries = aiQueries.filter(q => q.date === date && q.studentName === name);
+
+            if (matchingQueries.length === 0) return;
+
+            const queriesHtml = matchingQueries.map(q => {
+                return `
+                    <div style="border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; background: #fafafa; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                            <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;"><i data-lucide="clock" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i> ${q.timestamp}</span>
+                            <span style="font-size: 0.72rem; color: var(--primary-color); background: #e6f4ff; border: 1px solid #91caee; padding: 2px 8px; border-radius: 20px; font-weight: 700;">AI 질문</span>
+                        </div>
+                        <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); word-break: break-all; white-space: pre-wrap;"><span style="color: var(--primary-color); font-weight: 800; margin-right: 4px;">Q.</span>${q.question}</div>
+                        
+                        <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="bot" style="width: 14px; height: 14px;"></i> AI 답변 풀이:
+                            </div>
+                            <div class="ai-query-solution-markdown" style="font-size: 0.85rem; line-height: 1.5; color: var(--text-primary); background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; white-space: pre-wrap; font-family: var(--ff-primary); overflow-x: auto;">${q.answer}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            aiQueryDetailContent.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 14px; height: 100%; overflow-y: auto; max-height: 420px; padding-right: 4px; text-align: left; width: 100%;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-bottom: 6px;">
+                        <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="user" style="color: var(--primary-color); width: 18px; height: 18px;"></i> ${name} 원생의 질문
+                        </h4>
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">${date}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        ${queriesHtml}
+                    </div>
+                </div>
+            `;
+
+            // Re-render LaTeX math in details panel using KaTeX
+            const solutionBlocks = aiQueryDetailContent.querySelectorAll('.ai-query-solution-markdown');
+            solutionBlocks.forEach(block => {
+                if (typeof renderMathInElement === 'function') {
+                    renderMathInElement(block, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            });
+
+            safeCreateIcons();
+        };
+
         // Initial Renders
         renderCurriculumGrid();
 
@@ -4626,5 +5047,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStudents();
             renderConsultList();
             renderAdminCurriculumList();
+            renderAiQueryManagement();
         }
 });
