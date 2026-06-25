@@ -4235,7 +4235,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const consultPhoneInput = document.getElementById('consult-phone');
         const consultListTbody = document.getElementById('consult-list-tbody');
         const consultTabBtns = document.querySelectorAll('.consult-tab-btn');
-        let currentConsultFilter = 'all'; // all, pending, completed
+        const consultYearFilter = document.getElementById('consult-year-filter');
+        const consultYearFilterContainer = document.getElementById('consult-year-filter-container');
+        let currentConsultFilter = 'pending'; // default is pending (상담 미완료)
+        let currentConsultYear = 'all';
 
         // Open/Close Visitor Modal
         if (btnOpenConsultModal && consultInquiryModal) {
@@ -4298,14 +4301,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Render Admin Consultations List Table
+        // Populate Year Options for Consultation Filter
+        const populateConsultYears = () => {
+            if (!consultYearFilter) return;
+            const prevValue = consultYearFilter.value;
+            const years = [...new Set(consultations.map(c => {
+                if (!c.date) return null;
+                const yr = new Date(c.date).getFullYear();
+                return isNaN(yr) ? null : yr;
+            }).filter(Boolean))];
+            years.sort((a, b) => b - a);
+
+            let optionsHtml = '<option value="all">전체 년도</option>';
+            years.forEach(yr => {
+                optionsHtml += `<option value="${yr}">${yr}년</option>`;
+            });
+            consultYearFilter.innerHTML = optionsHtml;
+
+            if (years.map(String).includes(prevValue) || prevValue === 'all') {
+                consultYearFilter.value = prevValue;
+            } else {
+                consultYearFilter.value = 'all';
+            }
+            currentConsultYear = consultYearFilter.value;
+        };
+
         const renderConsultList = () => {
             if (!consultListTbody) return;
+            
+            // Populate years dropdown dynamically based on latest data
+            populateConsultYears();
             
             let filtered = consultations;
             if (currentConsultFilter === 'pending') {
                 filtered = consultations.filter(c => c.status === 'pending');
             } else if (currentConsultFilter === 'completed') {
                 filtered = consultations.filter(c => c.status === 'completed');
+            } else if (currentConsultFilter === 'all') {
+                if (currentConsultYear !== 'all') {
+                    filtered = consultations.filter(c => {
+                        if (!c.date) return false;
+                        const yr = new Date(c.date).getFullYear().toString();
+                        return yr === currentConsultYear;
+                    });
+                }
             }
 
             if (filtered.length === 0) {
@@ -4346,12 +4385,30 @@ document.addEventListener('DOMContentLoaded', () => {
             safeCreateIcons();
         };
 
+        // Year selector listener
+        if (consultYearFilter) {
+            consultYearFilter.addEventListener('change', (e) => {
+                currentConsultYear = e.target.value;
+                renderConsultList();
+            });
+        }
+
         // Filter Tabs for Consultations
         consultTabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 consultTabBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentConsultFilter = btn.getAttribute('data-filter');
+                
+                // Show/hide year filter based on tab
+                if (consultYearFilterContainer) {
+                    if (currentConsultFilter === 'all') {
+                        consultYearFilterContainer.style.display = 'flex';
+                    } else {
+                        consultYearFilterContainer.style.display = 'none';
+                    }
+                }
+                
                 renderConsultList();
             });
         });

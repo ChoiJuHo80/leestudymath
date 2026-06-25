@@ -560,6 +560,11 @@ a {
     box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
 }
 
+#consult-year-filter:focus {
+    border-color: var(--primary-hover) !important;
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+}
+
 /* Feed Section: 공지사항 */
 .notice-list {
     display: flex;
