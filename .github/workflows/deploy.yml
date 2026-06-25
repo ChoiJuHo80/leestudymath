@@ -24,6 +24,9 @@ jobs:
       run: npm ci
 
     - name: Build Project
+      env:
+        VITE_SUPABASE_URL: https://xqdfyyfiroukkluygvkq.supabase.co
+        VITE_SUPABASE_ANON_KEY: sb_publishable_VzYxmxytt9IFqmFuI9FW7Q_V9mDciJK
       run: npm run build
 
     - name: Authenticate to Google Cloud
