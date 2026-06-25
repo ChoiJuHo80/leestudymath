@@ -1943,8 +1943,20 @@ a {
         grid-template-columns: 1.1fr 0.9fr;
     }
 }
+
+.class-management-grid-three {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    align-items: start;
+}
+@media (min-width: 768px) {
+    .class-management-grid-three {
+        grid-template-columns: 1.1fr 0.9fr;
+    }
+}
 @media (min-width: 1024px) {
-    .class-management-grid {
+    .class-management-grid-three {
         grid-template-columns: 1.1fr 0.8fr 1.1fr;
     }
 }
