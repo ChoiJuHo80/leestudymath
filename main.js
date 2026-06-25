@@ -4196,16 +4196,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             consultListTbody.innerHTML = filtered.map(c => {
                 const isPending = c.status === 'pending';
-                const statusTag = isPending
-                    ? `<span style="background: #fffbe6; border: 1px solid #ffe58f; color: #d46b08; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; display: inline-block;">미완료</span>`
-                    : `<span style="background: #f6ffed; border: 1px solid #b7eb8f; color: #389e0d; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; display: inline-block;">완료</span>`;
-
-                const actionBtn = isPending
-                    ? `<button type="button" class="btn-toggle-status" data-id="${c.id}" data-status="completed" style="background: var(--primary-color); color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">상담 완료 처리</button>`
-                    : `<button type="button" class="btn-toggle-status" data-id="${c.id}" data-status="pending" style="background: #f4f4f5; color: var(--text-secondary); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">미완료 처리</button>`;
+                const checkboxTooltip = isPending ? '미완료 (클릭 시 완료 처리)' : '완료 (클릭 시 미완료 처리)';
 
                 return `
                     <tr style="border-bottom: 1px solid var(--border-color-split);">
+                        <td style="padding: 12px; text-align: center;">
+                            <input type="checkbox" class="chk-toggle-status" data-id="${c.id}" ${!isPending ? 'checked' : ''} style="cursor: pointer; transform: scale(1.15); width: 16px; height: 16px;" title="${checkboxTooltip}">
+                        </td>
                         <td style="padding: 12px; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">${c.date}</td>
                         <td style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text-primary); text-align: left;">${c.name}</td>
                         <td style="padding: 12px; font-size: 0.85rem; color: var(--text-primary); text-align: left;">${c.phone}</td>
@@ -4213,10 +4210,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="font-weight: 500;">${c.school}</div>
                             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${c.grade}</div>
                         </td>
-                        <td style="padding: 12px; font-size: 0.82rem; color: var(--text-primary); text-align: left; max-width: 300px; word-break: break-all; white-space: pre-line;">${c.memo || '<span style="color: var(--text-muted); font-style: italic;">내용 없음</span>'}</td>
-                        <td style="padding: 12px; text-align: center;">${statusTag}</td>
-                        <td style="padding: 12px; text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center; min-height: 48px;">
-                            ${actionBtn}
+                        <td style="padding: 12px; font-size: 0.82rem; color: var(--text-primary); text-align: left; word-break: break-all; white-space: pre-line;">${c.memo || '<span style="color: var(--text-muted); font-style: italic;">내용 없음</span>'}</td>
+                        <td style="padding: 12px; text-align: center;">
                             <button type="button" class="btn-delete-consult" data-id="${c.id}" style="background: none; border: none; color: var(--error-color); cursor: pointer; padding: 4px;" aria-label="삭제"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
                         </td>
                     </tr>
@@ -4239,10 +4234,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Click delegation on Consultations Table Body
         if (consultListTbody) {
             consultListTbody.addEventListener('click', (e) => {
-                const btnToggle = e.target.closest('.btn-toggle-status');
-                if (btnToggle) {
-                    const id = Number(btnToggle.getAttribute('data-id'));
-                    const nextStatus = btnToggle.getAttribute('data-status');
+                const chkToggle = e.target.closest('.chk-toggle-status');
+                if (chkToggle) {
+                    const id = Number(chkToggle.getAttribute('data-id'));
+                    const isChecked = chkToggle.checked;
+                    const nextStatus = isChecked ? 'completed' : 'pending';
                     const consult = consultations.find(c => c.id === id);
                     if (consult) {
                         consult.status = nextStatus;

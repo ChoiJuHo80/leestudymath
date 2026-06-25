@@ -438,13 +438,13 @@
                             <table class="schedule-table" style="min-width: 800px;">
                                 <thead>
                                     <tr>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; width: 60px;">완료</th>
                                         <th style="padding: 12px; text-align: left; font-size: 0.82rem; width: 120px;">신청 일자</th>
                                         <th style="padding: 12px; text-align: left; font-size: 0.82rem; width: 100px;">이름</th>
                                         <th style="padding: 12px; text-align: left; font-size: 0.82rem; width: 130px;">연락처</th>
                                         <th style="padding: 12px; text-align: left; font-size: 0.82rem; width: 150px;">학교 / 학년</th>
                                         <th style="padding: 12px; text-align: left; font-size: 0.82rem;">문의 내용 / 특이사항</th>
-                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; width: 100px;">상태</th>
-                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; width: 160px;">관리</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; width: 60px;">삭제</th>
                                     </tr>
                                 </thead>
                                 <tbody id="consult-list-tbody">
@@ -815,7 +815,7 @@
                     <input type="text" id="student-login-phone" required placeholder="예: 010-9876-5432" autocomplete="off">
                     <span class="auth-error-msg" id="student-auth-error-msg">일치하는 원생 정보가 없습니다. (테스트용: 김민준 / 010-9876-5432)</span>
                 </div>
-                <button type="submit" class="btn-modal-submit">인증 및 로그인</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">인증 및 로그인</button>
             </form>
 
             <!-- Tab 2: Email Login (Supabase Auth) -->
@@ -830,7 +830,7 @@
                     <input type="password" id="student-login-password" required placeholder="비밀번호 입력" autocomplete="off">
                     <span class="auth-error-msg" id="student-email-auth-error-msg">이메일 또는 비밀번호가 올바르지 않습니다.</span>
                 </div>
-                <button type="submit" class="btn-modal-submit">로그인</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">로그인</button>
             </form>
 
             <!-- Tab 3: Admin Login -->
@@ -841,7 +841,7 @@
                     <input type="password" id="admin-login-password" required placeholder="비밀번호 입력" autocomplete="off">
                     <span class="auth-error-msg" id="admin-login-auth-error-msg">비밀번호가 올바르지 않습니다. (테스트용: 9999)</span>
                 </div>
-                <button type="submit" class="btn-modal-submit">인증하기</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">인증하기</button>
             </form>
 
             <!-- Social Login Divider & Buttons -->
