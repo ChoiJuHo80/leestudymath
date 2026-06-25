@@ -1217,6 +1217,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentGridContainer = document.getElementById('student-grid-container');
     const studentSearchInput = document.getElementById('student-search-input');
     const btnStudentWrite = document.getElementById('btn-student-write');
+    // Student View State
+    let currentStudentView = 'active'; // 'active' or 'terminated'
+    let currentTerminatedYear = 'all'; // 'all' or specific year
+
+    // Student DOM Elements
     const navLinkStudents = document.getElementById('nav-link-students');
     const drawerLinkStudents = document.getElementById('drawer-link-students');
 
@@ -1244,12 +1249,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentTimeFriEnd = document.getElementById('student-time-fri-end');
     const studentProgressInput = document.getElementById('student-progress-input');
     const studentRemarksInput = document.getElementById('student-remarks-input');
+    const studentTerminatedCheckbox = document.getElementById('student-terminated-checkbox');
+    const studentTerminationDateInput = document.getElementById('student-termination-date-input');
     const studentFormModalTitle = document.getElementById('student-form-modal-title');
+
+    const populateTerminationYears = () => {
+        const yearFilter = document.getElementById('terminated-year-filter');
+        if (!yearFilter) return;
+        
+        const years = new Set();
+        students.forEach(s => {
+            if (s.isTerminated && s.terminationDate) {
+                const year = new Date(s.terminationDate).getFullYear();
+                if (year && !isNaN(year)) {
+                    years.add(year);
+                }
+            }
+        });
+        
+        const sortedYears = Array.from(years).sort((a, b) => b - a);
+        const prevVal = yearFilter.value || 'all';
+        
+        yearFilter.innerHTML = '<option value="all">전체 년도</option>';
+        sortedYears.forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = String(y);
+            opt.textContent = `${y}년`;
+            yearFilter.appendChild(opt);
+        });
+        
+        if (sortedYears.includes(Number(prevVal))) {
+            yearFilter.value = prevVal;
+        } else {
+            yearFilter.value = 'all';
+            currentTerminatedYear = 'all';
+        }
+    };
 
     const updateTotalStudentsCount = () => {
         const countEl = document.getElementById('total-students-count');
         if (countEl) {
-            countEl.textContent = `${students.length}명`;
+            const activeStudents = students.filter(s => !s.isTerminated);
+            countEl.textContent = `${activeStudents.length}명`;
         }
     };
 
@@ -1274,8 +1315,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filteredStudents = students.filter(s => {
             const matchesSearch = s.name.toLowerCase().includes(query);
-            const matchesClass = !classFilterVal || String(s.classId) === String(classFilterVal);
-            return matchesSearch && matchesClass;
+            
+            if (currentStudentView === 'active') {
+                if (s.isTerminated) return false;
+                const matchesClass = !classFilterVal || String(s.classId) === String(classFilterVal);
+                return matchesSearch && matchesClass;
+            } else {
+                if (!s.isTerminated) return false;
+                
+                if (currentTerminatedYear !== 'all') {
+                    const terminationYear = s.terminationDate ? new Date(s.terminationDate).getFullYear() : null;
+                    if (String(terminationYear) !== String(currentTerminatedYear)) {
+                        return false;
+                    }
+                }
+                return matchesSearch;
+            }
         });
 
         if (filteredStudents.length === 0) {
@@ -1405,12 +1460,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressListHtml = '<div style="color: var(--text-muted); font-size: 0.8rem;">진도 기록이 없습니다.</div>';
             }
 
+            const terminationTag = student.isTerminated 
+                ? `<span style="font-size: 0.72rem; font-weight: 700; color: #ff4d4f; background: #fff2f0; border: 1px solid #ffccc7; padding: 2px 6px; border-radius: 6px; margin-top: 4px; display: inline-block;">종결 (${student.terminationDate || '날짜 미지정'})</span>`
+                : '';
+
             card.innerHTML = `
                 <div class="student-card-header">
                     <div class="student-info-title">
                         <h3>${student.name}</h3>
                         <span>${student.age}세 &middot; ${student.school}</span>
                         ${classNameTag}
+                        ${terminationTag}
                     </div>
                     ${siblingTag}
                 </div>
@@ -1839,6 +1899,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     studentTimeFriEnd.value = friTime.end;
                     studentProgressInput.value = student.progress;
                     studentRemarksInput.value = student.remarks || '';
+                    if (studentTerminatedCheckbox) {
+                        studentTerminatedCheckbox.checked = !!student.isTerminated;
+                    }
+                    if (studentTerminationDateInput) {
+                        studentTerminationDateInput.value = student.terminationDate || '';
+                    }
                     studentFormModalTitle.textContent = '원생 정보 수정';
                     studentFormModal.classList.add('open');
                 }
@@ -2058,6 +2124,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (studentClassDurationInput) {
                 studentClassDurationInput.value = 90;
             }
+            if (studentTerminatedCheckbox) studentTerminatedCheckbox.checked = false;
+            if (studentTerminationDateInput) studentTerminationDateInput.value = '';
 
             // Populate and reset class select
             populateClassSelect();
@@ -2115,6 +2183,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             const progress = studentProgressInput.value.trim();
             const remarks = studentRemarksInput.value.trim();
+            const isTerminated = studentTerminatedCheckbox ? studentTerminatedCheckbox.checked : false;
+            const terminationDate = studentTerminationDateInput ? studentTerminationDateInput.value : '';
 
             if (editId) {
                 // Update
@@ -2133,7 +2203,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             classId,
                             schedule,
                             progress,
-                            remarks
+                            remarks,
+                            isTerminated,
+                            terminationDate
                         };
                     }
                     return student;
@@ -2154,7 +2226,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     classId,
                     schedule,
                     progress,
-                    remarks
+                    remarks,
+                    isTerminated,
+                    terminationDate
                 };
                 students.unshift(newStudent);
                 saveStudents();
@@ -4025,12 +4099,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderStudents(studentSearchInput ? studentSearchInput.value : '');
             });
         }
+        // Auto-fill today's date on termination check
+        if (studentTerminatedCheckbox && studentTerminationDateInput) {
+            studentTerminatedCheckbox.addEventListener('change', () => {
+                if (studentTerminatedCheckbox.checked) {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    studentTerminationDateInput.value = `${year}-${month}-${day}`;
+                } else {
+                    studentTerminationDateInput.value = '';
+                }
+            });
+        }
+
+        // Student View Switching (Active vs Terminated)
+        const btnViewActive = document.getElementById('btn-view-active');
+        const btnViewTerminated = document.getElementById('btn-view-terminated');
+        const terminatedYearFilterContainer = document.getElementById('terminated-year-filter-container');
+        const terminatedYearFilter = document.getElementById('terminated-year-filter');
+        const classTabsContainer = document.getElementById('class-tabs-container');
+
+        if (btnViewActive && btnViewTerminated) {
+            btnViewActive.addEventListener('click', () => {
+                btnViewActive.classList.add('active');
+                btnViewTerminated.classList.remove('active');
+                currentStudentView = 'active';
+                if (terminatedYearFilterContainer) terminatedYearFilterContainer.style.display = 'none';
+                if (classTabsContainer) classTabsContainer.style.display = '';
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+
+            btnViewTerminated.addEventListener('click', () => {
+                btnViewTerminated.classList.add('active');
+                btnViewActive.classList.remove('active');
+                currentStudentView = 'terminated';
+                if (terminatedYearFilterContainer) terminatedYearFilterContainer.style.display = 'flex';
+                if (classTabsContainer) classTabsContainer.style.display = 'none';
+                populateTerminationYears();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+        }
+
+        if (terminatedYearFilter) {
+            terminatedYearFilter.addEventListener('change', () => {
+                currentTerminatedYear = terminatedYearFilter.value;
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+        }
+
         // Initialize class select dropdown inside student form
         populateClassSelect();
         populateClassFilter();
         renderClassList();
         renderMainScheduleTable();
         updateTotalStudentsCount();
+        populateTerminationYears();
 
         // Default date for batch progress input to today
         const batchProgDateInput = document.getElementById('batch-progress-date-input');

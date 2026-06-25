@@ -289,11 +289,25 @@
                             <h2><i data-lucide="users" class="sec-title-icon purple-icon"></i>학생 관리 (LMS)</h2>
                             <span class="section-subtext">원생 등록 카드와 요일별 시간표, 진도 현황을 실시간 관리합니다.</span>
                         </div>
-                        <div class="admin-toolbar" style="margin-top: 12px; display: flex; gap: 12px; width: 100%; flex-wrap: wrap;">
-                            <div class="search-box-container" style="flex-grow: 1; position: relative;">
+                        <div class="admin-toolbar" style="margin-top: 12px; display: flex; gap: 12px; width: 100%; flex-wrap: wrap; align-items: center;">
+                            <div class="search-box-container" style="flex-grow: 1; position: relative; min-width: 200px;">
                                 <input type="text" id="student-search-input" placeholder="학생 이름으로 검색..." style="width: 100%; padding: 10px 16px 10px 40px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;">
                                 <i data-lucide="search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-secondary);"></i>
                             </div>
+                            
+                            <!-- Student View Toggle (Active vs Terminated) -->
+                            <div class="student-view-tabs" style="display: flex; gap: 4px; background: #f4f4f5; padding: 4px; border-radius: 50px; height: 38px; align-items: center; border: 1px solid var(--border-color-split);">
+                                <button type="button" class="student-view-btn active" id="btn-view-active" style="border: none; background: none; padding: 6px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; border-radius: 50px; color: var(--text-secondary); transition: var(--transition-smooth); height: 30px; display: flex; align-items: center; white-space: nowrap;">재학 학생</button>
+                                <button type="button" class="student-view-btn" id="btn-view-terminated" style="border: none; background: none; padding: 6px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; border-radius: 50px; color: var(--text-secondary); transition: var(--transition-smooth); height: 30px; display: flex; align-items: center; white-space: nowrap;">종결 학생</button>
+                            </div>
+
+                            <!-- Year Filter Dropdown (shown only when terminated is active) -->
+                            <div id="terminated-year-filter-container" style="display: none; align-items: center; gap: 6px;">
+                                <select id="terminated-year-filter" style="padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none; background-color: #ffffff; font-family: var(--ff-primary); font-size: 0.85rem; cursor: pointer; height: 38px; min-width: 110px; font-weight: 600; color: var(--text-primary);">
+                                    <option value="all">전체 년도</option>
+                                </select>
+                            </div>
+
                             <div class="class-filter-container" style="display: none;">
                                 <select id="student-class-filter" style="padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none; background-color: #ffffff; font-family: var(--ff-primary); font-size: 0.85rem; cursor: pointer; height: 38px; min-width: 160px; font-weight: 600; color: var(--text-primary);">
                                     <option value="">전체 반 보기</option>
@@ -783,6 +797,18 @@
                 <div class="form-group-modal" style="margin-top: 12px;">
                     <label for="student-remarks-input">특이사항 기록</label>
                     <textarea id="student-remarks-input" rows="3" placeholder="수업 태도, 학습 조언, 피드백 등 특이사항 기재"></textarea>
+                </div>
+
+                <!-- Row: Student Termination -->
+                <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 16px; align-items: center;">
+                    <div class="form-group-modal" style="flex-direction: row; gap: 8px; align-items: center; margin: 0;">
+                        <input type="checkbox" id="student-terminated-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="student-terminated-checkbox" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; margin: 0;">원생 종결 (퇴원)</label>
+                    </div>
+                    <div class="form-group-modal" id="student-termination-date-container" style="margin: 0;">
+                        <label for="student-termination-date-input" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">종결 일자</label>
+                        <input type="date" id="student-termination-date-input" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); outline: none; background: #ffffff;">
+                    </div>
                 </div>
 
                 <button type="submit" class="btn-modal-submit" style="margin-top: 20px; width: 100%;">저장하기</button>
