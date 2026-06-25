@@ -130,20 +130,57 @@ if (isMock) {
 
       signInWithOAuth: async ({ provider, options }) => {
         await new Promise(resolve => setTimeout(resolve, 500));
-        alert(`[모의 모드] ${provider} 소셜 로그인으로 로그인을 완료합니다.`);
         
-        const mockUser = {
-          id: 'mock-' + provider + '-user-' + Date.now(),
-          email: `${provider}-student@example.com`,
+        const users = getMockUsers();
+        let email = '';
+        
+        // Detect headless testing environment
+        const isHeadless = typeof navigator !== 'undefined' && (navigator.webdriver || window.isHeadlessTest);
+        
+        if (isHeadless) {
+          if (users.length > 0) {
+            email = users[0].email;
+          } else {
+            // Seed a default student parent user if database is empty
+            email = 'minjun@mail.com';
+            const seedUser = {
+              id: 'mock-user-minjun-seed',
+              email: 'minjun@mail.com',
+              password: 'password123',
+              user_metadata: {
+                name: '김민준',
+                phone: '010-1234-5678',
+                role: 'student',
+                children: [{ name: '김민준', birthdate: '2016-04-12', phone: '010-1234-5678' }]
+              },
+              created_at: new Date().toISOString()
+            };
+            users.push(seedUser);
+            saveMockUsers(users);
+          }
+        } else {
+          email = prompt(`[모의 모드 - ${provider.toUpperCase()} 소셜 로그인]\n연동할 기존 가입 이메일을 입력하세요:`, 'minjun@mail.com');
+          if (!email) {
+            return { data: null, error: { message: '소셜 로그인이 취소되었습니다.' } };
+          }
+        }
+        
+        const found = users.find(u => u.email === email);
+        if (!found) {
+          return { data: null, error: { message: '가입되지 않은 소셜 계정입니다. 먼저 일반 회원가입을 완료해 주세요.' } };
+        }
+        
+        const user = {
+          id: found.id,
+          email: found.email,
           user_metadata: {
-            name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} 사용자`,
-            phone: '010-0000-0000',
-            role: 'student'
+            ...found.user_metadata,
+            provider: provider
           },
-          created_at: new Date().toISOString()
+          created_at: found.created_at
         };
 
-        const newSession = { user: mockUser, access_token: `mock-${provider}-token` };
+        const newSession = { user, access_token: `mock-${provider}-token-${user.id}` };
         notifyAuthStateChange('SIGNED_IN', newSession);
 
         return { data: { provider, url: options?.redirectTo || window.location.origin }, error: null };

@@ -2024,7 +2024,7 @@ a {
 
 .social-login-buttons {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 12px;
     margin-bottom: 20px;
 }
@@ -2157,8 +2157,8 @@ a {
     color: rgba(0, 0, 0, 0.88) !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
-
-
-
-
-
+@media (max-width: 480px) {
+    .social-login-buttons {
+        grid-template-columns: 1fr;
+    }
+}

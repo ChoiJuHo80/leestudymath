@@ -223,7 +223,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Social Login (OAuth) handlers
     const btnGoogleLogin = document.getElementById('btn-google-login');
-    const btnGithubLogin = document.getElementById('btn-github-login');
 
     if (btnGoogleLogin) {
         btnGoogleLogin.addEventListener('click', async () => {
@@ -244,22 +243,151 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnGithubLogin) {
-        btnGithubLogin.addEventListener('click', async () => {
-            try {
-                const { error } = await supabase.auth.signInWithOAuth({
-                    provider: 'github',
-                    options: {
-                        redirectTo: window.location.origin
+    // ID/비밀번호 찾기 DOM Elements & Logic
+    const linkFindCredentials = document.getElementById('link-find-credentials');
+    const findCredentialsModal = document.getElementById('find-credentials-modal');
+    const btnFindCredentialsClose = document.getElementById('btn-find-credentials-close');
+    const linkFindBackLogin = document.getElementById('link-find-back-login');
+    const btnTabFindId = document.getElementById('btn-tab-find-id');
+    const btnTabFindPw = document.getElementById('btn-tab-find-pw');
+    const findIdForm = document.getElementById('find-id-form');
+    const findPwForm = document.getElementById('find-pw-form');
+    const findIdPhoneInput = document.getElementById('find-id-phone');
+    const findPwEmailInput = document.getElementById('find-pw-email');
+    const findPwPhoneInput = document.getElementById('find-pw-phone');
+    const findIdResult = document.getElementById('find-id-result');
+    const findPwResult = document.getElementById('find-pw-result');
+    const loginModal = document.getElementById('student-login-modal');
+
+    if (linkFindCredentials && findCredentialsModal && loginModal) {
+        linkFindCredentials.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginModal.classList.remove('open');
+            findCredentialsModal.classList.add('open');
+            
+            // Reset state
+            if (btnTabFindId) btnTabFindId.click();
+            if (findIdPhoneInput) findIdPhoneInput.value = '';
+            if (findPwEmailInput) findPwEmailInput.value = '';
+            if (findPwPhoneInput) findPwPhoneInput.value = '';
+            if (findIdResult) findIdResult.style.display = 'none';
+            if (findPwResult) findPwResult.style.display = 'none';
+            
+            if (findIdPhoneInput) findIdPhoneInput.focus();
+        });
+    }
+
+    if (btnFindCredentialsClose && findCredentialsModal) {
+        btnFindCredentialsClose.addEventListener('click', () => {
+            findCredentialsModal.classList.remove('open');
+        });
+    }
+
+    if (findCredentialsModal) {
+        findCredentialsModal.addEventListener('click', (e) => {
+            if (e.target === findCredentialsModal) {
+                findCredentialsModal.classList.remove('open');
+            }
+        });
+    }
+
+    if (linkFindBackLogin && findCredentialsModal && loginModal) {
+        linkFindBackLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            findCredentialsModal.classList.remove('open');
+            loginModal.classList.add('open');
+        });
+    }
+
+    if (btnTabFindId && btnTabFindPw && findIdForm && findPwForm) {
+        btnTabFindId.addEventListener('click', () => {
+            btnTabFindId.classList.add('active');
+            btnTabFindPw.classList.remove('active');
+            findIdForm.style.display = 'block';
+            findPwForm.style.display = 'none';
+        });
+
+        btnTabFindPw.addEventListener('click', () => {
+            btnTabFindPw.classList.add('active');
+            btnTabFindId.classList.remove('active');
+            findIdForm.style.display = 'none';
+            findPwForm.style.display = 'block';
+        });
+    }
+
+    if (findIdForm) {
+        findIdForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const phone = findIdPhoneInput.value.trim();
+            if (!phone) return;
+
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const matchedUsers = mockUsers.filter(u => {
+                const userPhone = u.user_metadata?.phone;
+                const matchesPhone = userPhone === phone;
+                const children = u.user_metadata?.children || [];
+                const matchesChildPhone = children.some(c => c.phone === phone) || u.user_metadata?.phone === phone;
+                return matchesPhone || matchesChildPhone;
+            });
+
+            const matchedStudents = students.filter(s => s.phone === phone || s.parentPhone === phone);
+
+            if (matchedUsers.length === 0 && matchedStudents.length === 0) {
+                findIdResult.innerHTML = `<span style="color: var(--error-color); font-weight: 700;">해당 연락처로 가입된 회원 정보를 찾을 수 없습니다.</span>`;
+            } else {
+                let html = `<p style="font-weight: 700; color: var(--primary-color); margin-bottom: 8px;">조회된 회원 정보:</p>`;
+                const shownEmails = new Set();
+                const shownStudents = new Set();
+
+                matchedUsers.forEach(u => {
+                    if (u.email && !shownEmails.has(u.email)) {
+                        shownEmails.add(u.email);
+                        const role = u.user_metadata?.role === 'admin' ? '관리자' : '학부모/학생';
+                        html += `<div>• <strong>이메일:</strong> ${u.email} (${role})</div>`;
                     }
                 });
-                if (error) {
-                    console.error('GitHub login error:', error.message);
-                    alert('GitHub 로그인 오류: ' + error.message);
-                }
-            } catch (err) {
-                console.error('GitHub login exceptional error:', err);
+
+                matchedStudents.forEach(s => {
+                    const key = `${s.name}-${s.phone}`;
+                    if (!shownStudents.has(key)) {
+                        shownStudents.add(key);
+                        html += `<div>• <strong>원생 이름:</strong> ${s.name} (${s.school || '학생'})</div>`;
+                    }
+                });
+
+                findIdResult.innerHTML = html;
             }
+            findIdResult.style.display = 'block';
+        });
+    }
+
+    if (findPwForm) {
+        findPwForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = findPwEmailInput.value.trim();
+            const phone = findPwPhoneInput.value.trim();
+            if (!email || !phone) return;
+
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const foundUser = mockUsers.find(u => u.email === email && (u.user_metadata?.phone === phone || (u.user_metadata?.children || []).some(c => c.phone === phone)));
+
+            if (!foundUser) {
+                if (email === 'teacher@math.com' && phone === '010-0000-0000') {
+                    findPwResult.innerHTML = `
+                        <div style="color: var(--success-color); font-weight: 700; margin-bottom: 5px;">관리자 계정 확인 완료!</div>
+                        <div>원장님의 비밀번호는 <strong>9999</strong> 입니다.</div>
+                    `;
+                } else {
+                    findPwResult.innerHTML = `<span style="color: var(--error-color); font-weight: 700;">입력하신 이메일과 연락처에 일치하는 회원 정보가 없습니다.</span>`;
+                }
+            } else {
+                const pwd = foundUser.password || '비밀번호 정보 없음 (소셜 연동 계정)';
+                findPwResult.innerHTML = `
+                    <div style="color: var(--success-color); font-weight: 700; margin-bottom: 5px;">회원 정보 확인 완료!</div>
+                    <div>회원님의 비밀번호는 <strong>${pwd}</strong> 입니다.</div>
+                `;
+            }
+            findPwResult.style.display = 'block';
         });
     }
 
@@ -337,7 +465,9 @@ document.addEventListener('DOMContentLoaded', () => {
         'student-phone-input',
         'student-parent-phone-input',
         'student-login-phone',
-        'student-signup-phone'
+        'student-signup-phone',
+        'find-id-phone',
+        'find-pw-phone'
     ];
     staticPhoneFields.forEach(id => {
         const el = document.getElementById(id);
@@ -3605,6 +3735,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderNotices();
                 renderStudents();
             } else {
+                // Check if this is a registered user
+                const userEmail = session.user.email;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const existsInMockUsers = mockUsers.some(u => u.email === userEmail);
+                const existsInStudents = students.some(s => s.phone === session.user.user_metadata?.phone || s.parentPhone === session.user.user_metadata?.phone || s.phone === session.user.email || s.parentPhone === session.user.email);
+                const hasChildrenMetadata = session.user.user_metadata?.children && session.user.user_metadata.children.length > 0;
+                
+                if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
+                    alert('가입되지 않은 소셜 계정입니다. 먼저 일반 회원가입을 완료해 주세요.');
+                    supabase.auth.signOut();
+                    return;
+                }
+
                 // They are a student/parent
                 isStudent = true;
                 isAdmin = false;
