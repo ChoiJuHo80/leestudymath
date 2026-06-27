@@ -2273,7 +2273,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById('student-password-input').value = student.password || '';
                     }
                     if (document.getElementById('student-address-input')) {
-                        document.getElementById('student-address-input').value = student.address || '';
+                        const parts = (student.address || '').split(' | ');
+                        document.getElementById('student-address-input').value = parts[0] || '';
+                        if (document.getElementById('student-address-detail-input')) {
+                            document.getElementById('student-address-detail-input').value = parts[1] || '';
+                        }
                     }
 
                     // Populate and pre-select class
@@ -2548,6 +2552,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (document.getElementById('student-username-input')) document.getElementById('student-username-input').value = '';
             if (document.getElementById('student-password-input')) document.getElementById('student-password-input').value = '';
             if (document.getElementById('student-address-input')) document.getElementById('student-address-input').value = '';
+            if (document.getElementById('student-address-detail-input')) document.getElementById('student-address-detail-input').value = '';
 
             // Populate and reset class select
             populateClassSelect();
@@ -2609,7 +2614,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const terminationDate = studentTerminationDateInput ? studentTerminationDateInput.value : '';
             const username = document.getElementById('student-username-input') ? document.getElementById('student-username-input').value.trim() : '';
             const password = document.getElementById('student-password-input') ? document.getElementById('student-password-input').value.trim() : '';
-            const address = document.getElementById('student-address-input') ? document.getElementById('student-address-input').value.trim() : '';
+            const addressBase = document.getElementById('student-address-input') ? document.getElementById('student-address-input').value.trim() : '';
+            const addressDetail = document.getElementById('student-address-detail-input') ? document.getElementById('student-address-detail-input').value.trim() : '';
+            const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
 
             if (editId) {
                 // Update
@@ -3592,16 +3599,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const email = document.getElementById('student-signup-email').value.trim();
                 const password = document.getElementById('student-signup-password').value;
                 const phone = document.getElementById('student-signup-phone').value.trim();
-                const address = document.getElementById('student-signup-address').value.trim();
+                const addressBase = document.getElementById('student-signup-address').value.trim();
+                const addressDetail = document.getElementById('student-signup-address-detail').value.trim();
 
                 // Validate house address
-                if (!address) {
+                if (!addressBase) {
                     if (signupErrorMsg) {
                         signupErrorMsg.textContent = '집 주소를 입력해 주세요.';
                         signupErrorMsg.style.display = 'block';
                     }
                     return;
                 }
+                const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
 
                 // Check email duplication locally
                 const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
@@ -5750,7 +5759,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="padding: 12px; font-size: 0.85rem; line-height: 1.4; text-align: left;">
                         <div style="font-weight: 700; color: var(--text-primary);">${u.name} (${u.email})</div>
                         <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">연락처: ${u.phone || u.user_metadata?.phone || '-'}</div>
-                        <div style="font-size: 0.78rem; color: var(--text-secondary);">주소: ${u.address || u.user_metadata?.address || '-'}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">주소: ${(u.address || u.user_metadata?.address || '-').replace(' | ', ' ')}</div>
                     </td>
                     <td style="padding: 12px; text-align: left;">
                         ${childrenText}
@@ -6146,6 +6155,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     inputElement.value = addr + extraAddr;
                     inputElement.dispatchEvent(new Event('input', { bubbles: true }));
                     container.style.display = 'none';
+                    
+                    // Autofocus detailed address field
+                    const detailInputId = (inputElement.id === 'student-signup-address') ? 'student-signup-address-detail' : 'student-address-detail-input';
+                    const detailInput = document.getElementById(detailInputId);
+                    if (detailInput) {
+                        detailInput.focus();
+                    }
                 },
                 width: '100%',
                 height: '100%'
