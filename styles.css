@@ -2162,3 +2162,90 @@ a {
         grid-template-columns: 1fr;
     }
 }
+
+/* User profile link styling */
+#link-user-profile-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(142, 68, 173, 0.05);
+    border: 1px solid rgba(142, 68, 173, 0.15);
+    color: var(--primary-color) !important;
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition-smooth);
+}
+#link-user-profile-edit:hover {
+    background: rgba(142, 68, 173, 0.12);
+    border-color: rgba(142, 68, 173, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Approval & Termination Badge Styles */
+.badge-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+}
+.badge-status.pending {
+    background-color: #fffbe6;
+    color: #d46b08;
+    border: 1px solid #ffe58f;
+}
+.badge-status.approved {
+    background-color: #f6ffed;
+    color: #389e0d;
+    border: 1px solid #b7eb8f;
+}
+.badge-status.terminated {
+    background-color: #fff0f6;
+    color: #c41d7f;
+    border: 1px solid #ffadd2;
+}
+
+/* Custom layout for child registration inputs in signup */
+.signup-child-block {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+.signup-child-block:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(142, 68, 173, 0.06);
+}
+.signup-child-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 8px;
+}
+.signup-child-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.btn-signup-remove-child {
+    border: none;
+    background: none;
+    color: #ff4d4f;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+.btn-signup-remove-child:hover {
+    background: #fff1f0;
+}

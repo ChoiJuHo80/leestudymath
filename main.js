@@ -87,8 +87,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Helper to update unified login button label/state
+    const getLoggedInUserName = () => {
+        if (isAdmin) return '원장님';
+        if (isStudent) {
+            const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+            if (studentSession) {
+                return studentSession.name + ' (학생)';
+            }
+            const user = supabase.auth.user ? supabase.auth.user() : null;
+            if (user) {
+                return (user.user_metadata?.name || user.email) + ' (학부모)';
+            }
+            const s = students.find(x => x.id === loggedInStudentId);
+            if (s) return s.name;
+        }
+        return '사용자';
+    };
+
     const updateLoginButton = () => {
         const btnLoginToggle = document.getElementById('btn-login-toggle');
+        const displayContainer = document.getElementById('user-profile-display-container');
+        const loggedUserName = document.getElementById('logged-user-name');
         if (!btnLoginToggle) return;
 
         if (isAdmin || isStudent) {
@@ -98,12 +117,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (iconWrapper) {
                 iconWrapper.innerHTML = '<i data-lucide="log-out"></i>';
             }
+            if (displayContainer && loggedUserName) {
+                loggedUserName.textContent = getLoggedInUserName();
+                displayContainer.style.display = 'flex';
+            }
         } else {
             btnLoginToggle.classList.remove('active-admin');
             btnLoginToggle.querySelector('span:last-child').textContent = '로그인';
             const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
             if (iconWrapper) {
                 iconWrapper.innerHTML = '<i data-lucide="log-in"></i>';
+            }
+            if (displayContainer) {
+                displayContainer.style.display = 'none';
             }
         }
         safeCreateIcons();
@@ -562,17 +588,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 ` : ''}
             </div>
             <div class="form-group-modal-row-three">
-                <div class="form-group-modal" style="margin-bottom: 0;">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
                     <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">이름</label>
                     <input type="text" class="child-name-input" required placeholder="예: 김민준" style="padding: 8px 12px; font-size: 0.85rem;">
                 </div>
-                <div class="form-group-modal" style="margin-bottom: 0;">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
                     <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">생년월일</label>
                     <input type="date" class="child-birth-input" required style="padding: 7px 12px; font-size: 0.85rem;">
                 </div>
-                <div class="form-group-modal" style="margin-bottom: 0;">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
                     <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">연락처 (선택)</label>
                     <input type="text" class="child-phone-input" placeholder="010-0000-0000" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+            </div>
+            <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+                <div class="form-group-modal" style="margin-bottom: 0;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+                        <span>학생 아이디</span>
+                        <button type="button" class="btn-check-child-id" style="border: none; background: rgba(142,68,173,0.08); color: var(--primary-color); padding: 2px 6px; font-size: 0.65rem; border-radius: 4px; cursor: pointer; font-weight: 700;">중복 체크</button>
+                    </label>
+                    <input type="text" class="child-id-input" required placeholder="영문/숫자 4~12자" style="padding: 8px 12px; font-size: 0.85rem;">
+                    <span class="child-id-check-msg" style="display: none; font-size: 0.68rem; margin-top: 2px; font-weight: 600;"></span>
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 0;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">비밀번호</label>
+                    <input type="password" class="child-pw-input" required placeholder="비밀번호 입력" style="padding: 8px 12px; font-size: 0.85rem;">
                 </div>
             </div>
         `;
@@ -587,10 +627,53 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Attach phone input formatter dynamically to child phone fields
         const childPhoneInput = block.querySelector('.child-phone-input');
         if (childPhoneInput) {
             childPhoneInput.addEventListener('input', handlePhoneInput);
+        }
+
+        const btnCheck = block.querySelector('.btn-check-child-id');
+        const idInput = block.querySelector('.child-id-input');
+        const checkMsg = block.querySelector('.child-id-check-msg');
+        if (btnCheck && idInput && checkMsg) {
+            btnCheck.addEventListener('click', () => {
+                const username = idInput.value.trim();
+                if (!username) {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#ff4d4f';
+                    checkMsg.textContent = '아이디를 입력해 주세요.';
+                    return;
+                }
+                if (username.length < 4) {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#ff4d4f';
+                    checkMsg.textContent = '아이디는 4자 이상이어야 합니다.';
+                    return;
+                }
+                
+                const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === username.toLowerCase());
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                let takenInMock = false;
+                mockUsers.forEach(u => {
+                    if (u.role === 'student' && u.email === username) {
+                        takenInMock = true;
+                    }
+                    const children = u.user_metadata?.children || [];
+                    if (children.some(c => c.username && c.username.toLowerCase() === username.toLowerCase())) {
+                        takenInMock = true;
+                    }
+                });
+                
+                if (takenInStudents || takenInMock) {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#ff4d4f';
+                    checkMsg.textContent = '이미 사용 중인 아이디입니다.';
+                } else {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#52c41a';
+                    checkMsg.textContent = '사용 가능한 아이디입니다.';
+                }
+            });
         }
 
         signupChildrenContainer.appendChild(block);
@@ -713,7 +796,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // Worksheet Download Simulator & Toast Notifications
     // ==========================================================================
-    const downloadBtns = document.querySelectorAll('.btn-download');
     const toastContainer = document.getElementById('toast-container');
 
     const showToast = (message) => {
@@ -735,28 +817,163 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3500);
     };
 
-    downloadBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const filename = btn.getAttribute('data-filename');
-            const originalHTML = btn.innerHTML;
+    // Default Resources Data
+    const defaultResources = [
+        {
+            id: 'res-1',
+            title: '2026 초등 연산왕 특강 - 모의고사 1회 (정답/풀이 포함).pdf',
+            size: '3.4 MB',
+            target: '초등 전학년',
+            type: 'pdf',
+            filename: '2026 초등 연산왕 특강 - 모의고사 1회.pdf',
+            downloads: 1421
+        },
+        {
+            id: 'res-2',
+            title: '중등 2학기 도형(기하) 핵심 공식집 및 오답 잡는 비법 요약노트.zip',
+            size: '8.9 MB',
+            target: '중등 전학년',
+            type: 'zip',
+            filename: '중등 2학기 도형 핵심 공식집.zip',
+            downloads: 843
+        },
+        {
+            id: 'res-3',
+            title: '서술형 킬러 문항 완벽 격파 - 하루 5문제 훈련장 (중등 대수편).hwp',
+            size: '1.2 MB',
+            target: '중등 2-3학년',
+            type: 'hwp',
+            filename: '서술형 킬러 문항 완벽 격파 훈련장.hwp',
+            downloads: 911
+        }
+    ];
 
-            if (btn.classList.contains('downloading')) return;
+    // Seed resources if empty
+    if (!localStorage.getItem('gongbubang_resources')) {
+        localStorage.setItem('gongbubang_resources', JSON.stringify(defaultResources));
+    }
 
-            btn.classList.add('downloading');
-            btn.innerHTML = `
-                <i data-lucide="loader-2" class="animate-spin"></i>
-                <span>다운로드 중...</span>
+    const renderResources = () => {
+        const listContainer = document.querySelector('.resources-list');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+        
+        let resources = [];
+        try {
+            resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+        } catch(e){}
+        
+        if (resources.length === 0) {
+            listContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">등록된 자료가 없습니다.</div>';
+            return;
+        }
+        
+        resources.forEach(res => {
+            const item = document.createElement('div');
+            item.className = 'resource-item';
+            
+            let iconClass = 'pdf-type';
+            if (res.type === 'zip') {
+                iconClass = 'zip-type';
+            } else if (res.type === 'hwp') {
+                iconClass = 'hwp-type';
+            } else if (res.type === 'xls') {
+                iconClass = 'xls-type';
+            }
+            
+            item.innerHTML = `
+                <div class="res-info">
+                    <i data-lucide="file-text" class="file-icon ${iconClass}"></i>
+                    <div class="file-details">
+                        <h4 class="file-title">${res.title}</h4>
+                        <span class="file-meta">파일크기: ${res.size} &middot; 다운로드 수: ${res.downloads}회 &middot; 대상: ${res.target}</span>
+                    </div>
+                </div>
+                <button class="btn-download" data-filename="${res.filename}" data-id="${res.id}">
+                    <i data-lucide="download"></i>
+                    <span>다운로드</span>
+                </button>
             `;
-            safeCreateIcons();
-
-            setTimeout(() => {
-                btn.classList.remove('downloading');
-                btn.innerHTML = originalHTML;
+            
+            const btn = item.querySelector('.btn-download');
+            btn.addEventListener('click', () => {
+                if (btn.classList.contains('downloading')) return;
+                btn.classList.add('downloading');
+                btn.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i><span>다운로드 중...</span>`;
                 safeCreateIcons();
-                showToast(`"${filename}" 다운로드가 완료되었습니다.`);
-            }, 1800);
+                
+                setTimeout(() => {
+                    btn.classList.remove('downloading');
+                    btn.innerHTML = `<i data-lucide="download"></i><span>다운로드</span>`;
+                    safeCreateIcons();
+                    
+                    res.downloads = (res.downloads || 0) + 1;
+                    localStorage.setItem('gongbubang_resources', JSON.stringify(resources));
+                    renderResources();
+                    if (isAdmin) renderAdminResources();
+                    
+                    showToast(`"${res.filename}" 다운로드가 완료되었습니다.`);
+                }, 1500);
+            });
+            
+            listContainer.appendChild(item);
         });
-    });
+        safeCreateIcons();
+    };
+
+    const renderAdminResources = () => {
+        const listContainer = document.getElementById('admin-resource-list-container');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+        
+        let resources = [];
+        try {
+            resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+        } catch(e){}
+        
+        resources.forEach(res => {
+            const item = document.createElement('div');
+            item.className = 'class-list-item';
+            item.style = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: #ffffff; margin-bottom: 8px;';
+            item.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); text-align: left;">${res.title}</span>
+                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-align: left;">${res.size} | ${res.target} | 다운로드: ${res.downloads}회</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn-resource-edit" data-id="${res.id}" style="border: none; background: #f1f5f9; cursor: pointer; padding: 6px; border-radius: 6px; color: var(--text-primary);"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i></button>
+                    <button type="button" class="btn-resource-delete" data-id="${res.id}" style="border: none; background: #fff1f0; cursor: pointer; padding: 6px; border-radius: 6px; color: #ff4d4f;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                </div>
+            `;
+            
+            item.querySelector('.btn-resource-edit').addEventListener('click', () => {
+                document.getElementById('edit-resource-id').value = res.id;
+                document.getElementById('resource-title-input').value = res.title;
+                document.getElementById('resource-size-input').value = res.size;
+                document.getElementById('resource-target-input').value = res.target;
+                document.getElementById('resource-type-select').value = res.type;
+                document.getElementById('resource-filename-input').value = res.filename;
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="edit-3" style="width: 18px; height: 18px;"></i> 자료 수정`;
+                safeCreateIcons();
+            });
+            
+            item.querySelector('.btn-resource-delete').addEventListener('click', () => {
+                if (confirm('이 자료를 삭제하시겠습니까?')) {
+                    const filtered = resources.filter(r => r.id !== res.id);
+                    localStorage.setItem('gongbubang_resources', JSON.stringify(filtered));
+                    renderResources();
+                    renderAdminResources();
+                    showToast('자료가 삭제되었습니다.');
+                }
+            });
+            
+            listContainer.appendChild(item);
+        });
+        safeCreateIcons();
+    };
+
+    // Initialize Resources view
+    setTimeout(renderResources, 100);
 
     // ==========================================================================
     // Notice CRUD Panel
@@ -813,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAdmin = false;
     let isStudent = false;
     let loggedInStudentId = null;
+    let userRole = null; // "admin" | "parent" | "student"
     let currentNoticeTag = 'all';
     let currentNoticeQuery = '';
 
@@ -1056,6 +1274,21 @@ document.addEventListener('DOMContentLoaded', () => {
         classes = defaultClasses;
     }
 
+    const getEarliestTime = (c) => {
+        let earliest = '23:59';
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+        days.forEach(day => {
+            const timeRange = c.schedule?.[day];
+            if (timeRange && timeRange !== '-') {
+                const start = timeRange.split('~')[0].trim();
+                if (start && start.length >= 5 && start < earliest) {
+                    earliest = start;
+                }
+            }
+        });
+        return earliest;
+    };
+
     const renderMainScheduleTable = () => {
         const tbody = document.getElementById('main-schedule-tbody');
         if (!tbody) return;
@@ -1065,8 +1298,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = `<tr><td colspan="7" style="padding: 24px; color: var(--text-secondary);">등록된 수업 스케줄이 없습니다.</td></tr>`;
             return;
         }
+
+        const sortedClasses = [...classes].sort((a, b) => {
+            const timeA = getEarliestTime(a);
+            const timeB = getEarliestTime(b);
+            return timeA.localeCompare(timeB);
+        });
         
-        classes.forEach(c => {
+        sortedClasses.forEach(c => {
             const tr = document.createElement('tr');
             
             // Format days
@@ -1077,13 +1316,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const friText = c.schedule?.fri || '-';
             
             tr.innerHTML = `
-                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px;">${c.name}</td>
+                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px;">${c.duration || 90}분</td>
                 <td>${monText}</td>
                 <td>${tueText}</td>
                 <td>${wedText}</td>
                 <td>${thuText}</td>
                 <td>${friText}</td>
-                <td style="font-weight: 500; color: var(--text-secondary);">${c.duration || 90}분</td>
+                <td style="font-weight: 500; color: var(--text-secondary);">${c.name}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -2022,6 +2261,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (studentClassDurationInput) {
                         studentClassDurationInput.value = student.classDuration || 90;
                     }
+                    
+                    if (document.getElementById('student-username-input')) {
+                        document.getElementById('student-username-input').value = student.username || '';
+                    }
+                    if (document.getElementById('student-password-input')) {
+                        document.getElementById('student-password-input').value = student.password || '';
+                    }
+                    if (document.getElementById('student-address-input')) {
+                        document.getElementById('student-address-input').value = student.address || '';
+                    }
 
                     // Populate and pre-select class
                     populateClassSelect();
@@ -2292,6 +2541,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (studentTerminatedCheckbox) studentTerminatedCheckbox.checked = false;
             if (studentTerminationDateInput) studentTerminationDateInput.value = '';
+            if (document.getElementById('student-username-input')) document.getElementById('student-username-input').value = '';
+            if (document.getElementById('student-password-input')) document.getElementById('student-password-input').value = '';
+            if (document.getElementById('student-address-input')) document.getElementById('student-address-input').value = '';
 
             // Populate and reset class select
             populateClassSelect();
@@ -2351,13 +2603,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const remarks = studentRemarksInput.value.trim();
             const isTerminated = studentTerminatedCheckbox ? studentTerminatedCheckbox.checked : false;
             const terminationDate = studentTerminationDateInput ? studentTerminationDateInput.value : '';
+            const username = document.getElementById('student-username-input') ? document.getElementById('student-username-input').value.trim() : '';
+            const password = document.getElementById('student-password-input') ? document.getElementById('student-password-input').value.trim() : '';
+            const address = document.getElementById('student-address-input') ? document.getElementById('student-address-input').value.trim() : '';
 
             if (editId) {
                 // Update
                 const id = parseStudentId(editId);
                 students = students.map(student => {
                     if (student.id === id) {
-                        return {
+                        const updated = {
                             ...student,
                             name,
                             age,
@@ -2371,8 +2626,43 @@ document.addEventListener('DOMContentLoaded', () => {
                             progress,
                             remarks,
                             isTerminated,
-                            terminationDate
+                            terminationDate,
+                            username,
+                            password,
+                            address
                         };
+                        
+                        // Sync back to parent user in gongbubang_mock_users if they are linked
+                        let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                        let parentId = null;
+                        if (String(id).includes('-')) {
+                            parentId = String(id).split('-')[0];
+                        }
+                        if (parentId) {
+                            mockUsers = mockUsers.map(u => {
+                                if (u.id === parentId) {
+                                    const updatedChildren = (u.user_metadata?.children || []).map(child => {
+                                        if (child.name === name) {
+                                            return { ...child, username, password };
+                                        }
+                                        return child;
+                                    });
+                                    return {
+                                        ...u,
+                                        address,
+                                        user_metadata: {
+                                            ...u.user_metadata,
+                                            address,
+                                            children: updatedChildren
+                                        }
+                                    };
+                                }
+                                return u;
+                            });
+                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                        }
+                        
+                        return updated;
                     }
                     return student;
                 });
@@ -2394,7 +2684,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     progress,
                     remarks,
                     isTerminated,
-                    terminationDate
+                    terminationDate,
+                    username,
+                    password,
+                    address
                 };
                 students.unshift(newStudent);
                 saveStudents();
@@ -2517,6 +2810,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderConsultList();
                 renderAdminCurriculumList();
                 renderAiQueryManagement();
+                if (typeof renderApprovalList === 'function') renderApprovalList();
+                if (typeof renderAdminResources === 'function') renderAdminResources();
                 showToast('관리자 모드가 성공적으로 활성화되었습니다.');
             } else {
                 if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
@@ -2868,6 +3163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     
+                    ${userRole === 'student' ? '' : `
                     <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px;">
                             <strong style="color: var(--text-primary); margin: 0;">선생님 지도 피드백 기록:</strong>
@@ -2880,6 +3176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${feedbacksHtml}
                         </div>
                     </div>
+                    `}
                 </div>
                 <div style="border-top: 1px dashed var(--border-color); padding-top: 12px;">
                     <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">예약된 주간 시간표</div>
@@ -3030,24 +3327,76 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Submit Student Login Form (Easy Login via name/phone)
+        // Submit Student Login Form (Student Login via Student ID / Password)
         studentLoginForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const inputName = studentLoginNameInput.value.trim();
-            const inputPhone = studentLoginPhoneInput.value.trim();
+            const inputId = studentLoginNameInput.value.trim();
+            const inputPassword = studentLoginPhoneInput.value;
 
-            const foundStudent = students.find(s => 
-                s.name === inputName && 
-                (s.parentPhone === inputPhone || (s.phone && s.phone === inputPhone))
-            );
+            // Search in mock users children accounts
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            let foundParent = null;
+            let foundChild = null;
+            
+            mockUsers.forEach(u => {
+                const children = u.user_metadata?.children || [];
+                children.forEach(c => {
+                    if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && c.password === inputPassword) {
+                        foundParent = u;
+                        foundChild = c;
+                    }
+                });
+            });
 
-            if (foundStudent) {
+            if (foundParent && foundChild) {
+                // Check parent account status
+                if (foundParent.status === 'pending') {
+                    alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                    return;
+                }
+                if (foundParent.status === 'terminated') {
+                    alert('관리자에 의해 종결된 아이디 입니다.');
+                    return;
+                }
+                
+                let foundStudent = students.find(s => s.name === foundChild.name && s.parentPhone === foundParent.phone);
+                if (!foundStudent) {
+                    let age = 10;
+                    if (foundChild.birthdate) {
+                        const birthYear = new Date(foundChild.birthdate).getFullYear();
+                        age = new Date().getFullYear() - birthYear + 1;
+                    }
+                    foundStudent = {
+                        id: foundParent.id + '-' + foundParent.user_metadata?.children?.findIndex(x => x.username === foundChild.username),
+                        name: foundChild.name,
+                        age,
+                        school: '공부방 초등학교',
+                        phone: foundChild.phone || '',
+                        parentPhone: foundParent.phone,
+                        sibling: foundParent.user_metadata?.children?.length > 1 ? `${foundParent.user_metadata.children.length - 1}명의 형제자매` : '없음',
+                        schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
+                        progress: '개념 완성 과정 등록 대기 중',
+                        remarks: '자녀 계정으로 가입되었습니다. 스케줄을 설정해 주세요.',
+                        username: foundChild.username,
+                        password: foundChild.password,
+                        address: foundParent.address
+                    };
+                    students.unshift(foundStudent);
+                    saveStudents();
+                }
+
                 // Logged in successfully
-                localStorage.setItem('gongbubang_last_student_name', inputName);
+                localStorage.setItem('gongbubang_last_student_name', inputId);
+                localStorage.setItem('gongbubang_student_session', JSON.stringify({
+                    username: foundChild.username,
+                    name: foundChild.name,
+                    role: 'student'
+                }));
+                
                 isStudent = true;
                 loggedInStudentId = foundStudent.id;
+                userRole = 'student';
                 
-                // Hide admin/teacher panels to avoid clash
                 // Hide admin/teacher panels to avoid clash
                 if (isAdmin) {
                     isAdmin = false;
@@ -3065,7 +3414,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
 
                 renderMyClass();
-                showToast(`[로그인 성공] ${foundStudent.name} 학생/학부모 포털에 연결되었습니다.`);
+                showToast(`[로그인 성공] ${foundStudent.name} 학생 포털에 연결되었습니다.`);
 
                 // Smooth scroll to myclass
                 setTimeout(() => {
@@ -3112,8 +3461,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         renderNotices();
                         renderStudents();
+                        if (typeof renderApprovalList === 'function') renderApprovalList();
+                        if (typeof renderAdminResources === 'function') renderAdminResources();
                         showToast('관리자 모드가 활성화되었습니다.');
                         return;
+                    }
+
+                    // Check local mockUsers database first (runs in both mock and real mode)
+                    const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                    const foundUserLocal = mockUsers.find(u => u.email === email && u.password === password);
+                    
+                    if (foundUserLocal) {
+                        if (foundUserLocal.status === 'pending') {
+                            alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                            return;
+                        }
+                        if (foundUserLocal.status === 'terminated') {
+                            alert('관리자에 의해 종결된 아이디 입니다.');
+                            return;
+                        }
                     }
 
                     const { data, error } = await supabase.auth.signInWithPassword({
@@ -3126,7 +3492,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (data.user) {
+                        const userStatus = foundUserLocal ? foundUserLocal.status : (data.user.user_metadata?.status || 'approved');
+                        if (userStatus === 'pending') {
+                            alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                            await supabase.auth.signOut();
+                            return;
+                        }
+                        if (userStatus === 'terminated') {
+                            alert('관리자에 의해 종결된 아이디 입니다.');
+                            await supabase.auth.signOut();
+                            return;
+                        }
+
                         localStorage.setItem('gongbubang_last_student_email', email);
+                        localStorage.removeItem('gongbubang_student_session'); // clear student session
+                        
                         const name = data.user.user_metadata?.name || '신규학생';
                         const phone = data.user.user_metadata?.phone || '';
 
@@ -3143,19 +3523,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                 sibling: '없음',
                                 schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
                                 progress: '개념 완성 과정 등록 대기 중',
-                                remarks: 'Supabase로 가입된 계정입니다. 스케줄을 추가해 주세요.'
+                                remarks: 'Supabase로 가입된 계정입니다. 스케줄을 추가해 주세요.',
+                                address: data.user.user_metadata?.address || ''
                             };
                             students.unshift(studentRecord);
                             saveStudents();
                         } else if (studentRecord.id !== data.user.id) {
                             // Sync ID
-                            students = students.map(s => s.id === studentRecord.id ? { ...s, id: data.user.id } : s);
+                            students = students.map(s => s.id === studentRecord.id ? { ...s, id: data.user.id, address: data.user.user_metadata?.address || s.address } : s);
                             saveStudents();
                         }
 
                         // Success login state
                         isStudent = true;
                         loggedInStudentId = data.user.id;
+                        userRole = 'parent';
 
                         // Hide admin/teacher panels to avoid clash
                         if (isAdmin) {
@@ -3174,7 +3556,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
 
                         renderMyClass();
-                        showToast(`[로그인 성공] ${name} 학생/학부모 포털에 연결되었습니다.`);
+                        showToast(`[로그인 성공] ${name} 학부모 포털에 연결되었습니다.`);
 
                         // Smooth scroll to myclass
                         setTimeout(() => {
@@ -3210,20 +3592,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 const email = document.getElementById('student-signup-email').value.trim();
                 const password = document.getElementById('student-signup-password').value;
                 const phone = document.getElementById('student-signup-phone').value.trim();
+                const address = document.getElementById('student-signup-address').value.trim();
+
+                // Validate house address
+                if (!address) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '집 주소를 입력해 주세요.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Check email duplication locally
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                if (mockUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '이미 가입 완료되었거나 가입 승인 요청 대기 중인 이메일입니다.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
 
                 // Collect children info dynamically
                 const children = [];
                 const childBlocks = signupChildrenContainer.querySelectorAll('.signup-child-block');
+                let childValidationError = '';
+                
                 childBlocks.forEach(block => {
                     const name = block.querySelector('.child-name-input').value.trim();
                     const birthdate = block.querySelector('.child-birth-input').value;
                     const childPhone = block.querySelector('.child-phone-input').value.trim();
-                    children.push({ name, birthdate, phone: childPhone });
+                    const childUsername = block.querySelector('.child-id-input').value.trim();
+                    const childPassword = block.querySelector('.child-pw-input').value;
+                    
+                    if (!name || !birthdate || !childUsername || !childPassword) {
+                        childValidationError = '자녀 정보(이름, 생년월일, 아이디, 비밀번호)를 모두 입력해 주세요.';
+                    }
+                    
+                    children.push({ name, birthdate, phone: childPhone, username: childUsername, password: childPassword });
                 });
+
+                if (childValidationError) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = childValidationError;
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
 
                 if (children.length === 0) {
                     if (signupErrorMsg) {
                         signupErrorMsg.textContent = '최소 한 명 이상의 자녀를 등록해 주세요.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Check child username duplication
+                let childUsernameDuplicate = false;
+                children.forEach(c => {
+                    const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === c.username.toLowerCase());
+                    let takenInMock = false;
+                    mockUsers.forEach(u => {
+                        if (u.role === 'student' && u.email === c.username) {
+                            takenInMock = true;
+                        }
+                        const uChildren = u.user_metadata?.children || [];
+                        if (uChildren.some(uc => uc.username && uc.username.toLowerCase() === c.username.toLowerCase())) {
+                            takenInMock = true;
+                        }
+                    });
+                    if (takenInStudents || takenInMock) {
+                        childUsernameDuplicate = true;
+                    }
+                });
+
+                if (childUsernameDuplicate) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '등록하려는 자녀의 학생 아이디 중 이미 사용 중인 아이디가 있습니다. 중복 체크를 완료해 주세요.';
                         signupErrorMsg.style.display = 'block';
                     }
                     return;
@@ -3236,83 +3682,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (signupErrorMsg) signupErrorMsg.style.display = 'none';
 
                 try {
-                    const { data, error } = await supabase.auth.signUp({
+                    // Create locally in mock database with status 'pending'
+                    const newUserId = 'user-' + Date.now();
+                    const localPendingUser = {
+                        id: newUserId,
                         email,
                         password,
-                        options: {
-                            data: {
-                                name: children[0].name,
-                                phone,
-                                children,
-                                role: 'parent'
-                            }
+                        name: children[0].name + ' 학부모',
+                        phone,
+                        address,
+                        role: 'parent',
+                        status: 'pending',
+                        createdAt: new Date().toISOString(),
+                        user_metadata: {
+                            name: children[0].name + ' 학부모',
+                            phone,
+                            address,
+                            children,
+                            role: 'parent'
                         }
-                    });
+                    };
+                    mockUsers.push(localPendingUser);
+                    localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
 
-                    if (error) {
-                        throw error;
-                    }
-
-                    if (data.user) {
-                        showToast('회원가입이 완료되었습니다! 자동으로 로그인됩니다.');
-                        studentSignupModal.classList.remove('open');
-                        
-                        // Map or create student records in LMS
-                        children.forEach((child, idx) => {
-                            let studentRecord = students.find(s => s.name === child.name && (s.parentPhone === phone || s.phone === child.phone));
-                            if (!studentRecord) {
-                                let age = 10;
-                                if (child.birthdate) {
-                                    const birthYear = new Date(child.birthdate).getFullYear();
-                                    age = new Date().getFullYear() - birthYear + 1;
+                    // If Supabase is active, register inside Supabase Auth too
+                    if (supabase.auth.signUp) {
+                        await supabase.auth.signUp({
+                            email,
+                            password,
+                            options: {
+                                data: {
+                                    name: children[0].name + ' 학부모',
+                                    phone,
+                                    address,
+                                    children,
+                                    role: 'parent',
+                                    status: 'pending'
                                 }
-                                studentRecord = {
-                                    id: `${data.user.id}-${idx}`,
-                                    name: child.name,
-                                    age,
-                                    school: '공부방 초등학교',
-                                    phone: child.phone,
-                                    parentPhone: phone,
-                                    sibling: children.length > 1 ? `${children.length - 1}명의 형제자매` : '없음',
-                                    schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
-                                    progress: '개념 완성 과정 등록 대기 중',
-                                    remarks: 'Supabase 가입 신규 학부모 계정입니다. 스케줄을 설정해 주세요.'
-                                };
-                                students.unshift(studentRecord);
-                            } else {
-                                students = students.map(s => s.id === studentRecord.id ? { 
-                                    ...s, 
-                                    id: `${data.user.id}-${idx}`, 
-                                    sibling: children.length > 1 ? `${children.length - 1}명의 형제자매` : s.sibling 
-                                } : s);
                             }
                         });
-                        saveStudents();
+                    }
 
-                        isStudent = true;
-                        loggedInStudentId = `${data.user.id}-0`; // Default to first child
-
-                        // Hide admin/teacher panels to avoid clash
-                        if (isAdmin) {
-                            isAdmin = false;
-                            if (btnAdminWrite) btnAdminWrite.style.display = 'none';
-                            if (studentSection) studentSection.style.display = 'none';
-                            if (navLinkStudents) navLinkStudents.style.display = 'none';
-                            if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
-                        }
-
-                        updateLoginButton();
-
-                        if (myclassSection) myclassSection.style.display = 'block';
-                        if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
-                        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
-
-                        renderMyClass();
-                        
-                        setTimeout(() => {
-                            const targetOffset = myclassSection.offsetTop - 90;
-                            window.scrollTo({ top: targetOffset, behavior: 'smooth' });
-                        }, 200);
+                    // Alert user and close modal
+                    alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 로그인 및 서비스 이용이 가능합니다.');
+                    studentSignupModal.classList.remove('open');
+                    studentSignupForm.reset();
+                    
+                    // Force signout to clear auto-login session
+                    if (supabase.auth.signOut) {
+                        await supabase.auth.signOut();
                     }
                 } catch (err) {
                     console.error('Signup error:', err);
@@ -5181,15 +5599,508 @@ document.addEventListener('DOMContentLoaded', () => {
             safeCreateIcons();
         };
 
+        // Unified user management DB initialization
+        const initUsers = () => {
+            let users = [];
+            try {
+                users = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            } catch(e){}
+            
+            if (users.length === 0) {
+                const seededUsers = [
+                    {
+                        id: 'parent-1',
+                        email: 'parent@test.com',
+                        password: '123456',
+                        name: '김부모',
+                        phone: '010-9876-5432',
+                        address: '서울시 강남구 역삼동 101호',
+                        role: 'parent',
+                        status: 'approved',
+                        createdAt: new Date().toISOString(),
+                        approvedAt: new Date().toISOString(),
+                        user_metadata: {
+                            name: '김부모',
+                            phone: '010-9876-5432',
+                            address: '서울시 강남구 역삼동 101호',
+                            role: 'parent',
+                            children: [
+                                { name: '김민준', birthdate: '2016-01-01', phone: '010-1111-2222', username: 'minjun', password: '1234' },
+                                { name: '김서아', birthdate: '2018-01-01', phone: '010-5555-6666', username: 'seoah', password: '1234' }
+                            ]
+                        }
+                    },
+                    {
+                        id: 'parent-2',
+                        email: 'parent2@test.com',
+                        password: '123456',
+                        name: '이부모',
+                        phone: '010-4444-5555',
+                        address: '서울시 서초구 반포동 202호',
+                        role: 'parent',
+                        status: 'approved',
+                        createdAt: new Date().toISOString(),
+                        approvedAt: new Date().toISOString(),
+                        user_metadata: {
+                            name: '이부모',
+                            phone: '010-4444-5555',
+                            address: '서울시 서초구 반포동 202호',
+                            role: 'parent',
+                            children: [
+                                { name: '이서윤', birthdate: '2012-01-01', phone: '010-2222-3333', username: 'seoyun', password: '1234' }
+                            ]
+                        }
+                    }
+                ];
+                localStorage.setItem('gongbubang_mock_users', JSON.stringify(seededUsers));
+            }
+            
+            // Sync default student cards
+            let updatedStudents = false;
+            students = students.map(s => {
+                let updated = { ...s };
+                if (s.name === '김민준' && !s.username) {
+                    updated.username = 'minjun';
+                    updated.password = '1234';
+                    updated.address = '서울시 강남구 역삼동 101호';
+                    updatedStudents = true;
+                } else if (s.name === '이서윤' && !s.username) {
+                    updated.username = 'seoyun';
+                    updated.password = '1234';
+                    updated.address = '서울시 서초구 반포동 202호';
+                    updatedStudents = true;
+                } else if (s.name === '김서아' && !s.username) {
+                    updated.username = 'seoah';
+                    updated.password = '1234';
+                    updated.address = '서울시 강남구 역삼동 101호';
+                    updatedStudents = true;
+                }
+                return updated;
+            });
+            if (updatedStudents) {
+                saveStudents();
+            }
+        };
+
+        // Render Admin Approval Request Queue & User Termination Management
+        const renderApprovalList = () => {
+            const tbody = document.getElementById('approval-list-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const filterStatus = document.getElementById('approval-status-filter')?.value || 'pending';
+            const filterYear = document.getElementById('approval-year-filter')?.value || 'all';
+            
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const parentUsers = mockUsers.filter(u => u.role === 'parent');
+            
+            let filtered = parentUsers.filter(u => {
+                const status = u.status || 'pending';
+                if (status !== filterStatus) return false;
+                
+                if (filterYear !== 'all') {
+                    const dateStr = u.createdAt || u.approvedAt || u.terminatedAt || '';
+                    if (!dateStr.includes(filterYear)) return false;
+                }
+                return true;
+            });
+            
+            const countLabel = document.getElementById('approval-count-label');
+            if (countLabel) {
+                countLabel.textContent = `조회 결과: ${filtered.length}건`;
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding: 24px; text-align: center; color: var(--text-secondary);">해당 조건의 가입/신청 내역이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            filtered.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                
+                const childrenText = (u.user_metadata?.children || []).map(c => 
+                    `<div style="font-size: 0.82rem; font-weight: 600; text-align: left;">- 이름: ${c.name} (${c.birthdate || ''})</div>
+                     <div style="font-size: 0.76rem; color: var(--text-muted); margin-left: 8px; text-align: left;">아이디: <strong>${c.username || '-'}</strong> / 비번: <strong>${c.password || '-'}</strong></div>`
+                ).join('<div style="height: 6px;"></div>');
+                
+                const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-';
+                let dateLabel = `신청일: ${dateStr}`;
+                if (filterStatus === 'approved') {
+                    const appDate = u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '-';
+                    dateLabel = `신청일: ${dateStr}<br><span style="color: var(--success-color); font-weight: 600;">승인일: ${appDate}</span>`;
+                } else if (filterStatus === 'terminated') {
+                    const appDate = u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '-';
+                    const termDate = u.terminatedAt ? new Date(u.terminatedAt).toLocaleDateString() : '-';
+                    dateLabel = `승인일: ${appDate}<br><span style="color: #ff4d4f; font-weight: 600;">종결일: ${termDate}</span>`;
+                }
+                
+                let actionBtn = '';
+                if (filterStatus === 'pending') {
+                    actionBtn = `<button type="button" class="btn-approve" data-id="${u.id}" style="padding: 6px 14px; font-size: 0.8rem; background: var(--success-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 700;">승인</button>`;
+                } else if (filterStatus === 'approved') {
+                    actionBtn = `<label style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 700; color: #ff4d4f;">
+                                    <input type="checkbox" class="chk-terminate" data-id="${u.id}" style="accent-color: #ff4d4f;"> 종결
+                                 </label>`;
+                } else if (filterStatus === 'terminated') {
+                    actionBtn = `<button type="button" class="btn-terminate-cancel" data-id="${u.id}" style="padding: 6px 12px; font-size: 0.78rem; background: #f1f5f9; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-weight: 600;">종결 취소</button>`;
+                }
+                
+                tr.innerHTML = `
+                    <td style="padding: 12px; font-size: 0.85rem; line-height: 1.4; text-align: left;">
+                        <div style="font-weight: 700; color: var(--text-primary);">${u.name} (${u.email})</div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">연락처: ${u.phone || u.user_metadata?.phone || '-'}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">주소: ${u.address || u.user_metadata?.address || '-'}</div>
+                    </td>
+                    <td style="padding: 12px; text-align: left;">
+                        ${childrenText}
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);">
+                        ${dateLabel}
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        ${actionBtn}
+                    </td>
+                `;
+                
+                // Bind actions
+                if (filterStatus === 'pending') {
+                    tr.querySelector('.btn-approve').addEventListener('click', () => {
+                        if (confirm(`"${u.name}" 학부모 계정을 가입 승인하시겠습니까?\n승인 시 자녀 계정들도 활성화되며 원생 명단에 추가됩니다.`)) {
+                            u.status = 'approved';
+                            u.approvedAt = new Date().toISOString();
+                            
+                            const childrenData = u.user_metadata?.children || [];
+                            childrenData.forEach((c, idx) => {
+                                let exist = students.find(s => s.name === c.name && (s.parentPhone === u.phone || s.phone === c.phone));
+                                let age = 10;
+                                if (c.birthdate) {
+                                    const birthYear = new Date(c.birthdate).getFullYear();
+                                    age = new Date().getFullYear() - birthYear + 1;
+                                }
+                                if (!exist) {
+                                    students.unshift({
+                                        id: `${u.id}-${idx}`,
+                                        name: c.name,
+                                        age,
+                                        school: '공부방 초등학교',
+                                        phone: c.phone || '',
+                                        parentPhone: u.phone,
+                                        sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : '없음',
+                                        schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
+                                        progress: '개념 완성 과정 등록 대기 중',
+                                        remarks: '신규 가입 자녀입니다. 스케줄을 설정해 주세요.',
+                                        username: c.username,
+                                        password: c.password,
+                                        address: u.address
+                                    });
+                                } else {
+                                    exist.username = c.username;
+                                    exist.password = c.password;
+                                    exist.address = u.address;
+                                    exist.id = `${u.id}-${idx}`;
+                                }
+                            });
+                            
+                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            saveStudents();
+                            renderApprovalList();
+                            renderStudents();
+                            showToast(`"${u.name}" 학부모 가입이 승인되었습니다.`);
+                        }
+                    });
+                } else if (filterStatus === 'approved') {
+                    tr.querySelector('.chk-terminate').addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            if (confirm(`"${u.name}" 학부모 및 등록된 자녀 계정을 종결(퇴원) 처리하시겠습니까?\n종결 처리 시 해당 계정의 로그인이 즉시 차단됩니다.`)) {
+                                u.status = 'terminated';
+                                u.terminatedAt = new Date().toISOString();
+                                
+                                const childIds = (u.user_metadata?.children || []).map((_, idx) => `${u.id}-${idx}`);
+                                students = students.map(s => {
+                                    if (childIds.includes(String(s.id))) {
+                                        return {
+                                            ...s,
+                                            isTerminated: true,
+                                            terminationDate: new Date().toISOString().split('T')[0]
+                                        };
+                                    }
+                                    return s;
+                                });
+                                
+                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                saveStudents();
+                                renderApprovalList();
+                                renderStudents();
+                                showToast(`"${u.name}" 학부모 계정이 종결되었습니다.`);
+                            } else {
+                                e.target.checked = false;
+                            }
+                        }
+                    });
+                } else if (filterStatus === 'terminated') {
+                    tr.querySelector('.btn-terminate-cancel').addEventListener('click', () => {
+                        if (confirm(`"${u.name}" 학부모 계정의 종결 처리를 취소하고 다시 승인 상태로 복원하시겠습니까?`)) {
+                            u.status = 'approved';
+                            u.terminatedAt = null;
+                            
+                            const childIds = (u.user_metadata?.children || []).map((_, idx) => `${u.id}-${idx}`);
+                            students = students.map(s => {
+                                if (childIds.includes(String(s.id))) {
+                                    return {
+                                        ...s,
+                                        isTerminated: false,
+                                        terminationDate: ''
+                                    };
+                                }
+                                return s;
+                            });
+                            
+                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            saveStudents();
+                            renderApprovalList();
+                            renderStudents();
+                            showToast(`"${u.name}" 학부모 계정이 승인 상태로 복원되었습니다.`);
+                        }
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            safeCreateIcons();
+        };
+
+        // User Profile update modal logic
+        const linkUserProfileEdit = document.getElementById('link-user-profile-edit');
+        const userProfileModal = document.getElementById('user-profile-modal');
+        const btnUserProfileClose = document.getElementById('btn-user-profile-close');
+        const userProfileForm = document.getElementById('user-profile-form');
+        
+        if (linkUserProfileEdit && userProfileModal) {
+            linkUserProfileEdit.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                const emailDisplay = document.getElementById('profile-email-display');
+                const phoneInput = document.getElementById('profile-phone-input');
+                const phoneGroup = document.getElementById('profile-phone-group');
+                const passwordInput = document.getElementById('profile-password-input');
+                
+                if (passwordInput) passwordInput.value = '';
+                
+                if (isAdmin) {
+                    if (emailDisplay) emailDisplay.value = 'teacher@math.com (관리자)';
+                    if (phoneGroup) phoneGroup.style.display = 'none';
+                } else if (isStudent) {
+                    if (phoneGroup) phoneGroup.style.display = 'block';
+                    
+                    const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+                    if (studentSession) {
+                        if (emailDisplay) emailDisplay.value = studentSession.username + ' (학생)';
+                        const s = students.find(x => x.id === loggedInStudentId);
+                        if (s && phoneInput) phoneInput.value = s.phone || '';
+                    } else {
+                        const user = supabase.auth.user ? supabase.auth.user() : null;
+                        if (user) {
+                            if (emailDisplay) emailDisplay.value = user.email + ' (학부모)';
+                            if (phoneInput) phoneInput.value = user.user_metadata?.phone || '';
+                        }
+                    }
+                }
+                userProfileModal.classList.add('open');
+            });
+        }
+        
+        if (btnUserProfileClose && userProfileModal) {
+            btnUserProfileClose.addEventListener('click', () => {
+                userProfileModal.classList.remove('open');
+            });
+        }
+        
+        if (userProfileForm) {
+            userProfileForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newPhone = document.getElementById('profile-phone-input').value.trim();
+                const newPassword = document.getElementById('profile-password-input').value;
+                
+                try {
+                    if (isAdmin) {
+                        if (newPassword) {
+                            if (newPassword.length < 4) {
+                                alert('비밀번호는 4자리 이상이어야 합니다.');
+                                return;
+                            }
+                            localStorage.setItem('gongbubang_admin_password', newPassword);
+                            showToast('관리자 비밀번호가 성공적으로 변경되었습니다.');
+                        }
+                    } else if (isStudent) {
+                        const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+                        if (studentSession) {
+                            // Student password change
+                            const s = students.find(x => x.id === loggedInStudentId);
+                            if (s) {
+                                s.phone = newPhone;
+                                if (newPassword) {
+                                    if (newPassword.length < 4) {
+                                        alert('비밀번호는 4자리 이상이어야 합니다.');
+                                        return;
+                                    }
+                                    s.password = newPassword;
+                                }
+                                saveStudents();
+                            }
+                            
+                            // Sync back to gongbubang_mock_users
+                            let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                            let parentId = null;
+                            if (String(loggedInStudentId).includes('-')) {
+                                parentId = String(loggedInStudentId).split('-')[0];
+                            }
+                            if (parentId) {
+                                mockUsers = mockUsers.map(u => {
+                                    if (u.id === parentId) {
+                                        const updatedChildren = (u.user_metadata?.children || []).map(child => {
+                                            if (child.name === studentSession.name) {
+                                                let uc = { ...child, phone: newPhone };
+                                                if (newPassword) uc.password = newPassword;
+                                                return uc;
+                                            }
+                                            return child;
+                                        });
+                                        return {
+                                            ...u,
+                                            user_metadata: {
+                                                ...u.user_metadata,
+                                                children: updatedChildren
+                                            }
+                                        };
+                                    }
+                                    return u;
+                                });
+                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            }
+                            showToast('학생 정보가 수정되었습니다.');
+                        } else {
+                            // Parent password change
+                            const user = supabase.auth.user ? supabase.auth.user() : null;
+                            if (user) {
+                                let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                                mockUsers = mockUsers.map(u => {
+                                    if (u.id === user.id || u.email === user.email) {
+                                        let uu = { ...u, phone: newPhone };
+                                        if (newPassword) uu.password = newPassword;
+                                        uu.user_metadata = {
+                                            ...u.user_metadata,
+                                            phone: newPhone
+                                        };
+                                        return uu;
+                                    }
+                                    return u;
+                                });
+                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                
+                                if (supabase.auth.updateUser) {
+                                    const updateData = { data: { phone: newPhone } };
+                                    if (newPassword) updateData.password = newPassword;
+                                    await supabase.auth.updateUser(updateData);
+                                }
+                                
+                                students = students.map(s => {
+                                    if (String(s.id).startsWith(user.id)) {
+                                        return { ...s, parentPhone: newPhone };
+                                    }
+                                    return s;
+                                });
+                                saveStudents();
+                                showToast('개인정보가 수정되었습니다.');
+                            }
+                        }
+                    }
+                    
+                    if (userProfileModal) userProfileModal.classList.remove('open');
+                    updateLoginButton();
+                    renderStudents();
+                    renderMyClass();
+                } catch(err) {
+                    console.error('Profile update error:', err);
+                    alert('정보 수정 중 오류가 발생했습니다: ' + err.message);
+                }
+            });
+        }
+
+        // Bind approval status change
+        const approvalStatusFilter = document.getElementById('approval-status-filter');
+        const approvalYearFilter = document.getElementById('approval-year-filter');
+        if (approvalStatusFilter) approvalStatusFilter.addEventListener('change', renderApprovalList);
+        if (approvalYearFilter) approvalYearFilter.addEventListener('change', renderApprovalList);
+
+        // Bind resource CRUD form
+        const resourceForm = document.getElementById('resource-editor-form');
+        if (resourceForm) {
+            resourceForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = document.getElementById('edit-resource-id').value;
+                const title = document.getElementById('resource-title-input').value.trim();
+                const size = document.getElementById('resource-size-input').value.trim();
+                const target = document.getElementById('resource-target-input').value.trim();
+                const type = document.getElementById('resource-type-select').value;
+                const filename = document.getElementById('resource-filename-input').value.trim();
+                
+                let resources = [];
+                try {
+                    resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+                } catch(err){}
+                
+                if (id) {
+                    resources = resources.map(res => res.id === id ? { ...res, title, size, target, type, filename } : res);
+                    showToast('자료가 수정되었습니다.');
+                } else {
+                    const newRes = {
+                        id: 'res-' + Date.now(),
+                        title,
+                        size,
+                        target,
+                        type,
+                        filename,
+                        downloads: 0
+                    };
+                    resources.push(newRes);
+                    showToast('자료가 새로 등록되었습니다.');
+                }
+                
+                localStorage.setItem('gongbubang_resources', JSON.stringify(resources));
+                resourceForm.reset();
+                document.getElementById('edit-resource-id').value = '';
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정`;
+                renderResources();
+                renderAdminResources();
+            });
+        }
+        
+        const btnResourceClear = document.getElementById('btn-resource-clear');
+        if (btnResourceClear && resourceForm) {
+            btnResourceClear.addEventListener('click', () => {
+                resourceForm.reset();
+                document.getElementById('edit-resource-id').value = '';
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정`;
+                safeCreateIcons();
+            });
+        }
+
         // Initial Renders
         renderCurriculumGrid();
 
         safeCreateIcons();
         renderNotices();
+        
+        // Initialize user database and sync students
+        initUsers();
+        
         if (isAdmin) {
             renderStudents();
             renderConsultList();
             renderAdminCurriculumList();
             renderAiQueryManagement();
+            renderApprovalList();
+            renderAdminResources();
         }
 });

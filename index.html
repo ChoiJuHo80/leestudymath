@@ -40,6 +40,12 @@
                     <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
                 </nav>
                 <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
+                    <span id="user-profile-display-container" style="display: none; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 600; margin-right: 4px;">
+                        <a href="#" id="link-user-profile-edit" style="color: var(--primary-color); text-decoration: none; border-bottom: 1px dashed var(--primary-color); padding-bottom: 2px; transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="user" style="width: 16px; height: 16px;"></i>
+                            <span id="logged-user-name">사용자</span> 님
+                        </a>
+                    </span>
                     <button class="btn-admin-mode" id="btn-login-toggle">
                         <span class="student-icon-wrapper"><i data-lucide="log-in"></i></span>
                         <span>로그인</span>
@@ -216,13 +222,13 @@
                         <table class="schedule-table" id="main-schedule-table">
                             <thead>
                                 <tr>
-                                    <th style="min-width: 140px; text-align: left; padding-left: 20px;">반 이름</th>
+                                    <th style="min-width: 140px; text-align: left; padding-left: 20px;">수업 시간</th>
                                     <th>월요일</th>
                                     <th>화요일</th>
                                     <th>수요일</th>
                                     <th>목요일</th>
                                     <th>금요일</th>
-                                    <th>수업 시간</th>
+                                    <th>반 이름</th>
                                 </tr>
                             </thead>
                             <tbody id="main-schedule-tbody">
@@ -570,6 +576,117 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- 가입 승인 및 종결 관리 Section (Admin Only) -->
+                    <div class="class-management-card" id="approval-management-card" style="margin-top: 30px;">
+                        <div class="class-management-header">
+                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="shield-check" style="color: var(--primary-color); width: 22px; height: 22px;"></i> 가입 승인 및 종결 관리
+                            </h3>
+                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">학부모 회원 가입 신청을 검토 후 승인하거나, 기존 승인된 계정을 종결(퇴원) 처리 및 관리합니다.</p>
+                        </div>
+                        
+                        <!-- Filters -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">구분 필터:</label>
+                                <select id="approval-status-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; background: #ffffff;">
+                                    <option value="pending">승인 대기</option>
+                                    <option value="approved">승인 완료</option>
+                                    <option value="terminated">종결</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">가입/요청 년도:</label>
+                                <select id="approval-year-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; background: #ffffff;">
+                                    <option value="all">전체</option>
+                                    <option value="2026">2026년</option>
+                                    <option value="2025">2025년</option>
+                                </select>
+                            </div>
+                            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: auto;" id="approval-count-label">조회 결과: 0건</span>
+                        </div>
+
+                        <div class="schedule-table-wrapper" style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff;">
+                            <table class="schedule-table" style="min-width: 800px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #fafafa; border-bottom: 2px solid var(--border-color);">
+                                        <th style="padding: 12px; text-align: left; font-size: 0.82rem; font-weight: 700;">학부모 계정 정보 (이메일/연락처/주소)</th>
+                                        <th style="padding: 12px; text-align: left; font-size: 0.82rem; font-weight: 700;">등록 자녀 정보 (이름/학년/아이디)</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; font-weight: 700;">신청/등록 일자</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; font-weight: 700; width: 140px;">액션</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="approval-list-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 자료공유 센터 관리 Section (Admin Only) -->
+                    <div class="class-management-card" id="resource-management-card" style="margin-top: 30px;">
+                        <div class="class-management-header">
+                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="download-cloud" style="color: var(--mascot-pink-bg); width: 22px; height: 22px;"></i> 자료공유 센터 관리
+                            </h3>
+                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">공부방 홈페이지 자료공유 센터에 표시될 학습 자료를 등록, 수정하거나 삭제합니다.</p>
+                        </div>
+                        
+                        <div class="class-management-grid">
+                            <!-- Left Form -->
+                            <div class="class-form-container">
+                                <h4 id="resource-editor-title" style="font-size: 0.95rem; font-weight: 700; color: var(--mascot-pink-bg); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정
+                                </h4>
+                                <form id="resource-editor-form" style="display: grid; gap: 14px;">
+                                    <input type="hidden" id="edit-resource-id">
+                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label for="resource-title-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">자료 제목</label>
+                                        <input type="text" id="resource-title-input" required placeholder="예: 2026 초등 연산왕 특강 - 모의고사 1회 (정답/풀이 포함).pdf" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                    </div>
+                                    <div class="form-group-modal-row-three" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="resource-size-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">파일 크기</label>
+                                            <input type="text" id="resource-size-input" required placeholder="예: 3.4 MB" style="padding: 8px 12px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="resource-target-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">대상 학년/구분</label>
+                                            <input type="text" id="resource-target-input" required placeholder="예: 초등 전학년" style="padding: 8px 12px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="resource-type-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">파일 형식</label>
+                                            <select id="resource-type-select" required style="padding: 8px 12px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; height: 34px; background: #ffffff;">
+                                                <option value="pdf">PDF (.pdf)</option>
+                                                <option value="zip">ZIP 압축파일 (.zip)</option>
+                                                <option value="hwp">HWP 한글 (.hwp)</option>
+                                                <option value="xls">XLS 엑셀 (.xls/.xlsx)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label for="resource-filename-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">다운로드 파일명 (실제 다운로드될 명칭)</label>
+                                        <input type="text" id="resource-filename-input" required placeholder="예: 2026_초등_연산왕_특강_1회.pdf" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                    </div>
+                                    
+                                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+                                        <button type="button" id="btn-resource-clear" style="height: 38px; padding: 0 16px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; font-weight: 500; transition: var(--transition-smooth); white-space: nowrap;">초기화</button>
+                                        <button type="submit" class="btn-modal-submit" style="width: auto; height: 38px; padding: 0 20px; margin-top: 0; background: var(--mascot-pink-bg); border-color: var(--mascot-pink-bg); white-space: nowrap;">저장</button>
+                                    </div>
+                                </form>
+                            </div>
+                            
+                            <!-- Right List -->
+                            <div class="class-list-column">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="list" style="width: 18px; height: 18px; color: var(--text-secondary);"></i> 등록 자료 리스트
+                                </h4>
+                                <div id="admin-resource-list-container" style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
+                                    <!-- Resource list items populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Section: 마이클래스 (Student/Parent Portal) -->
@@ -811,6 +928,22 @@
                     </div>
                 </div>
 
+                <!-- Row: Login ID & Password & Address -->
+                <div class="form-row-three" style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin-top: 12px;">
+                    <div class="form-group-modal">
+                        <label for="student-username-input">학생 아이디</label>
+                        <input type="text" id="student-username-input" placeholder="학생 아이디">
+                    </div>
+                    <div class="form-group-modal">
+                        <label for="student-password-input">학생 비밀번호</label>
+                        <input type="text" id="student-password-input" placeholder="학생 비밀번호">
+                    </div>
+                    <div class="form-group-modal">
+                        <label for="student-address-input">집 주소</label>
+                        <input type="text" id="student-address-input" placeholder="집 주소 입력">
+                    </div>
+                </div>
+
                 <!-- Row: Class Selection -->
                 <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
                     <div class="form-group-modal" style="grid-column: span 2;">
@@ -903,24 +1036,24 @@
             
             <!-- Login Type Tabs -->
             <div class="login-tabs">
-                <button type="button" class="login-tab-btn active" id="btn-tab-easy">간편 로그인</button>
-                <button type="button" class="login-tab-btn" id="btn-tab-email">이메일 로그인</button>
+                <button type="button" class="login-tab-btn active" id="btn-tab-easy">학생 로그인</button>
+                <button type="button" class="login-tab-btn" id="btn-tab-email">학부모 로그인</button>
                 <button type="button" class="login-tab-btn" id="btn-tab-admin">관리자 로그인</button>
             </div>
 
-            <!-- Tab 1: Easy Login (Name & Phone) -->
+            <!-- Tab 1: Student Login (ID & Password) -->
             <form id="student-login-form" class="modal-form">
-                <p class="modal-desc">등록된 학생 이름과 부모님 연락처를 입력하세요.</p>
+                <p class="modal-desc">학생의 개별 아이디와 비밀번호를 입력하세요.</p>
                 <div class="form-group-modal">
-                    <label for="student-login-name">학생 이름</label>
-                    <input type="text" id="student-login-name" required placeholder="예: 김민준" autocomplete="off">
+                    <label for="student-login-name">학생 아이디</label>
+                    <input type="text" id="student-login-name" required placeholder="학생 아이디 입력" autocomplete="off">
                 </div>
                 <div class="form-group-modal">
-                    <label for="student-login-phone">부모님 연락처</label>
-                    <input type="text" id="student-login-phone" required placeholder="예: 010-9876-5432" autocomplete="off">
-                    <span class="auth-error-msg" id="student-auth-error-msg">일치하는 원생 정보가 없습니다. (테스트용: 김민준 / 010-9876-5432)</span>
+                    <label for="student-login-phone">비밀번호</label>
+                    <input type="password" id="student-login-phone" required placeholder="비밀번호 입력" autocomplete="off">
+                    <span class="auth-error-msg" id="student-auth-error-msg">아이디 또는 비밀번호가 잘못되었습니다.</span>
                 </div>
-                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">인증 및 로그인</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">로그인</button>
             </form>
 
             <!-- Tab 2: Email Login (Supabase Auth) -->
@@ -985,8 +1118,8 @@
     <div class="modal-overlay" id="student-signup-modal">
         <div class="modal-box auth-box">
             <button class="modal-close-btn" id="btn-student-signup-close"><i data-lucide="x"></i></button>
-            <h3 class="modal-title">학부모/학생 회원가입</h3>
-            <p class="modal-desc">Supabase Auth를 통한 회원가입을 진행합니다.</p>
+            <h3 class="modal-title">학부모 가입</h3>
+            <p class="modal-desc">학부모 가입 및 자녀의 개별 계정을 등록합니다.</p>
             <form id="student-signup-form" class="modal-form">
                 <div class="form-group-modal">
                     <label for="student-signup-email">이메일 주소</label>
@@ -999,6 +1132,10 @@
                 <div class="form-group-modal">
                     <label for="student-signup-phone">부모님 연락처</label>
                     <input type="text" id="student-signup-phone" required placeholder="예: 010-9876-5432" autocomplete="off">
+                </div>
+                <div class="form-group-modal">
+                    <label for="student-signup-address">집 주소</label>
+                    <input type="text" id="student-signup-address" required placeholder="예: 서울시 강남구 역삼동 123-45" autocomplete="off">
                 </div>
                 
                 <div class="signup-children-section" style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 16px;">
@@ -1013,7 +1150,7 @@
                     </div>
                     <span class="auth-error-msg" id="signup-error-msg" style="margin-top: 10px;">회원가입 중 오류가 발생했습니다.</span>
                 </div>
-                <button type="submit" class="btn-modal-submit" style="margin-top: 20px;">회원가입 완료</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 20px;">회원가입 승인 요청</button>
             </form>
         </div>
     </div>
@@ -1321,6 +1458,36 @@
                 </div>
                 
                 <button type="submit" class="btn-modal-submit" style="margin-top: 6px;">상담 예약 신청하기</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Personal Information Modification Modal -->
+    <div class="modal-overlay" id="user-profile-modal">
+        <div class="modal-box auth-box" style="max-width: 420px;">
+            <button class="modal-close-btn" id="btn-user-profile-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="user-cog" style="color: var(--primary-color);"></i>개인정보 수정
+            </h3>
+            <p class="modal-desc">가입 정보 중 연락처와 로그인 비밀번호를 수정할 수 있습니다.</p>
+            
+            <form id="user-profile-form" class="modal-form" style="display: flex; flex-direction: column; gap: 14px;">
+                <div class="form-group-modal">
+                    <label for="profile-email-display">계정 ID (이메일/아이디)</label>
+                    <input type="text" id="profile-email-display" readonly style="width: 100%; padding: 10px 14px; border-radius: var(--border-radius-base); border: 1px solid var(--border-color); background-color: #f1f5f9; cursor: not-allowed; outline: none; font-size: 0.9rem;">
+                </div>
+                
+                <div class="form-group-modal" id="profile-phone-group">
+                    <label for="profile-phone-input">연락처</label>
+                    <input type="text" id="profile-phone-input" required placeholder="예: 010-1234-5678" autocomplete="off" style="width: 100%; padding: 10px 14px; border-radius: var(--border-radius-base); border: 1px solid var(--border-color); outline: none; font-size: 0.9rem;">
+                </div>
+
+                <div class="form-group-modal">
+                    <label for="profile-password-input">새 비밀번호 (변경 시에만 입력)</label>
+                    <input type="password" id="profile-password-input" placeholder="새 비밀번호 입력 (6자리 이상)" autocomplete="off" style="width: 100%; padding: 10px 14px; border-radius: var(--border-radius-base); border: 1px solid var(--border-color); outline: none; font-size: 0.9rem;">
+                </div>
+                
+                <button type="submit" class="btn-modal-submit" style="margin-top: 6px;">수정 완료</button>
             </form>
         </div>
     </div>
