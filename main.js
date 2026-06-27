@@ -6086,6 +6086,57 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Daum Postcode Search integration
+        const openPostcode = (inputElement) => {
+            if (typeof daum === 'undefined') {
+                alert('주소 검색 서비스를 불러올 수 없습니다. 인터넷 연결을 확인해 주세요.');
+                return;
+            }
+            new daum.Postcode({
+                oncomplete: function(data) {
+                    let addr = '';
+                    let extraAddr = '';
+
+                    if (data.userSelectedType === 'R') {
+                        addr = data.roadAddress;
+                    } else {
+                        addr = data.jibunAddress;
+                    }
+
+                    if (data.userSelectedType === 'R') {
+                        if (data.bname !== '' && /[동|로|가]$/g.test(data.bname)) {
+                            extraAddr += data.bname;
+                        }
+                        if (data.buildingName !== '' && data.apartment === 'Y') {
+                            extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
+                        }
+                        if (extraAddr !== '') {
+                            extraAddr = ' (' + extraAddr + ')';
+                        }
+                    }
+
+                    inputElement.value = addr + extraAddr;
+                    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }).open();
+        };
+
+        const btnSignupSearchAddress = document.getElementById('btn-signup-search-address');
+        const inputSignupAddress = document.getElementById('student-signup-address');
+        if (btnSignupSearchAddress && inputSignupAddress) {
+            const handler = () => openPostcode(inputSignupAddress);
+            btnSignupSearchAddress.addEventListener('click', handler);
+            inputSignupAddress.addEventListener('click', handler);
+        }
+
+        const btnAdminSearchAddress = document.getElementById('btn-admin-search-address');
+        const inputAdminAddress = document.getElementById('student-address-input');
+        if (btnAdminSearchAddress && inputAdminAddress) {
+            const handler = () => openPostcode(inputAdminAddress);
+            btnAdminSearchAddress.addEventListener('click', handler);
+            inputAdminAddress.addEventListener('click', handler);
+        }
+
         // Initial Renders
         renderCurriculumGrid();
 
