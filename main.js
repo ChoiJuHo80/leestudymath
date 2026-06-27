@@ -738,13 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (studentSignupModal) {
-        studentSignupModal.addEventListener('click', (e) => {
-            if (e.target === studentSignupModal) {
-                studentSignupModal.classList.remove('open');
-            }
-        });
-    }
+    // Backdrop click listener removed so signup modal does not close when clicking outside
 
     // ==========================================================================
     // Active Navigation Link on Scroll
@@ -3321,11 +3315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        studentLoginModal.addEventListener('click', (e) => {
-            if (e.target === studentLoginModal) {
-                studentLoginModal.classList.remove('open');
-            }
-        });
+        // Backdrop click listener removed so login modal does not close when clicking outside
 
         // Submit Student Login Form (Student Login via Student ID / Password)
         studentLoginForm.addEventListener('submit', (e) => {
