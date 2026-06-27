@@ -230,7 +230,7 @@
                                     <th>수요일</th>
                                     <th>목요일</th>
                                     <th>금요일</th>
-                                    <th>반 이름</th>
+                                    <th>총 수업시간</th>
                                 </tr>
                             </thead>
                             <tbody id="main-schedule-tbody">
@@ -946,6 +946,13 @@
                             <input type="text" id="student-address-input" placeholder="우측 주소 검색 버튼을 클릭하세요" readonly style="background: #f8fafc; cursor: pointer; flex-grow: 1;">
                             <button type="button" id="btn-admin-search-address" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 42px;">주소 검색</button>
                         </div>
+                        <div id="admin-address-search-container" style="display: none; border: 1px solid var(--border-color); width: 100%; height: 400px; margin-top: 10px; position: relative; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm);">
+                            <div style="background: #fafafa; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">우편번호 검색</span>
+                                <button type="button" id="btn-close-admin-postcode" style="background: none; border: none; font-weight: 700; color: #ff4d4f; cursor: pointer; font-size: 0.8rem;">[닫기]</button>
+                            </div>
+                            <div id="admin-postcode-embed" style="width:100%; height:360px;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1143,6 +1150,13 @@
                     <div style="display: flex; gap: 8px;">
                         <input type="text" id="student-signup-address" required placeholder="우측 주소 검색 버튼을 클릭하세요" readonly style="background: #f8fafc; cursor: pointer; flex-grow: 1;">
                         <button type="button" id="btn-signup-search-address" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 42px;">주소 검색</button>
+                    </div>
+                    <div id="signup-address-search-container" style="display: none; border: 1px solid var(--border-color); width: 100%; height: 400px; margin-top: 10px; position: relative; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm);">
+                        <div style="background: #fafafa; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">우편번호 검색</span>
+                            <button type="button" id="btn-close-signup-postcode" style="background: none; border: none; font-weight: 700; color: #ff4d4f; cursor: pointer; font-size: 0.8rem;">[닫기]</button>
+                        </div>
+                        <div id="signup-postcode-embed" style="width:100%; height:360px;"></div>
                     </div>
                 </div>
                 

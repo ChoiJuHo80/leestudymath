@@ -1283,6 +1283,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return earliest;
     };
 
+    const getClassTimeRange = (c) => {
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+        for (const day of days) {
+            const val = c.schedule?.[day];
+            if (val && val !== '-') return val;
+        }
+        return '-';
+    };
+
     const renderMainScheduleTable = () => {
         const tbody = document.getElementById('main-schedule-tbody');
         if (!tbody) return;
@@ -1302,21 +1311,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sortedClasses.forEach(c => {
             const tr = document.createElement('tr');
             
-            // Format days
-            const monText = c.schedule?.mon || '-';
-            const tueText = c.schedule?.tue || '-';
-            const wedText = c.schedule?.wed || '-';
-            const thuText = c.schedule?.thu || '-';
-            const friText = c.schedule?.fri || '-';
+            // Show class name under the days it is scheduled, otherwise "-"
+            const monText = (c.schedule?.mon && c.schedule.mon !== '-') ? c.name : '-';
+            const tueText = (c.schedule?.tue && c.schedule.tue !== '-') ? c.name : '-';
+            const wedText = (c.schedule?.wed && c.schedule.wed !== '-') ? c.name : '-';
+            const thuText = (c.schedule?.thu && c.schedule.thu !== '-') ? c.name : '-';
+            const friText = (c.schedule?.fri && c.schedule.fri !== '-') ? c.name : '-';
+            const timeRange = getClassTimeRange(c);
             
             tr.innerHTML = `
-                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px;">${c.duration || 90}분</td>
+                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px;">${timeRange}</td>
                 <td>${monText}</td>
                 <td>${tueText}</td>
                 <td>${wedText}</td>
                 <td>${thuText}</td>
                 <td>${friText}</td>
-                <td style="font-weight: 500; color: var(--text-secondary);">${c.name}</td>
+                <td style="font-weight: 500; color: var(--text-secondary);">${c.duration || 90}분</td>
             `;
             tbody.appendChild(tr);
         });
@@ -6082,6 +6092,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('주소 검색 서비스를 불러올 수 없습니다. 인터넷 연결을 확인해 주세요.');
                 return;
             }
+            
+            let containerId = '';
+            let embedId = '';
+            let closeBtnId = '';
+            
+            if (inputElement.id === 'student-signup-address') {
+                containerId = 'signup-address-search-container';
+                embedId = 'signup-postcode-embed';
+                closeBtnId = 'btn-close-signup-postcode';
+            } else {
+                containerId = 'admin-address-search-container';
+                embedId = 'admin-postcode-embed';
+                closeBtnId = 'btn-close-admin-postcode';
+            }
+            
+            const container = document.getElementById(containerId);
+            const embedDiv = document.getElementById(embedId);
+            const closeBtn = document.getElementById(closeBtnId);
+            
+            if (!container || !embedDiv) return;
+            
+            // Close other postcode container if open
+            const otherContainerId = (containerId === 'signup-address-search-container') ? 'admin-address-search-container' : 'signup-address-search-container';
+            const otherContainer = document.getElementById(otherContainerId);
+            if (otherContainer) otherContainer.style.display = 'none';
+            
+            container.style.display = 'block';
+            
             new daum.Postcode({
                 oncomplete: function(data) {
                     let addr = '';
@@ -6107,8 +6145,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     inputElement.value = addr + extraAddr;
                     inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }).open();
+                    container.style.display = 'none';
+                },
+                width: '100%',
+                height: '100%'
+            }).embed(embedDiv);
+            
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    container.style.display = 'none';
+                };
+            }
         };
 
         const btnSignupSearchAddress = document.getElementById('btn-signup-search-address');
