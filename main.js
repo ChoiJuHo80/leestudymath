@@ -2797,32 +2797,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const password = adminLoginPassword.value.trim();
 
             if (password === '9999') {
-                isAdmin = true;
-                isStudent = false;
-                loggedInStudentId = null;
-
                 if (studentLoginModal) {
                     studentLoginModal.classList.remove('open');
                 }
-                
-                updateLoginButton();
-
-                if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
-                if (studentSection) studentSection.style.display = 'block';
-                if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
-                if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
-
-                if (myclassSection) myclassSection.style.display = 'none';
-                if (navLinkMyclass) navLinkMyclass.style.display = 'none';
-                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-
-                renderNotices();
-                renderStudents();
-                renderConsultList();
-                renderAdminCurriculumList();
-                renderAiQueryManagement();
-                if (typeof renderApprovalList === 'function') renderApprovalList();
-                if (typeof renderAdminResources === 'function') renderAdminResources();
+                handleAdminLoginSetup();
                 showToast('관리자 모드가 성공적으로 활성화되었습니다.');
             } else {
                 if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
@@ -3272,22 +3250,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('Signout error:', e);
                 }
 
-                isAdmin = false;
-                isStudent = false;
-                loggedInStudentId = null;
-                
-                updateLoginButton();
-
-                // Hide all private layouts/links
-                if (btnAdminWrite) btnAdminWrite.style.display = 'none';
-                if (studentSection) studentSection.style.display = 'none';
-                if (navLinkStudents) navLinkStudents.style.display = 'none';
-                if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
-                if (myclassSection) myclassSection.style.display = 'none';
-                if (navLinkMyclass) navLinkMyclass.style.display = 'none';
-                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-
-                renderNotices();
+                handleLogoutCleanup();
                 showToast('로그아웃 되었습니다.');
             } else {
                 // Open login modal
@@ -3457,19 +3420,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     // Hardcoded check for admin login via email
                     if (email === 'teacher@math.com' && password === '9999') {
-                        isAdmin = true;
                         studentLoginModal.classList.remove('open');
-                        
-                        updateLoginButton();
-                        if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
-                        if (studentSection) studentSection.style.display = 'block';
-                        if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
-                        if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
-                        
-                        renderNotices();
-                        renderStudents();
-                        if (typeof renderApprovalList === 'function') renderApprovalList();
-                        if (typeof renderAdminResources === 'function') renderAdminResources();
+                        handleAdminLoginSetup();
                         showToast('관리자 모드가 활성화되었습니다.');
                         return;
                     }
@@ -4140,28 +4092,94 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Admin layout setup and cleanup helpers
+    const handleLogoutCleanup = () => {
+        isAdmin = false;
+        isStudent = false;
+        loggedInStudentId = null;
+        
+        // Restore schedule section back to main feed
+        const scheduleSection = document.getElementById('schedule');
+        const curriculumSection = document.getElementById('curriculum');
+        if (scheduleSection && curriculumSection) {
+            curriculumSection.parentNode.insertBefore(scheduleSection, curriculumSection.nextSibling);
+            scheduleSection.style.display = 'block';
+        }
+
+        // Show resources section
+        const resourcesSection = document.getElementById('resources');
+        if (resourcesSection) {
+            resourcesSection.style.display = 'block';
+        }
+
+        // Hide admin/student specific elements
+        if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+        if (studentSection) studentSection.style.display = 'none';
+        if (navLinkStudents) navLinkStudents.style.display = 'none';
+        if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+        if (myclassSection) myclassSection.style.display = 'none';
+        if (navLinkMyclass) navLinkMyclass.style.display = 'none';
+        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+        
+        updateLoginButton();
+        safeCreateIcons();
+        renderNotices();
+    };
+
+    const handleAdminLoginSetup = () => {
+        isAdmin = true;
+        isStudent = false;
+        loggedInStudentId = null;
+
+        // Move schedule section inside students section at the bottom (fifth position)
+        const scheduleSection = document.getElementById('schedule');
+        const studentsSection = document.getElementById('students');
+        if (scheduleSection && studentsSection) {
+            studentsSection.appendChild(scheduleSection);
+            scheduleSection.style.display = 'block';
+        }
+
+        // Hide resources section (자료공유 센터)
+        const resourcesSection = document.getElementById('resources');
+        if (resourcesSection) {
+            resourcesSection.style.display = 'none';
+        }
+        
+        // Hide resource-management-card inside students
+        const resourceManagementCard = document.getElementById('resource-management-card');
+        if (resourceManagementCard) {
+            resourceManagementCard.style.display = 'none';
+        }
+
+        // Show admin controls
+        updateLoginButton();
+        if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
+        if (studentSection) studentSection.style.display = 'block';
+        if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
+        if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+
+        if (myclassSection) myclassSection.style.display = 'none';
+        if (navLinkMyclass) navLinkMyclass.style.display = 'none';
+        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+
+        renderNotices();
+        renderStudents();
+        renderConsultList();
+        renderAdminCurriculumList();
+        renderAiQueryManagement();
+        if (typeof renderApprovalList === 'function') renderApprovalList();
+        safeCreateIcons();
+    };
+
     // Initial load & Auth Listener Setup
     supabase.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
             // Check if they are admin
             if (session.user.email === 'teacher@math.com') {
-                isAdmin = true;
-                isStudent = false;
-                loggedInStudentId = null;
-                
-                updateLoginButton();
-                if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
-                if (studentSection) studentSection.style.display = 'block';
-                if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
-                if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
-
-                if (myclassSection) myclassSection.style.display = 'none';
-                if (navLinkMyclass) navLinkMyclass.style.display = 'none';
-                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-
-                renderNotices();
-                renderStudents();
+                handleAdminLoginSetup();
             } else {
+                // Ensure admin layout is cleaned up when student/parent logs in
+                handleLogoutCleanup();
                 // Check if this is a registered user
                 const userEmail = session.user.email;
                 const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
@@ -4278,16 +4296,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             // No session
-            const isUUID = (id) => typeof id === 'string' && id.includes('-');
-            if (isStudent && isUUID(loggedInStudentId)) {
-                isStudent = false;
-                loggedInStudentId = null;
-                
-                updateLoginButton();
-                if (myclassSection) myclassSection.style.display = 'none';
-                if (navLinkMyclass) navLinkMyclass.style.display = 'none';
-                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
-            }
+            handleLogoutCleanup();
         }
 
         safeCreateIcons();
