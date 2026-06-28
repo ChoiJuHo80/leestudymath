@@ -214,6 +214,50 @@
                         </div>
                     </div>
 
+                    <!-- Card: Director Daily Checklist -->
+                    <div class="class-management-card" id="admin-checklist-card" style="margin-top: 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <i data-lucide="check-square" style="color: var(--primary-color); width: 22px; height: 22px;"></i> 원장님 일일 업무 & 습관 체크리스트
+                            </h3>
+                            <input type="date" id="admin-habit-record-date" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; color: var(--text-primary);">
+                        </div>
+                        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">원장님의 매일 실천 업무와 습관을 기록하고 달성률을 체크해 보세요.</p>
+                        
+                        <!-- Progress Bar -->
+                        <div style="background: rgba(142, 68, 173, 0.04); border: 1px solid rgba(142, 68, 173, 0.1); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; margin-top: 14px; margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">
+                                <span>오늘의 업무 달성률</span>
+                                <span id="admin-habit-achievement-percentage" style="color: var(--mascot-purple-bg); font-size: 1.1rem;">0% (0/0 완료)</span>
+                            </div>
+                            <div style="background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; overflow: hidden;">
+                                <div id="admin-habit-achievement-bar" style="background: linear-gradient(90deg, var(--mascot-purple-bg), var(--primary-color)); height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff; margin-bottom: 14px;">
+                            <table class="schedule-table" style="width: 100%; border-collapse: collapse; min-width: auto; margin: 0;">
+                                <thead>
+                                    <tr style="background: #fafafa; border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">체크</th>
+                                        <th style="padding: 10px; text-align: left; font-size: 0.82rem; font-weight: 700;">내용</th>
+                                        <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">삭제</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-habit-tbody">
+                                    <!-- Dynamic elements -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Add Input -->
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="admin-habit-new-input" placeholder="새로운 원장님 업무/생활습관 입력" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px;">
+                            <button type="button" id="btn-admin-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
+                        </div>
+                    </div>
+
                     <!-- AI Query History Section (Admin Only) -->
                     <div class="section-title-bar notice-header-bar" style="margin-top: 40px;">
                         <div class="title-left">

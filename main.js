@@ -3033,6 +3033,175 @@ document.addEventListener('DOMContentLoaded', () => {
         container.scrollTop = container.scrollHeight;
     };
 
+    // Render Admin Habits Checklist & Achievement rate
+    const renderAdminHabits = () => {
+        const tbody = document.getElementById('admin-habit-tbody');
+        const dateInput = document.getElementById('admin-habit-record-date');
+        const percentageText = document.getElementById('admin-habit-achievement-percentage');
+        const progressBar = document.getElementById('admin-habit-achievement-bar');
+        const newInput = document.getElementById('admin-habit-new-input');
+        const btnAdd = document.getElementById('btn-admin-add-habit');
+
+        if (!tbody) return;
+
+        // Set default date to today in local timezone if not set
+        if (dateInput && !dateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-\ ${month}-\ ${day}`.replace(/\s/g, '');
+        }
+
+        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+
+        // Seed default habits if empty
+        let habits = [];
+        try {
+            const stored = localStorage.getItem('gongbubang_habits_admin');
+            habits = stored ? JSON.parse(stored) : null;
+        } catch(e) {}
+
+        if (!habits) {
+            habits = [
+                { id: 'ah1', text: '학원 전체 청소 및 환기하기' },
+                { id: 'ah2', text: '오늘 수업 교재 및 맞춤형 프린트 준비하기' },
+                { id: 'ah3', text: '출결 현황 확인 및 등원/하원 문자 발송하기' },
+                { id: 'ah4', text: '신규 상담 예약 문의 내역 확인 및 연락하기' },
+                { id: 'ah5', text: '블로그 소식지 및 교육 정보 업데이트하기' }
+            ];
+            localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+        }
+
+        // Load records
+        let records = {};
+        try {
+            const stored = localStorage.getItem('gongbubang_habit_records_admin');
+            records = stored ? JSON.parse(stored) : {};
+        } catch(e) {}
+
+        const dayRecords = records[selectedDate] || {};
+
+        tbody.innerHTML = '';
+
+        if (habits.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">등록된 업무가 없습니다. 아래 입력창에서 추가해 주세요!</td></tr>`;
+            if (percentageText) percentageText.textContent = '0% (0/0 완료)';
+            if (progressBar) progressBar.style.width = '0%';
+        } else {
+            let completedCount = 0;
+            habits.forEach(h => {
+                const tr = document.createElement('tr');
+                const checked = dayRecords[h.id] ? 'checked' : '';
+                if (dayRecords[h.id]) completedCount++;
+
+                tr.innerHTML = `
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <input type="checkbox" class="admin-habit-check" data-id="&quot;${h.id}&quot;" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                    </td>
+                    <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
+                        ${h.text}
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <button type="button" class="btn-delete-admin-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Calculate percentage
+            const percentage = Math.round((completedCount / habits.length) * 100);
+            if (percentageText) percentageText.textContent = `${percentage}% (${completedCount}/${habits.length} 완료)`;
+            if (progressBar) progressBar.style.width = `${percentage}%`;
+        }
+
+        // Bind checkbox listeners
+        const checks = tbody.querySelectorAll('.admin-habit-check');
+        checks.forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const id = e.target.getAttribute('data-id').replace(/^"|"$/g, '');
+                const isChecked = e.target.checked;
+                
+                if (!records[selectedDate]) records[selectedDate] = {};
+                records[selectedDate][id] = isChecked;
+                
+                localStorage.setItem('gongbubang_habit_records_admin', JSON.stringify(records));
+                
+                // Re-calculate stats
+                let localCompleted = 0;
+                habits.forEach(h => {
+                    if (records[selectedDate][h.id]) localCompleted++;
+                });
+                const percentage = Math.round((localCompleted / habits.length) * 100);
+                if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
+                if (progressBar) progressBar.style.width = `${percentage}%`;
+            });
+        });
+
+        // Bind delete listeners
+        const deletes = tbody.querySelectorAll('.btn-delete-admin-habit');
+        deletes.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.getAttribute('data-id');
+                if (confirm('이 항목을 체크리스트에서 삭제하시겠습니까?')) {
+                    habits = habits.filter(h => h.id !== id);
+                    localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+                    
+                    // Clean up records
+                    Object.keys(records).forEach(d => {
+                        if (records[d] && records[d][id] !== undefined) {
+                            delete records[d][id];
+                        }
+                    });
+                    localStorage.setItem('gongbubang_habit_records_admin', JSON.stringify(records));
+                    
+                    renderAdminHabits();
+                }
+            });
+        });
+
+        // Date listener
+        if (dateInput) {
+            const newDateInput = dateInput.cloneNode(true);
+            dateInput.parentNode.replaceChild(newDateInput, dateInput);
+            newDateInput.addEventListener('change', () => {
+                renderAdminHabits();
+            });
+        }
+
+        // Add habit listener
+        if (btnAdd && newInput) {
+            const newBtnAdd = btnAdd.cloneNode(true);
+            btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
+            
+            const handleAdd = () => {
+                const text = newInput.value.trim();
+                if (!text) {
+                    alert('내용을 입력해 주세요.');
+                    return;
+                }
+                const newHabit = {
+                    id: 'ah-' + Date.now(),
+                    text: text
+                };
+                habits.push(newHabit);
+                localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+                newInput.value = '';
+                renderAdminHabits();
+            };
+            
+            newBtnAdd.addEventListener('click', handleAdd);
+            
+            newInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    handleAdd();
+                }
+            };
+        }
+
+        safeCreateIcons();
+    };
+
     // Render Daily Habits Checklist & Achievement rate
     const renderMyClassDailyHabits = (studentId) => {
         const tbody = document.getElementById('daily-habit-tbody');
@@ -4278,6 +4447,9 @@ document.addEventListener('DOMContentLoaded', () => {
             curriculumSection.parentNode.insertBefore(scheduleSection, curriculumSection.nextSibling);
             scheduleSection.style.display = 'block';
         }
+        if (curriculumSection) {
+            curriculumSection.style.display = 'block';
+        }
 
         // Show resources section
         const resourcesSection = document.getElementById('resources');
@@ -4317,12 +4489,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (resourcesSection) {
             resourcesSection.style.display = 'none';
         }
+
+        // Hide curriculum section (커리큘럼 소개)
+        const curriculumSection = document.getElementById('curriculum');
+        if (curriculumSection) {
+            curriculumSection.style.display = 'none';
+        }
         
         // Hide resource-management-card inside students
         const resourceManagementCard = document.getElementById('resource-management-card');
         if (resourceManagementCard) {
             resourceManagementCard.style.display = 'none';
         }
+
+        // Render admin daily checklist
+        renderAdminHabits();
 
         // Show admin controls
         updateLoginButton();
