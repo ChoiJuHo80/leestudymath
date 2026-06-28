@@ -3033,6 +3033,25 @@ document.addEventListener('DOMContentLoaded', () => {
         container.scrollTop = container.scrollHeight;
     };
 
+    // Get array of date strings (YYYY-MM-DD) representing the week containing selectedDate
+    const getWeekDates = (dateStr) => {
+        const current = new Date(dateStr);
+        const day = current.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Monday
+        const monday = new Date(current.setDate(diff));
+        
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dt = String(d.getDate()).padStart(2, '0');
+            dates.push(`${y}-${m}-${dt}`);
+        }
+        return dates;
+    };
+
     // Render Admin Habits Checklist & Achievement rate
     const renderAdminHabits = () => {
         const tbody = document.getElementById('admin-habit-tbody');
@@ -3096,6 +3115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (percentageText) percentageText.textContent = '0% (0/0 완료)';
             if (progressBar) progressBar.style.width = '0%';
         } else {
+            const weekDates = getWeekDates(selectedDate);
             let completedCount = 0;
             habits.forEach(h => {
                 const tr = document.createElement('tr');
@@ -3104,12 +3124,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
 
+                // Calculate weekly completions
+                let weekCompleted = 0;
+                weekDates.forEach(d => {
+                    if (records[d] && records[d][h.id]) {
+                        weekCompleted++;
+                    }
+                });
+
                 tr.innerHTML = `
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <input type="checkbox" class="admin-habit-check" data-id="&quot;${h.id}&quot;" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
                     </td>
                     <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
                         ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle; font-size: 0.92rem; font-weight: 700; color: var(--text-primary);">
+                        ${weekCompleted}/${h.frequency}
                     </td>
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <button type="button" class="btn-delete-admin-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
@@ -3212,17 +3243,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 records[selectedDate][id] = isChecked;
                 
                 localStorage.setItem('gongbubang_habit_records_admin', JSON.stringify(records));
-                
-                // Re-calculate stats
-                let localCompleted = 0;
-                habits.forEach(h => {
-                    if (records[selectedDate][h.id]) localCompleted++;
-                });
-                const percentage = Math.round((localCompleted / habits.length) * 100);
-                if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
-                if (progressBar) progressBar.style.width = `${percentage}%`;
-
-                updateStatsRealtime();
+                renderAdminHabits();
             });
         });
 
@@ -3356,6 +3377,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (percentageText) percentageText.textContent = '0% (0/0 완료)';
             if (progressBar) progressBar.style.width = '0%';
         } else {
+            const weekDates = getWeekDates(selectedDate);
             let completedCount = 0;
             habits.forEach(h => {
                 const tr = document.createElement('tr');
@@ -3364,17 +3386,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
 
+                // Calculate weekly completions
+                let weekCompleted = 0;
+                weekDates.forEach(d => {
+                    if (records[d] && records[d][h.id]) {
+                        weekCompleted++;
+                    }
+                });
+
                 tr.innerHTML = `
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
-                        <input type="checkbox" class="habit-check" data-id="${h.id}" dots style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                        <input type="checkbox" class="habit-check" data-id="${h.id}" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
                     </td>
                     <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
                         ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
                     </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle; font-size: 0.92rem; font-weight: 700; color: var(--text-primary);">
+                        ${weekCompleted}/${h.frequency}
+                    </td>
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <button type="button" class="btn-delete-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
                     </td>
-                `.replace('\dots', checked);
+                `;
                 tbody.appendChild(tr);
             });
 
@@ -3472,17 +3505,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 records[selectedDate][id] = isChecked;
                 
                 localStorage.setItem('gongbubang_habit_records_' + studentId, JSON.stringify(records));
-                
-                // Re-calculate local stats
-                let localCompleted = 0;
-                habits.forEach(h => {
-                    if (records[selectedDate][h.id]) localCompleted++;
-                });
-                const percentage = Math.round((localCompleted / habits.length) * 100);
-                if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
-                if (progressBar) progressBar.style.width = `${percentage}%`;
-
-                updateStatsRealtime();
+                renderMyClassDailyHabits(studentId);
             });
         });
 
