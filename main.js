@@ -4867,12 +4867,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Check if this is a registered user
                 const userEmail = session.user.email;
                 const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
-                const existsInMockUsers = mockUsers.some(u => u.email === userEmail);
-                const existsInStudents = students.some(s => s.phone === session.user.user_metadata?.phone || s.parentPhone === session.user.user_metadata?.phone || s.phone === session.user.email || s.parentPhone === session.user.email);
+                
+                // Normalizer helper for phone numbers
+                const normalizePhone = (p) => {
+                    let cleaned = String(p || '').replace(/\D/g, '');
+                    if (cleaned.startsWith('82')) {
+                        cleaned = '0' + cleaned.substring(2);
+                    }
+                    return cleaned;
+                };
+
+                const sessionPhone = normalizePhone(session.user.user_metadata?.phone);
+
+                // Find matching user in mockUsers by email or phone number
+                let matchedUser = mockUsers.find(u => {
+                    const uEmail = String(u.email || '').toLowerCase();
+                    const uPhone = normalizePhone(u.phone);
+                    return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
+                });
+
+                if (matchedUser) {
+                    // Link Kakao/Google/Naver email to local user if not already linked
+                    if (matchedUser.email.toLowerCase() !== userEmail.toLowerCase()) {
+                        matchedUser.email = userEmail;
+                        localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                    }
+                    
+                    // Override session user_metadata with registered user info
+                    session.user.user_metadata = {
+                        ...session.user.user_metadata,
+                        name: matchedUser.name,
+                        phone: matchedUser.phone,
+                        address: matchedUser.address,
+                        children: matchedUser.user_metadata?.children || matchedUser.children || [],
+                        role: 'parent',
+                        status: matchedUser.status
+                    };
+                }
+
+                const existsInMockUsers = mockUsers.some(u => {
+                    const uEmail = String(u.email || '').toLowerCase();
+                    const uPhone = normalizePhone(u.phone);
+                    return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
+                });
+                const existsInStudents = students.some(s => {
+                    const sPhone = normalizePhone(s.phone);
+                    const sParentPhone = normalizePhone(s.parentPhone);
+                    return (sessionPhone && (sPhone === sessionPhone || sParentPhone === sessionPhone)) ||
+                           (userEmail && (String(s.phone || '').toLowerCase() === userEmail.toLowerCase() || String(s.parentPhone || '').toLowerCase() === userEmail.toLowerCase()));
+                });
                 const hasChildrenMetadata = session.user.user_metadata?.children && session.user.user_metadata.children.length > 0;
                 
                 if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
                     alert('가입되지 않은 소셜 계정입니다. 먼저 일반 회원가입을 완료해 주세요.');
+                    supabase.auth.signOut();
+                    return;
+                }
+
+                // Check matched user status
+                if (matchedUser && matchedUser.status === 'pending') {
+                    alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                    supabase.auth.signOut();
+                    return;
+                }
+                if (matchedUser && matchedUser.status === 'terminated') {
+                    alert('관리자에 의해 종결된 계정입니다.');
                     supabase.auth.signOut();
                     return;
                 }
