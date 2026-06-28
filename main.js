@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.warn('Lucide is not loaded yet.');
         }
+        
+        // Update Quick Menu highlights if in admin mode and highlights updater is defined
+        if (typeof updateAdminQuickMenuHighlights === 'function' && isAdmin) {
+            updateAdminQuickMenuHighlights();
+        }
     };
 
     // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
@@ -3052,6 +3057,73 @@ document.addEventListener('DOMContentLoaded', () => {
         return dates;
     };
 
+    // Update Admin Quick Menu Highlights & Badge counts
+    let isUpdatingHighlights = false;
+    const updateAdminQuickMenuHighlights = () => {
+        if (isUpdatingHighlights) return;
+        isUpdatingHighlights = true;
+        
+        try {
+            // 1. Uncompleted Consultations
+            const pendingConsults = consultations.filter(c => c.status === 'pending').length;
+            const btnConsult = document.querySelector('#admin-quick-menu a[href="#consult-management-card"]');
+            if (btnConsult) {
+                if (pendingConsults > 0) {
+                    btnConsult.style.background = 'rgba(249, 115, 22, 0.08)';
+                    btnConsult.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    btnConsult.style.color = 'rgb(234, 88, 12)';
+                    btnConsult.innerHTML = `<i data-lucide="phone-call" style="width: 14px; height: 14px; color: rgb(234, 88, 12);"></i> 상담 문의 <span style="background: rgb(234, 88, 12); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${pendingConsults}</span>`;
+                } else {
+                    btnConsult.style.background = '#f1f5f9';
+                    btnConsult.style.borderColor = 'var(--border-color)';
+                    btnConsult.style.color = 'var(--text-primary)';
+                    btnConsult.innerHTML = `<i data-lucide="phone-call" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 상담 문의`;
+                }
+            }
+
+            // 2. Pending Signup Approvals
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const pendingApprovals = mockUsers.filter(u => u.role === 'parent' && (u.status === 'pending' || !u.status)).length;
+            const btnApproval = document.querySelector('#admin-quick-menu a[href="#approval-management-card"]');
+            if (btnApproval) {
+                if (pendingApprovals > 0) {
+                    btnApproval.style.background = 'rgba(239, 68, 68, 0.08)';
+                    btnApproval.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    btnApproval.style.color = 'rgb(220, 38, 38)';
+                    btnApproval.innerHTML = `<i data-lucide="shield-check" style="width: 14px; height: 14px; color: rgb(220, 38, 38);"></i> 가입/종결 승인 <span style="background: rgb(220, 38, 38); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${pendingApprovals}</span>`;
+                } else {
+                    btnApproval.style.background = '#f1f5f9';
+                    btnApproval.style.borderColor = 'var(--border-color)';
+                    btnApproval.style.color = 'var(--text-primary)';
+                    btnApproval.innerHTML = `<i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--success-color);"></i> 가입/종결 승인`;
+                }
+            }
+
+            // 3. AI Queries
+            const totalAiQueries = aiQueries.length;
+            const btnAi = document.querySelector('#admin-quick-menu a[href="#ai-query-management-card"]');
+            if (btnAi) {
+                if (totalAiQueries > 0) {
+                    btnAi.style.background = 'rgba(139, 92, 246, 0.08)';
+                    btnAi.style.borderColor = 'rgba(139, 92, 246, 0.3)';
+                    btnAi.style.color = 'rgb(109, 40, 217)';
+                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: rgb(109, 40, 217);"></i> AI 질의 내역 <span style="background: rgb(109, 40, 217); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${totalAiQueries}</span>`;
+                } else {
+                    btnAi.style.background = '#f1f5f9';
+                    btnAi.style.borderColor = 'var(--border-color)';
+                    btnAi.style.color = 'var(--text-primary)';
+                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역`;
+                }
+            }
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        } finally {
+            isUpdatingHighlights = false;
+        }
+    };
+
     // Render Admin Habits Checklist & Achievement rate
     const renderAdminHabits = () => {
         const tbody = document.getElementById('admin-habit-tbody');
@@ -4705,6 +4777,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render admin daily checklist
         renderAdminHabits();
+
+        // Update Quick Menu Highlights
+        updateAdminQuickMenuHighlights();
 
         // Show admin controls
         updateLoginButton();
