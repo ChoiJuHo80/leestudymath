@@ -252,9 +252,28 @@
                         </div>
 
                         <!-- Add Input -->
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="admin-habit-new-input" placeholder="새로운 원장님 업무/생활습관 입력" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px;">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="text" id="admin-habit-new-input" placeholder="새로운 원장님 업무/생활습관 입력" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; min-width: 150px;">
+                            <select id="admin-habit-new-freq" style="padding: 0 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; font-weight: 600; color: var(--text-primary); cursor: pointer; background: #ffffff;">
+                                <option value="7">주 7회 (매일)</option>
+                                <option value="6">주 6회</option>
+                                <option value="5">주 5회</option>
+                                <option value="4">주 4회</option>
+                                <option value="3">주 3회</option>
+                                <option value="2">주 2회</option>
+                                <option value="1">주 1회</option>
+                            </select>
                             <button type="button" id="btn-admin-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
+                        </div>
+
+                        <!-- Monthly Statistics Section -->
+                        <div style="border-top: 1px dashed var(--border-color); padding-top: 16px; margin-top: 16px;">
+                            <h4 style="font-family: var(--ff-primary); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-primary); font-weight: 700;">
+                                <i data-lucide="bar-chart-3" style="color: var(--mascot-pink-bg); width: 18px; height: 18px;"></i> 월간 항목별 달성 리포트
+                            </h4>
+                            <div id="admin-monthly-habit-report" style="display: flex; flex-direction: column; gap: 12px;">
+                                <!-- Monthly stats rendered dynamically -->
+                            </div>
                         </div>
                     </div>
 
@@ -838,9 +857,28 @@
                                 </div>
 
                                 <!-- Add Habit Input Form -->
-                                <div style="display: flex; gap: 8px; margin-top: 4px;">
-                                    <input type="text" id="habit-new-input" placeholder="새로운 생활 습관 입력 (예: 30분 걷기)" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px;">
+                                <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                                    <input type="text" id="habit-new-input" placeholder="새로운 생활 습관 입력 (예: 30분 걷기)" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; min-width: 150px;">
+                                    <select id="habit-new-freq" style="padding: 0 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; font-weight: 600; color: var(--text-primary); cursor: pointer; background: #ffffff;">
+                                        <option value="7">주 7회 (매일)</option>
+                                        <option value="6">주 6회</option>
+                                        <option value="5">주 5회</option>
+                                        <option value="4">주 4회</option>
+                                        <option value="3">주 3회</option>
+                                        <option value="2">주 2회</option>
+                                        <option value="1">주 1회</option>
+                                    </select>
                                     <button type="button" id="btn-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
+                                </div>
+
+                                <!-- Monthly Statistics Section -->
+                                <div style="border-top: 1px dashed var(--border-color); padding-top: 16px; margin-top: 8px;">
+                                    <h4 style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-primary);">
+                                        <i data-lucide="bar-chart-3" style="color: var(--mascot-pink-bg); width: 18px; height: 18px;"></i> 월간 항목별 달성 리포트
+                                    </h4>
+                                    <div id="myclass-monthly-habit-report" style="display: flex; flex-direction: column; gap: 12px;">
+                                        <!-- Monthly stats rendered dynamically -->
+                                    </div>
                                 </div>
                             </div>
 

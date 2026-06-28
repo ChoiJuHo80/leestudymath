@@ -3040,7 +3040,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const percentageText = document.getElementById('admin-habit-achievement-percentage');
         const progressBar = document.getElementById('admin-habit-achievement-bar');
         const newInput = document.getElementById('admin-habit-new-input');
+        const freqSelect = document.getElementById('admin-habit-new-freq');
         const btnAdd = document.getElementById('btn-admin-add-habit');
+        const monthlyReport = document.getElementById('admin-monthly-habit-report');
 
         if (!tbody) return;
 
@@ -3050,10 +3052,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
-            dateInput.value = `${year}-\ ${month}-\ ${day}`.replace(/\s/g, '');
+            dateInput.value = `${year}-${month}-${day}`;
         }
 
         const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const [yearStr, monthStr] = selectedDate.split('-');
+        const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
 
         // Seed default habits if empty
         let habits = [];
@@ -3064,14 +3068,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!habits) {
             habits = [
-                { id: 'ah1', text: '학원 전체 청소 및 환기하기' },
-                { id: 'ah2', text: '오늘 수업 교재 및 맞춤형 프린트 준비하기' },
-                { id: 'ah3', text: '출결 현황 확인 및 등원/하원 문자 발송하기' },
-                { id: 'ah4', text: '신규 상담 예약 문의 내역 확인 및 연락하기' },
-                { id: 'ah5', text: '블로그 소식지 및 교육 정보 업데이트하기' }
+                { id: 'ah1', text: '학원 전체 청소 및 환기하기', frequency: 7 },
+                { id: 'ah2', text: '오늘 수업 교재 및 맞춤형 프린트 준비하기', frequency: 7 },
+                { id: 'ah3', text: '출결 현황 확인 및 등원/하원 문자 발송하기', frequency: 7 },
+                { id: 'ah4', text: '신규 상담 예약 문의 내역 확인 및 연락하기', frequency: 7 },
+                { id: 'ah5', text: '블로그 소식지 및 교육 정보 업데이트하기', frequency: 5 }
             ];
             localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
         }
+
+        // Fill missing frequencies (defaults to 7)
+        habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
 
         // Load records
         let records = {};
@@ -3095,12 +3102,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const checked = dayRecords[h.id] ? 'checked' : '';
                 if (dayRecords[h.id]) completedCount++;
 
+                const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
+
                 tr.innerHTML = `
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <input type="checkbox" class="admin-habit-check" data-id="&quot;${h.id}&quot;" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
                     </td>
                     <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
-                        ${h.text}
+                        ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
                     </td>
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <button type="button" class="btn-delete-admin-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
@@ -3115,11 +3124,88 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progressBar) progressBar.style.width = `${percentage}%`;
         }
 
+        // Render Monthly Report
+        if (monthlyReport) {
+            monthlyReport.innerHTML = '';
+            if (habits.length === 0) {
+                monthlyReport.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 10px;">등록된 업무 통계가 없습니다.</div>';
+            } else {
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    
+                    // Count completions in this selected month
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        }
+
+        const updateStatsRealtime = () => {
+            if (monthlyReport) {
+                monthlyReport.innerHTML = '';
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        };
+
         // Bind checkbox listeners
         const checks = tbody.querySelectorAll('.admin-habit-check');
         checks.forEach(chk => {
             chk.addEventListener('change', (e) => {
-                const id = e.target.getAttribute('data-id').replace(/^"|"$/g, '');
+                const id = e.target.getAttribute('data-id').replace(/^"|"$/g, '').replace(/&quot;/g, '');
                 const isChecked = e.target.checked;
                 
                 if (!records[selectedDate]) records[selectedDate] = {};
@@ -3135,6 +3221,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const percentage = Math.round((localCompleted / habits.length) * 100);
                 if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
                 if (progressBar) progressBar.style.width = `${percentage}%`;
+
+                updateStatsRealtime();
             });
         });
 
@@ -3170,7 +3258,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add habit listener
-        if (btnAdd && newInput) {
+        if (btnAdd && newInput && freqSelect) {
             const newBtnAdd = btnAdd.cloneNode(true);
             btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
             
@@ -3182,7 +3270,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const newHabit = {
                     id: 'ah-' + Date.now(),
-                    text: text
+                    text: text,
+                    frequency: parseInt(freqSelect.value)
                 };
                 habits.push(newHabit);
                 localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
@@ -3209,7 +3298,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const percentageText = document.getElementById('habit-achievement-percentage');
         const progressBar = document.getElementById('habit-achievement-bar');
         const newInput = document.getElementById('habit-new-input');
+        const freqSelect = document.getElementById('habit-new-freq');
         const btnAdd = document.getElementById('btn-add-habit');
+        const monthlyReport = document.getElementById('myclass-monthly-habit-report');
 
         if (!tbody) return;
 
@@ -3223,6 +3314,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const [yearStr, monthStr] = selectedDate.split('-');
+        const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
 
         // Seed default habits if empty
         let habits = [];
@@ -3233,16 +3326,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!habits) {
             habits = [
-                { id: 'h1', text: '기상 후 물 2잔 마시기' },
-                { id: 'h2', text: '햇빛 10~20분 쬐기' },
-                { id: 'h3', text: '30분 걷기' },
-                { id: 'h4', text: '단백질 2~3번 챙겨 먹기' },
-                { id: 'h5', text: '채소와 과일 먹기' },
-                { id: 'h6', text: '물 1.5~2L 마시기' },
-                { id: 'h7', text: '오후 2시 이후 카페인 줄이기' }
+                { id: 'h1', text: '기상 후 물 2잔 마시기', frequency: 7 },
+                { id: 'h2', text: '햇빛 10~20분 쬐기', frequency: 7 },
+                { id: 'h3', text: '30분 걷기', frequency: 7 },
+                { id: 'h4', text: '단백질 2~3번 챙겨 먹기', frequency: 7 },
+                { id: 'h5', text: '채소와 과일 먹기', frequency: 7 },
+                { id: 'h6', text: '물 1.5~2L 마시기', frequency: 7 },
+                { id: 'h7', text: '오후 2시 이후 카페인 줄이기', frequency: 7 }
             ];
             localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
         }
+
+        // Fill missing frequencies (defaults to 7)
+        habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
 
         // Load records
         let records = {};
@@ -3266,17 +3362,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const checked = dayRecords[h.id] ? 'checked' : '';
                 if (dayRecords[h.id]) completedCount++;
 
+                const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
+
                 tr.innerHTML = `
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
-                        <input type="checkbox" class="habit-check" data-id="${h.id}" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                        <input type="checkbox" class="habit-check" data-id="${h.id}" dots style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
                     </td>
                     <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
-                        ${h.text}
+                        ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
                     </td>
                     <td style="padding: 10px; text-align: center; vertical-align: middle;">
                         <button type="button" class="btn-delete-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
                     </td>
-                `;
+                `.replace('\dots', checked);
                 tbody.appendChild(tr);
             });
 
@@ -3285,6 +3383,83 @@ document.addEventListener('DOMContentLoaded', () => {
             if (percentageText) percentageText.textContent = `${percentage}% (${completedCount}/${habits.length} 완료)`;
             if (progressBar) progressBar.style.width = `${percentage}%`;
         }
+
+        // Render Monthly Report
+        if (monthlyReport) {
+            monthlyReport.innerHTML = '';
+            if (habits.length === 0) {
+                monthlyReport.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 10px;">등록된 생활습관 통계가 없습니다.</div>';
+            } else {
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    
+                    // Count completions in this selected month
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        }
+
+        const updateStatsRealtime = () => {
+            if (monthlyReport) {
+                monthlyReport.innerHTML = '';
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        };
 
         // Bind checkbox listeners
         const checks = tbody.querySelectorAll('.habit-check');
@@ -3306,6 +3481,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const percentage = Math.round((localCompleted / habits.length) * 100);
                 if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
                 if (progressBar) progressBar.style.width = `${percentage}%`;
+
+                updateStatsRealtime();
             });
         });
 
@@ -3341,7 +3518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Bind add listener (re-clone to avoid duplication)
-        if (btnAdd && newInput) {
+        if (btnAdd && newInput && freqSelect) {
             const newBtnAdd = btnAdd.cloneNode(true);
             btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
             
@@ -3353,7 +3530,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const newHabit = {
                     id: 'h-' + Date.now(),
-                    text: text
+                    text: text,
+                    frequency: parseInt(freqSelect.value)
                 };
                 habits.push(newHabit);
                 localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
