@@ -170,7 +170,32 @@
             <!-- Main Feed -->
             <main class="blog-feed">
                     <section id="students" class="feed-section admin-only-section" style="display: none; scroll-margin-top: 80px;">
-                    <div class="class-management-card" id="consult-management-card" style="margin-top: 30px;">
+                    <!-- Admin Quick Menu Bar -->
+                    <div id="admin-quick-menu" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="compass" style="width: 16px; height: 16px; color: var(--primary-color);"></i> 대시보드 바로가기:
+                        </span>
+                        <a href="#consult-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="phone-call" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 상담 문의
+                        </a>
+                        <a href="#admin-checklist-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 업무 체크리스트
+                        </a>
+                        <a href="#student-lms-section" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="users" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 학생 관리 (LMS)
+                        </a>
+                        <a href="#ai-query-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역
+                        </a>
+                        <a href="#approval-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--success-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--success-color);"></i> 가입/종결 승인
+                        </a>
+                        <a href="#schedule" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 수업 스케줄
+                        </a>
+                    </div>
+
+                    <div class="class-management-card" id="consult-management-card" style="margin-top: 20px; scroll-margin-top: 90px;">
                         <div class="class-management-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
                             <div>
                                 <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
@@ -215,7 +240,7 @@
                     </div>
 
                     <!-- Card: Director Daily Checklist -->
-                    <div class="class-management-card" id="admin-checklist-card" style="margin-top: 30px;">
+                    <div class="class-management-card" id="admin-checklist-card" style="margin-top: 30px; scroll-margin-top: 90px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                             <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
                                 <i data-lucide="check-square" style="color: var(--primary-color); width: 22px; height: 22px;"></i> 원장님 일일 업무 & 습관 체크리스트
@@ -279,7 +304,7 @@
                     </div>
 
                     <!-- AI Query History Section (Admin Only) -->
-                    <div class="section-title-bar notice-header-bar" style="margin-top: 40px;">
+                    <div class="section-title-bar notice-header-bar" id="student-lms-section" style="margin-top: 40px; scroll-margin-top: 90px;">
                         <div class="title-left">
                             <h2><i data-lucide="users" class="sec-title-icon purple-icon"></i>학생 관리 (LMS)</h2>
                             <span class="section-subtext">원생 등록 카드와 요일별 시간표, 진도 현황을 실시간 관리합니다.</span>
@@ -426,7 +451,7 @@
                     </div>
 
                     <!-- Consultation Inquiry Management Section (Admin Only) -->
-                    <div class="class-management-card" id="ai-query-management-card" style="margin-top: 30px;">
+                    <div class="class-management-card" id="ai-query-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
                         <div class="class-management-header">
                             <div>
                                 <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
@@ -461,7 +486,7 @@
                     </div>
 
                     <!-- Curriculum Management Section (Admin Only) -->
-                    <div class="class-management-card" id="approval-management-card" style="margin-top: 30px;">
+                    <div class="class-management-card" id="approval-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
                         <div class="class-management-header">
                             <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                                     <i data-lucide="shield-check" style="color: var(--primary-color); width: 22px; height: 22px;"></i> 가입 승인 및 종결 관리
@@ -674,7 +699,7 @@
                 </section>
 
                 <!-- Section: 스케줄 -->
-                <section id="schedule" class="feed-section">
+                <section id="schedule" class="feed-section" style="scroll-margin-top: 90px;">
                     <div class="section-title-bar">
                         <h2><i data-lucide="calendar" class="sec-title-icon purple-icon"></i>수업 스케줄</h2>
                         <span class="section-subtext">등록된 반별 수업 요일 및 시간표입니다. (수업 상담 후 배치 결정)</span>
