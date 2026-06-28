@@ -3033,6 +3033,178 @@ document.addEventListener('DOMContentLoaded', () => {
         container.scrollTop = container.scrollHeight;
     };
 
+    // Render Daily Habits Checklist & Achievement rate
+    const renderMyClassDailyHabits = (studentId) => {
+        const tbody = document.getElementById('daily-habit-tbody');
+        const dateInput = document.getElementById('habit-record-date');
+        const percentageText = document.getElementById('habit-achievement-percentage');
+        const progressBar = document.getElementById('habit-achievement-bar');
+        const newInput = document.getElementById('habit-new-input');
+        const btnAdd = document.getElementById('btn-add-habit');
+
+        if (!tbody) return;
+
+        // Set default date to today in local timezone (YYYY-MM-DD) if not set
+        if (dateInput && !dateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
+        }
+
+        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+
+        // Seed default habits if empty
+        let habits = [];
+        try {
+            const stored = localStorage.getItem('gongbubang_habits_' + studentId);
+            habits = stored ? JSON.parse(stored) : null;
+        } catch(e) {}
+
+        if (!habits) {
+            habits = [
+                { id: 'h1', text: '기상 후 물 2잔 마시기' },
+                { id: 'h2', text: '햇빛 10~20분 쬐기' },
+                { id: 'h3', text: '30분 걷기' },
+                { id: 'h4', text: '단백질 2~3번 챙겨 먹기' },
+                { id: 'h5', text: '채소와 과일 먹기' },
+                { id: 'h6', text: '물 1.5~2L 마시기' },
+                { id: 'h7', text: '오후 2시 이후 카페인 줄이기' }
+            ];
+            localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+        }
+
+        // Load records
+        let records = {};
+        try {
+            const stored = localStorage.getItem('gongbubang_habit_records_' + studentId);
+            records = stored ? JSON.parse(stored) : {};
+        } catch(e) {}
+
+        const dayRecords = records[selectedDate] || {};
+
+        tbody.innerHTML = '';
+
+        if (habits.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">등록된 습관이 없습니다. 아래 입력칸에서 추가해 주세요!</td></tr>`;
+            if (percentageText) percentageText.textContent = '0% (0/0 완료)';
+            if (progressBar) progressBar.style.width = '0%';
+        } else {
+            let completedCount = 0;
+            habits.forEach(h => {
+                const tr = document.createElement('tr');
+                const checked = dayRecords[h.id] ? 'checked' : '';
+                if (dayRecords[h.id]) completedCount++;
+
+                tr.innerHTML = `
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <input type="checkbox" class="habit-check" data-id="${h.id}" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                    </td>
+                    <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
+                        ${h.text}
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <button type="button" class="btn-delete-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Calculate percentage
+            const percentage = Math.round((completedCount / habits.length) * 100);
+            if (percentageText) percentageText.textContent = `${percentage}% (${completedCount}/${habits.length} 완료)`;
+            if (progressBar) progressBar.style.width = `${percentage}%`;
+        }
+
+        // Bind checkbox listeners
+        const checks = tbody.querySelectorAll('.habit-check');
+        checks.forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const isChecked = e.target.checked;
+                
+                if (!records[selectedDate]) records[selectedDate] = {};
+                records[selectedDate][id] = isChecked;
+                
+                localStorage.setItem('gongbubang_habit_records_' + studentId, JSON.stringify(records));
+                
+                // Re-calculate local stats
+                let localCompleted = 0;
+                habits.forEach(h => {
+                    if (records[selectedDate][h.id]) localCompleted++;
+                });
+                const percentage = Math.round((localCompleted / habits.length) * 100);
+                if (percentageText) percentageText.textContent = `${percentage}% (${localCompleted}/${habits.length} 완료)`;
+                if (progressBar) progressBar.style.width = `${percentage}%`;
+            });
+        });
+
+        // Bind delete listeners
+        const deletes = tbody.querySelectorAll('.btn-delete-habit');
+        deletes.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.getAttribute('data-id');
+                if (confirm('이 습관을 체크리스트에서 삭제하시겠습니까?')) {
+                    habits = habits.filter(h => h.id !== id);
+                    localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+                    
+                    // Clean up records for this habit
+                    Object.keys(records).forEach(d => {
+                        if (records[d] && records[d][id] !== undefined) {
+                            delete records[d][id];
+                        }
+                    });
+                    localStorage.setItem('gongbubang_habit_records_' + studentId, JSON.stringify(records));
+                    
+                    renderMyClassDailyHabits(studentId);
+                }
+            });
+        });
+
+        // Bind date change listener (re-clone to avoid duplication)
+        if (dateInput) {
+            const newDateInput = dateInput.cloneNode(true);
+            dateInput.parentNode.replaceChild(newDateInput, dateInput);
+            newDateInput.addEventListener('change', () => {
+                renderMyClassDailyHabits(studentId);
+            });
+        }
+
+        // Bind add listener (re-clone to avoid duplication)
+        if (btnAdd && newInput) {
+            const newBtnAdd = btnAdd.cloneNode(true);
+            btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
+            
+            const handleAdd = () => {
+                const text = newInput.value.trim();
+                if (!text) {
+                    alert('습관 내용을 입력해 주세요.');
+                    return;
+                }
+                const newHabit = {
+                    id: 'h-' + Date.now(),
+                    text: text
+                };
+                habits.push(newHabit);
+                localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+                newInput.value = '';
+                renderMyClassDailyHabits(studentId);
+            };
+            
+            newBtnAdd.addEventListener('click', handleAdd);
+            
+            // Allow enter key press
+            newInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    handleAdd();
+                }
+            };
+        }
+
+        safeCreateIcons();
+    };
+
     // Render My Class Portal
     const renderMyClass = () => {
         const infoWidget = document.getElementById('myclass-info-widget');
@@ -3236,6 +3408,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderMyClassAiHistory();
         renderStudentChat();
+        renderMyClassDailyHabits(loggedInStudentId);
         safeCreateIcons();
     };
 

@@ -753,6 +753,53 @@
                             </div>
 
                             
+                            <!-- Daily Habit Checklist Widget -->
+                            <div class="widget" id="myclass-daily-habit-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                    <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                        <i data-lucide="calendar-check-2" style="color: var(--mascot-purple-bg);"></i>일일 생활 습관 체크리스트
+                                    </h3>
+                                    <!-- Date selector -->
+                                    <input type="date" id="habit-record-date" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; color: var(--text-primary);">
+                                </div>
+                                
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">나만의 좋은 습관들을 정하고 매일 실천하여 달성률을 체크해 보세요.</p>
+                                
+                                <!-- Progress bar banner -->
+                                <div style="background: rgba(142, 68, 173, 0.04); border: 1px solid rgba(142, 68, 173, 0.1); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">
+                                        <span>오늘의 실천 달성률</span>
+                                        <span id="habit-achievement-percentage" style="color: var(--mascot-purple-bg); font-size: 1.1rem;">0% (0/0 완료)</span>
+                                    </div>
+                                    <!-- ProgressBar Track -->
+                                    <div style="background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; overflow: hidden;">
+                                        <div id="habit-achievement-bar" style="background: linear-gradient(90deg, var(--mascot-purple-bg), var(--primary-color)); height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Checklist Table -->
+                                <div style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff;">
+                                    <table class="schedule-table" style="width: 100%; border-collapse: collapse; min-width: auto; margin: 0;">
+                                        <thead>
+                                            <tr style="background: #fafafa; border-bottom: 1px solid var(--border-color);">
+                                                <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">체크</th>
+                                                <th style="padding: 10px; text-align: left; font-size: 0.82rem; font-weight: 700;">내용</th>
+                                                <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">삭제</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="daily-habit-tbody">
+                                            <!-- Dynamically populated habits -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Add Habit Input Form -->
+                                <div style="display: flex; gap: 8px; margin-top: 4px;">
+                                    <input type="text" id="habit-new-input" placeholder="새로운 생활 습관 입력 (예: 30분 걷기)" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px;">
+                                    <button type="button" id="btn-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
+                                </div>
+                            </div>
+
                             <!-- Homework Widget -->
                             <div class="widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
                                 <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
