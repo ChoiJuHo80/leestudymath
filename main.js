@@ -2807,6 +2807,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 handleAdminLoginSetup();
                 showToast('관리자 모드가 성공적으로 활성화되었습니다.');
+                
+                // Redirection check
+                if (sessionStorage.getItem('login_callback_url')) {
+                    handleLoginSuccessRedirection();
+                }
             } else {
                 if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
                 const authBox = studentLoginModal ? studentLoginModal.querySelector('.modal-box') : null;
@@ -3121,6 +3126,46 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } finally {
             isUpdatingHighlights = false;
+        }
+    };
+
+    // Handle Redirect / Scroll to callbackUrl after successful login (Joonggonara Style)
+    const handleLoginSuccessRedirection = () => {
+        const callback = sessionStorage.getItem('login_callback_url');
+        if (callback) {
+            sessionStorage.removeItem('login_callback_url');
+            
+            // Clean up query parameters in URL
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+            // Redirect / Scroll to target section
+            setTimeout(() => {
+                let targetId = callback.replace(/^\//, ''); // Strip leading slash
+                if (targetId === 'mystore' || targetId === 'myclass') {
+                    targetId = 'myclass';
+                } else if (targetId === 'students' || targetId === 'admin') {
+                    targetId = 'students';
+                }
+
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    // Show hidden dynamic sections if necessary
+                    if (targetId === 'myclass' && myclassSection) {
+                        myclassSection.style.display = 'block';
+                        if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
+                        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
+                    } else if (targetId === 'students' && studentSection) {
+                        studentSection.style.display = 'block';
+                        if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
+                        if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+                    }
+
+                    const targetOffset = targetEl.offsetTop - 90;
+                    window.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                    showToast('요청하신 페이지로 연동되었습니다.');
+                }
+            }, 300);
         }
     };
 
@@ -4001,11 +4046,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMyClass();
                 showToast(`[로그인 성공] ${foundStudent.name} 학생 포털에 연결되었습니다.`);
 
-                // Smooth scroll to myclass
-                setTimeout(() => {
-                    const targetOffset = myclassSection.offsetTop - 90;
-                    window.scrollTo({ top: targetOffset, behavior: 'smooth' });
-                }, 100);
+                // Check for callback redirect, otherwise scroll to myclass
+                if (sessionStorage.getItem('login_callback_url')) {
+                    handleLoginSuccessRedirection();
+                } else {
+                    setTimeout(() => {
+                        const targetOffset = myclassSection.offsetTop - 90;
+                        window.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                    }, 100);
+                }
             } else {
                 studentAuthErrorMsg.style.display = 'block';
                 const authBox = studentLoginModal.querySelector('.modal-box');
@@ -4038,6 +4087,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         studentLoginModal.classList.remove('open');
                         handleAdminLoginSetup();
                         showToast('관리자 모드가 활성화되었습니다.');
+                        
+                        // Redirection check
+                        if (sessionStorage.getItem('login_callback_url')) {
+                            handleLoginSuccessRedirection();
+                        }
                         return;
                     }
 
@@ -4932,6 +4986,24 @@ document.addEventListener('DOMContentLoaded', () => {
         safeCreateIcons();
         renderNotices();
         if (isAdmin) renderStudents();
+        
+        // Auto-check callbackUrl and trigger login modal if not logged in
+        if (session) {
+            handleLoginSuccessRedirection();
+        } else {
+            const urlParams = new URLSearchParams(window.location.search);
+            const callbackUrl = urlParams.get('callbackUrl');
+            if (callbackUrl) {
+                sessionStorage.setItem('login_callback_url', callbackUrl);
+                setTimeout(() => {
+                    const studentLoginModal = document.getElementById('login-modal');
+                    if (studentLoginModal) {
+                        studentLoginModal.classList.add('open');
+                        showToast('로그인이 필요한 페이지입니다. 로그인해 주세요.');
+                    }
+                }, 300);
+            }
+        }
     });
 
     // Bind parent calendar navigation click listeners once
