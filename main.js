@@ -318,6 +318,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(`Error saving habit records for ${studentId} to Supabase:`, e);
             }
         }
+    };
+
     const saveMockUsers = async (usersArray) => {
         try { localStorage.setItem('gongbubang_mock_users', JSON.stringify(usersArray)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
