@@ -187,6 +187,9 @@
                         <a href="#ai-query-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역
                         </a>
+                        <a href="#textbook-request-management-card" id="quick-menu-textbooks" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="if(document.getElementById('quick-menu-textbooks-badge').style.display === 'none') { this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)'; } else { this.style.background='#fef2f2'; this.style.borderColor='#fee2e2'; }">
+                            <i data-lucide="book" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청 <span id="quick-menu-textbooks-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
                         <a href="#approval-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--success-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--success-color);"></i> 가입/종결 승인
                         </a>
@@ -532,6 +535,55 @@
                         </div>
                     </div>
 
+                    <!-- Textbook Request Management Section (Admin Only) -->
+                    <div class="class-management-card" id="textbook-request-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
+                        <div class="class-management-header">
+                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="book" style="color: var(--mascot-purple-bg); width: 22px; height: 22px;"></i> 교재 구매 요청 관리
+                            </h3>
+                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">원생들의 교재 구매 요청 내역을 확인하고 승인 및 결제 여부를 관리합니다.</p>
+                        </div>
+                        
+                        <!-- Filters -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">확인 상태:</label>
+                                <select id="textbook-confirm-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; background: #ffffff;">
+                                    <option value="all">전체</option>
+                                    <option value="unconfirmed">미확인</option>
+                                    <option value="confirmed">확인완료</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">결제 여부:</label>
+                                <select id="textbook-payment-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; background: #ffffff;">
+                                    <option value="all">전체</option>
+                                    <option value="unpaid">미결제</option>
+                                    <option value="paid">결제완료</option>
+                                </select>
+                            </div>
+                            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: auto;" id="textbook-request-count-label">조회 결과: 0건</span>
+                        </div>
+
+                        <div class="schedule-table-wrapper" style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff;">
+                            <table class="schedule-table" style="min-width: 800px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #fafafa; border-bottom: 2px solid var(--border-color);">
+                                        <th style="padding: 12px; text-align: left; font-size: 0.82rem; font-weight: 700;">반 정보 / 원생 이름</th>
+                                        <th style="padding: 12px; text-align: left; font-size: 0.82rem; font-weight: 700;">신청 교재명</th>
+                                        <th style="padding: 12px; text-align: right; font-size: 0.82rem; font-weight: 700;">금액</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; font-weight: 700;">확인 상태</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; font-weight: 700;">결제 정보</th>
+                                        <th style="padding: 12px; text-align: center; font-size: 0.82rem; font-weight: 700; width: 140px;">액션</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="textbook-request-list-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- 자료공유 센터 관리 Section (Admin Only) -->
                     <div class="class-management-card" id="curriculum-management-card" style="margin-top: 30px;">
                         <div class="class-management-header">
@@ -804,6 +856,17 @@
                             <!-- Info Widget -->
                             <div class="widget" id="myclass-info-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
                                 <!-- Will be rendered dynamically -->
+                            </div>
+
+                            <!-- Textbook Purchase Widget -->
+                            <div class="widget" id="myclass-textbook-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 20px; height: 20px;"></i> 반 교재 및 구매 요청
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">현재 반에 등록된 교재 목록입니다. 구매 요청 및 모바일 결제를 진행할 수 있습니다.</p>
+                                <div id="myclass-textbook-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                    <!-- Dynamic content -->
+                                </div>
                             </div>
                             
                             <!-- Monthly Attendance Calendar Widget -->
@@ -1684,6 +1747,40 @@
                 
                 <button type="submit" class="btn-modal-submit" style="margin-top: 6px;">수정 완료</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Class Textbooks Management (Admin Only) -->
+    <div class="modal-overlay" id="class-textbooks-modal">
+        <div class="modal-box" style="max-width: 500px; padding: 24px;">
+            <button type="button" class="modal-close-btn" id="btn-class-textbooks-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="book" style="color: #8e44ad;"></i> <span id="textbook-modal-title-class-name">반</span> 교재 관리
+            </h3>
+            <p class="modal-desc">이 반에 소속된 학생들이 구매할 교재의 이름과 금액을 관리합니다.</p>
+            
+            <div style="margin-top: 16px; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; background: #fafafa;">
+                <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">새 교재 추가</h4>
+                <form id="add-textbook-form" style="display: grid; grid-template-columns: 1.5fr 1fr auto; gap: 8px; align-items: flex-end;">
+                    <input type="hidden" id="textbook-modal-class-id">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label for="textbook-name-input" style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">교재명</label>
+                        <input type="text" id="textbook-name-input" required placeholder="교재명 입력" style="padding: 8px 12px; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label for="textbook-price-input" style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">금액 (원)</label>
+                        <input type="number" id="textbook-price-input" required placeholder="예: 15000" min="0" style="padding: 8px 12px; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                    </div>
+                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 6px; padding: 8px 14px; height: 34px; font-size: 0.82rem; background: #8e44ad; white-space: nowrap; margin-bottom: 0;">추가</button>
+                </form>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">교재 목록</h4>
+                <div id="modal-textbook-list-container" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+                    <!-- Textbook items will be listed dynamically -->
+                </div>
+            </div>
         </div>
     </div>
 

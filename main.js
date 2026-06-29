@@ -61,7 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tue: dbClass.tue_start ? `${dbClass.tue_start}~${dbClass.tue_end}` : '',
         wed: dbClass.wed_start ? `${dbClass.wed_start}~${dbClass.wed_end}` : '',
         thu: dbClass.thu_start ? `${dbClass.thu_start}~${dbClass.thu_end}` : '',
-        fri: dbClass.fri_start ? `${dbClass.fri_start}~${dbClass.fri_end}` : ''
+        fri: dbClass.fri_start ? `${dbClass.fri_start}~${dbClass.fri_end}` : '',
+        textbooks: dbClass.textbooks ? (typeof dbClass.textbooks === 'string' ? JSON.parse(dbClass.textbooks) : dbClass.textbooks) : []
     });
 
     const mapClassToDb = (jsClass) => {
@@ -84,7 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tue_start: tue.start, tue_end: tue.end,
             wed_start: wed.start, wed_end: wed.end,
             thu_start: thu.start, thu_end: thu.end,
-            fri_start: fri.start, fri_end: fri.end
+            fri_start: fri.start, fri_end: fri.end,
+            textbooks: jsClass.textbooks || []
         };
     };
 
@@ -238,19 +240,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapAiQueryFromDb = (dbQ) => ({
         id: dbQ.id,
         studentId: dbQ.student_id,
-        query: dbQ.query,
-        response: dbQ.response,
+        studentName: dbQ.student_name,
+        question: dbQ.query,
+        answer: dbQ.response,
         date: dbQ.date,
-        rating: dbQ.rating
+        timestamp: dbQ.timestamp,
+        isRead: !!dbQ.is_read
     });
     const mapAiQueryToDb = (jsQ) => ({
         id: jsQ.id,
         student_id: jsQ.studentId,
-        query: jsQ.query,
-        response: jsQ.response,
+        student_name: jsQ.studentName,
+        query: jsQ.question,
+        response: jsQ.answer,
         date: jsQ.date,
-        rating: jsQ.rating
+        timestamp: jsQ.timestamp,
+        is_read: !!jsQ.isRead
     });
+
+    const mapTextbookRequestFromDb = (dbReq) => ({
+        id: dbReq.id,
+        studentId: dbReq.student_id,
+        studentName: dbReq.student_name,
+        classId: dbReq.class_id,
+        className: dbReq.class_name,
+        textbookName: dbReq.textbook_name,
+        price: dbReq.price,
+        isConfirmed: !!dbReq.is_confirmed,
+        paymentStatus: dbReq.payment_status,
+        createdAt: dbReq.created_at
+    });
+
+    const mapTextbookRequestToDb = (jsReq) => ({
+        id: jsReq.id,
+        student_id: jsReq.studentId,
+        student_name: jsReq.studentName,
+        class_id: jsReq.classId,
+        class_name: jsReq.className,
+        textbook_name: jsReq.textbookName,
+        price: jsReq.price,
+        is_confirmed: !!jsReq.isConfirmed,
+        payment_status: jsReq.paymentStatus || '미결제',
+        created_at: jsReq.createdAt || new Date().toISOString()
+    });
+
+    const saveAiQueries = async () => {
+        try { localStorage.setItem('gongbubang_ai_queries', JSON.stringify(aiQueries)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = aiQueries.map(mapAiQueryToDb);
+                await supabase.from('sb_ai_queries').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving AI queries to Supabase:', e);
+            }
+        }
+    };
+
+    const saveTextbookRequests = async () => {
+        try { localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(textbookRequests)); } catch(e){}
+        if (typeof updateAdminQuickMenuHighlights === 'function') updateAdminQuickMenuHighlights();
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = textbookRequests.map(mapTextbookRequestToDb);
+                await supabase.from('sb_textbook_requests').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving textbook requests to Supabase:', e);
+            }
+        }
+    };
 
     const saveResources = async () => {
         try { localStorage.setItem('gongbubang_resources', JSON.stringify(resources)); } catch(e){}
@@ -385,7 +442,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_attendance', mapAttendanceFromDb, mapAttendanceToDb, defaultAttendance, 'gongbubang_attendance'),
                 syncTable('sb_consultations', u => u, u => u, defaultConsultations, 'gongbubang_consultations'),
                 syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
-                syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries')
+                syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
+                syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests')
             ]);
 
             if (syncResults[0]) notices = syncResults[0];
@@ -422,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[10]) consultations = syncResults[10];
             if (syncResults[11]) curriculums = syncResults[11];
             if (syncResults[12]) aiQueries = syncResults[12];
+            if (syncResults[13]) textbookRequests = syncResults[13];
 
             // 1. Sync habits
             const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
@@ -1727,6 +1786,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let consultations = defaultConsultations;
     let curriculums = defaultCurriculums;
     let aiQueries = defaultAiQueries;
+    const defaultTextbookRequests = [];
+    let textbookRequests = defaultTextbookRequests;
 
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
@@ -1760,6 +1821,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedAiQueries = localStorage.getItem('gongbubang_ai_queries');
         if (storedAiQueries) aiQueries = JSON.parse(storedAiQueries);
         else localStorage.setItem('gongbubang_ai_queries', JSON.stringify(defaultAiQueries));
+
+        const storedTextbookReqs = localStorage.getItem('gongbubang_textbook_requests');
+        if (storedTextbookReqs) textbookRequests = JSON.parse(storedTextbookReqs);
+        else localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(defaultTextbookRequests));
     } catch (e) {
         console.error('localStorage is not accessible for state tables.', e);
     }
@@ -3502,6 +3567,117 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
+    // Class Textbooks Modal Setup
+    // ==========================================================================
+    const classTextbooksModal = document.getElementById('class-textbooks-modal');
+    const btnClassTextbooksClose = document.getElementById('btn-class-textbooks-close');
+    const addTextbookForm = document.getElementById('add-textbook-form');
+    const textbookModalTitleClassName = document.getElementById('textbook-modal-title-class-name');
+    const textbookModalClassId = document.getElementById('textbook-modal-class-id');
+    const textbookNameInput = document.getElementById('textbook-name-input');
+    const textbookPriceInput = document.getElementById('textbook-price-input');
+    const modalTextbookListContainer = document.getElementById('modal-textbook-list-container');
+
+    const openClassTextbooksModal = (classId) => {
+        if (!classTextbooksModal) return;
+        const cls = classes.find(c => String(c.id) === String(classId));
+        if (!cls) return;
+
+        if (textbookModalTitleClassName) textbookModalTitleClassName.textContent = cls.name;
+        if (textbookModalClassId) textbookModalClassId.value = cls.id;
+        
+        renderModalTextbookList(cls);
+        classTextbooksModal.classList.add('open');
+    };
+
+    const renderModalTextbookList = (cls) => {
+        if (!modalTextbookListContainer) return;
+        modalTextbookListContainer.innerHTML = '';
+
+        const books = cls.textbooks || [];
+        if (books.length === 0) {
+            modalTextbookListContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 12px;">등록된 교재가 없습니다.</div>';
+            return;
+        }
+
+        books.forEach((book, index) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '8px 12px';
+            row.style.border = '1px solid var(--border-color)';
+            row.style.borderRadius = '8px';
+            row.style.background = '#ffffff';
+
+            row.innerHTML = `
+                <div style="text-align: left;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">${book.name}</span>
+                    <span style="font-size: 0.8rem; color: var(--primary-color); font-weight: 600; margin-left: 8px;">${Number(book.price).toLocaleString()}원</span>
+                </div>
+                <button type="button" class="btn-delete-textbook" style="border: none; background: transparent; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;" data-index="${index}">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+            `;
+
+            row.querySelector('.btn-delete-textbook').addEventListener('click', () => {
+                if (confirm(`'${book.name}' 교재를 삭제하시겠습니까?`)) {
+                    cls.textbooks.splice(index, 1);
+                    saveClasses();
+                    renderModalTextbookList(cls);
+                    if (loggedInStudentId) renderMyClass();
+                }
+            });
+
+            modalTextbookListContainer.appendChild(row);
+        });
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+
+    if (classTextbooksModal) {
+        if (btnClassTextbooksClose) {
+            btnClassTextbooksClose.addEventListener('click', () => {
+                classTextbooksModal.classList.remove('open');
+            });
+        }
+        classTextbooksModal.addEventListener('click', (e) => {
+            if (e.target === classTextbooksModal) {
+                classTextbooksModal.classList.remove('open');
+            }
+        });
+    }
+
+    if (addTextbookForm) {
+        addTextbookForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const classId = textbookModalClassId.value;
+            const name = textbookNameInput.value.trim();
+            const price = parseInt(textbookPriceInput.value, 10);
+
+            if (!classId || !name || isNaN(price)) return;
+
+            const cls = classes.find(c => String(c.id) === String(classId));
+            if (!cls) return;
+
+            if (!cls.textbooks) cls.textbooks = [];
+            cls.textbooks.push({
+                id: Date.now(),
+                name,
+                price
+            });
+
+            saveClasses();
+            renderModalTextbookList(cls);
+
+            textbookNameInput.value = '';
+            textbookPriceInput.value = '';
+
+            if (loggedInStudentId) renderMyClass();
+        });
+    }
+
+    // ==========================================================================
     // Notice Editor Actions (Write / Edit Form Submit)
     // ==========================================================================
     if (btnAdminWrite && noticeFormModal && noticeEditorForm && editNoticeIdInput && noticeTagSelect && noticeTitleInput && noticeContentInput && formModalTitle) {
@@ -3776,20 +3952,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 3. AI Queries
-            const totalAiQueries = aiQueries.length;
+            // 3. AI Queries (Count only unread queries)
+            const unreadAiQueries = aiQueries.filter(q => !q.isRead).length;
             const btnAi = document.querySelector('#admin-quick-menu a[href="#ai-query-management-card"]');
             if (btnAi) {
-                if (totalAiQueries > 0) {
+                if (unreadAiQueries > 0) {
                     btnAi.style.background = 'rgba(139, 92, 246, 0.08)';
                     btnAi.style.borderColor = 'rgba(139, 92, 246, 0.3)';
                     btnAi.style.color = 'rgb(109, 40, 217)';
-                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: rgb(109, 40, 217);"></i> AI 질의 내역 <span style="background: rgb(109, 40, 217); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${totalAiQueries}</span>`;
+                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: rgb(109, 40, 217);"></i> AI 질의 내역 <span style="background: rgb(109, 40, 217); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${unreadAiQueries}</span>`;
                 } else {
                     btnAi.style.background = '#f1f5f9';
                     btnAi.style.borderColor = 'var(--border-color)';
                     btnAi.style.color = 'var(--text-primary)';
                     btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역`;
+                }
+            }
+
+            // 4. Textbook Requests (Highlight if there are unconfirmed requests)
+            const unconfirmedTextbooks = textbookRequests.filter(r => !r.isConfirmed).length;
+            const btnTextbooks = document.getElementById('quick-menu-textbooks');
+            const badgeTextbooks = document.getElementById('quick-menu-textbooks-badge');
+            if (btnTextbooks && badgeTextbooks) {
+                if (unconfirmedTextbooks > 0) {
+                    btnTextbooks.style.background = 'rgba(239, 68, 68, 0.08)';
+                    btnTextbooks.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    btnTextbooks.style.color = 'rgb(220, 38, 38)';
+                    badgeTextbooks.style.display = 'inline-block';
+                    badgeTextbooks.textContent = unconfirmedTextbooks;
+                } else {
+                    btnTextbooks.style.background = '#f1f5f9';
+                    btnTextbooks.style.borderColor = 'var(--border-color)';
+                    btnTextbooks.style.color = 'var(--text-primary)';
+                    badgeTextbooks.style.display = 'none';
                 }
             }
 
@@ -4561,6 +4756,101 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (isAdmin) renderStudents(studentSearchInput ? studentSearchInput.value : '');
                         showToast(box.checked ? '과제 완료 처리가 완료되었습니다!' : '과제 대기 상태로 변경되었습니다.');
                     });
+                });
+            }
+        }
+
+        // Render Class Textbooks
+        const studentClass = classes.find(c => String(c.id) === String(student.classId));
+        const textbookListEl = document.getElementById('myclass-textbook-list');
+        if (textbookListEl) {
+            textbookListEl.innerHTML = '';
+            if (!studentClass || !studentClass.textbooks || studentClass.textbooks.length === 0) {
+                textbookListEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 20px 0;">이 반에 등록된 교재가 없습니다.</div>';
+            } else {
+                studentClass.textbooks.forEach(tb => {
+                    // Find if there is an existing request for this textbook by this student
+                    const req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tb.name);
+                    
+                    const item = document.createElement('div');
+                    item.style.display = 'flex';
+                    item.style.justifyContent = 'space-between';
+                    item.style.alignItems = 'center';
+                    item.style.padding = '12px';
+                    item.style.border = '1px solid var(--border-color)';
+                    item.style.borderRadius = '12px';
+                    item.style.background = '#ffffff';
+                    
+                    let actionHtml = '';
+                    if (!req) {
+                        actionHtml = `<button type="button" class="btn-request-purchase" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-tb-name="${tb.name}" data-tb-price="${tb.price}">구매 요청</button>`;
+                    } else if (!req.isConfirmed) {
+                        actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">승인 대기</span>`;
+                    } else if (req.paymentStatus === '미결제') {
+                        actionHtml = `
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
+                                <button type="button" class="btn-pay-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;">결제하기</button>
+                            </div>
+                        `;
+                    } else {
+                        actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                    }
+                    
+                    item.innerHTML = `
+                        <div style="text-align: left;">
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tb.name}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(tb.price).toLocaleString()}원</span></div>
+                        </div>
+                        <div>
+                            ${actionHtml}
+                        </div>
+                    `;
+                    
+                    // Bind action listeners
+                    const reqBtn = item.querySelector('.btn-request-purchase');
+                    if (reqBtn) {
+                        reqBtn.addEventListener('click', async () => {
+                            const newReq = {
+                                id: Date.now(),
+                                studentId: student.id,
+                                studentName: student.name,
+                                classId: studentClass.id,
+                                className: studentClass.name,
+                                textbookName: tb.name,
+                                price: tb.price,
+                                isConfirmed: false,
+                                paymentStatus: '미결제',
+                                createdAt: new Date().toISOString()
+                            };
+                            textbookRequests.unshift(newReq);
+                            await saveTextbookRequests();
+                            renderMyClass();
+                            if (isAdmin) renderTextbookRequests();
+                            showToast('교재 구매 요청이 전송되었습니다. 관리자 확인 후 결제가 가능합니다.');
+                        });
+                    }
+                    
+                    const payBtn = item.querySelector('.btn-pay-toss');
+                    if (payBtn) {
+                        payBtn.addEventListener('click', async () => {
+                            // Toss Payments integration simulation
+                            if (confirm(`토스페이먼츠(Toss Payments) 모의 결제를 진행하시겠습니까?\n결제 금액: ${Number(tb.price).toLocaleString()}원`)) {
+                                textbookRequests = textbookRequests.map(r => {
+                                    if (String(r.id) === String(req.id)) {
+                                        return { ...r, paymentStatus: '결제완료' };
+                                    }
+                                    return r;
+                                });
+                                await saveTextbookRequests();
+                                renderMyClass();
+                                if (isAdmin) renderTextbookRequests();
+                                showToast('결제가 성공적으로 완료되었습니다!');
+                            }
+                        });
+                    }
+                    
+                    textbookListEl.appendChild(item);
                 });
             }
         }
@@ -5461,6 +5751,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAdminCurriculumList();
         renderAiQueryManagement();
         if (typeof renderApprovalList === 'function') renderApprovalList();
+        if (typeof renderTextbookRequests === 'function') renderTextbookRequests();
         safeCreateIcons();
     };
 
@@ -5895,11 +6186,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">${schedSummary}</div>
                         </div>
                         <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            <button type="button" class="btn-class-textbooks" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: #fdfafd; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 600;">교재</button>
                             <button type="button" class="btn-class-edit" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: #f8fafc; cursor: pointer;">수정</button>
                             <button type="button" class="btn-class-delete" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer;">삭제</button>
                         </div>
                     `;
                     
+                    // Attach textbooks listener
+                    item.querySelector('.btn-class-textbooks').addEventListener('click', () => {
+                        openClassTextbooksModal(c.id);
+                    });
+
                     // Attach edit listener
                     item.querySelector('.btn-class-edit').addEventListener('click', () => {
                         try {
@@ -6949,10 +7246,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const studentNamesHtml = Object.keys(studentQueries).map(name => {
+                    const unreadCount = studentQueries[name].filter(q => !q.isRead).length;
+                    const badgeBg = unreadCount > 0 ? '#ef4444' : '#f0f0f0';
+                    const badgeColor = unreadCount > 0 ? '#ffffff' : 'var(--text-secondary)';
                     return `
-                        <button type="button" class="btn-view-ai-query-detail" data-date="${date}" data-name="${name}" style="border: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px; height: 28px; line-height: 1;">
+                        <button type="button" class="btn-view-ai-query-detail" data-date="${date}" data-name="${name}" style="border: none; background: #ffffff; border: 1px solid ${unreadCount > 0 ? '#fca5a5' : 'var(--border-color)'}; border-radius: 20px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px; height: 28px; line-height: 1;">
                             <i data-lucide="user" style="width: 12px; height: 12px; color: var(--text-secondary);"></i> ${name}
-                            <span style="font-size: 0.7rem; background: #f0f0f0; color: var(--text-secondary); border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; margin-left: 2px;">${studentQueries[name].length}</span>
+                            <span style="font-size: 0.7rem; background: ${badgeBg}; color: ${badgeColor}; border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; margin-left: 2px; font-weight: 700;">${studentQueries[name].length}</span>
                         </button>
                     `;
                 }).join('');
@@ -6996,6 +7296,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const matchingQueries = aiQueries.filter(q => q.date === date && q.studentName === name);
 
             if (matchingQueries.length === 0) return;
+
+            // Mark matching queries as read
+            let hasChanged = false;
+            aiQueries = aiQueries.map(q => {
+                if (q.date === date && q.studentName === name && !q.isRead) {
+                    hasChanged = true;
+                    return { ...q, isRead: true };
+                }
+                return q;
+            });
+
+            if (hasChanged) {
+                saveAiQueries();
+                updateAdminQuickMenuHighlights();
+                renderAiQueryManagement();
+            }
 
             const queriesHtml = matchingQueries.map(q => {
                 return `
@@ -7320,6 +7636,98 @@ document.addEventListener('DOMContentLoaded', () => {
             safeCreateIcons();
         };
 
+        const renderTextbookRequests = () => {
+            const tbody = document.getElementById('textbook-request-list-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const filterConfirm = document.getElementById('textbook-confirm-filter')?.value || 'all';
+            const filterPayment = document.getElementById('textbook-payment-filter')?.value || 'all';
+            
+            let filtered = textbookRequests || [];
+            
+            // Filter by confirmation status
+            if (filterConfirm === 'unconfirmed') {
+                filtered = filtered.filter(r => !r.isConfirmed);
+            } else if (filterConfirm === 'confirmed') {
+                filtered = filtered.filter(r => r.isConfirmed);
+            }
+            
+            // Filter by payment status
+            if (filterPayment === 'unpaid') {
+                filtered = filtered.filter(r => r.paymentStatus === '미결제');
+            } else if (filterPayment === 'paid') {
+                filtered = filtered.filter(r => r.paymentStatus === '결제완료');
+            }
+            
+            const countLabel = document.getElementById('textbook-request-count-label');
+            if (countLabel) {
+                countLabel.textContent = `조회 결과: ${filtered.length}건`;
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">구매 요청 내역이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            filtered.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                
+                let confirmBadge = '';
+                if (r.isConfirmed) {
+                    confirmBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">확인 완료</span>`;
+                } else {
+                    confirmBadge = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미확인</span>`;
+                }
+                
+                let paymentBadge = '';
+                if (r.paymentStatus === '결제완료') {
+                    paymentBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                } else {
+                    paymentBadge = `<span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미결제</span>`;
+                }
+                
+                let actionBtn = '';
+                if (!r.isConfirmed) {
+                    actionBtn = `<button type="button" class="btn-confirm-req btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto;" data-req-id="${r.id}">확인</button>`;
+                } else {
+                    actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">조치완료</span>`;
+                }
+                
+                tr.innerHTML = `
+                    <td style="padding: 12px; text-align: left; font-size: 0.85rem;">
+                        <strong>${r.className || '반 정보 없음'}</strong><br>
+                        <span style="color: var(--text-secondary);">${r.studentName}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: left; font-size: 0.85rem; font-weight: 600;">${r.textbookName}</td>
+                    <td style="padding: 12px; text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--primary-color);">${Number(r.price).toLocaleString()}원</td>
+                    <td style="padding: 12px; text-align: center;">${confirmBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${paymentBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${actionBtn}</td>
+                `;
+                
+                const btn = tr.querySelector('.btn-confirm-req');
+                if (btn) {
+                    btn.addEventListener('click', async () => {
+                        textbookRequests = textbookRequests.map(item => {
+                            if (String(item.id) === String(r.id)) {
+                                return { ...item, isConfirmed: true };
+                            }
+                            return item;
+                        });
+                        await saveTextbookRequests();
+                        renderTextbookRequests();
+                        updateAdminQuickMenuHighlights();
+                        showToast('구매 요청 건을 확인 승인하였습니다. 학부모 포털에서 즉시 확인 가능하며 결제 단계로 진행됩니다.');
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            safeCreateIcons();
+        };
+
         // User Profile update modal logic
         const linkUserProfileEdit = document.getElementById('link-user-profile-edit');
         const userProfileModal = document.getElementById('user-profile-modal');
@@ -7482,6 +7890,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const approvalYearFilter = document.getElementById('approval-year-filter');
         if (approvalStatusFilter) approvalStatusFilter.addEventListener('change', renderApprovalList);
         if (approvalYearFilter) approvalYearFilter.addEventListener('change', renderApprovalList);
+
+        // Bind textbook requests filters
+        const textbookConfirmFilter = document.getElementById('textbook-confirm-filter');
+        const textbookPaymentFilter = document.getElementById('textbook-payment-filter');
+        if (textbookConfirmFilter) textbookConfirmFilter.addEventListener('change', renderTextbookRequests);
+        if (textbookPaymentFilter) textbookPaymentFilter.addEventListener('change', renderTextbookRequests);
 
         // Bind resource CRUD form
         const resourceForm = document.getElementById('resource-editor-form');
@@ -7646,6 +8060,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAdminCurriculumList();
             renderAiQueryManagement();
             renderApprovalList();
+            renderTextbookRequests();
             renderAdminResources();
         }
 });
