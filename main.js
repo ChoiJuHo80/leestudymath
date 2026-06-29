@@ -729,6 +729,12 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             studentLoginModal.classList.remove('open');
             
+            // Reset to Step 1: Social 인증 선택
+            const stepSocial = document.getElementById('signup-step-social');
+            const stepProfile = document.getElementById('signup-step-profile');
+            if (stepSocial) stepSocial.style.display = 'block';
+            if (stepProfile) stepProfile.style.display = 'none';
+
             // Clear and add first child
             if (signupChildrenContainer) {
                 signupChildrenContainer.innerHTML = '';
@@ -737,14 +743,68 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             studentSignupModal.classList.add('open');
-            const signupEmailInput = document.getElementById('student-signup-email');
-            if (signupEmailInput) signupEmailInput.focus();
+        });
+    }
+
+    // Social Signup buttons
+    const btnSignupGoogle = document.getElementById('btn-signup-google');
+    const btnSignupKakao = document.getElementById('btn-signup-kakao');
+
+    if (btnSignupGoogle) {
+        btnSignupGoogle.addEventListener('click', async () => {
+            try {
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Google signup error:', error.message);
+                    alert('Google 인증 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Google signup exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnSignupKakao) {
+        btnSignupKakao.addEventListener('click', async () => {
+            try {
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'kakao',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Kakao signup error:', error.message);
+                    alert('Kakao 인증 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Kakao signup exceptional error:', err);
+            }
         });
     }
 
     if (btnStudentSignupClose && studentSignupModal) {
-        btnStudentSignupClose.addEventListener('click', () => {
+        btnStudentSignupClose.addEventListener('click', async () => {
             studentSignupModal.classList.remove('open');
+            sessionStorage.removeItem('gongbubang_signup_flow');
+            
+            // If they authenticated but closed the signup modal before saving profile, sign out
+            const sessionResp = await supabase.auth.getSession();
+            const session = sessionResp.data.session;
+            if (session && session.user) {
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const exists = mockUsers.some(u => String(u.email).toLowerCase() === String(session.user.email).toLowerCase());
+                if (!exists) {
+                    await supabase.auth.signOut();
+                }
+            }
         });
     }
 
@@ -4215,15 +4275,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Submit Signup Form (Supabase Auth)
+        // Submit Signup Form (Social OAuth Complete)
         const studentSignupForm = document.getElementById('student-signup-form');
         const signupErrorMsg = document.getElementById('signup-error-msg');
 
         if (studentSignupForm) {
             studentSignupForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = document.getElementById('student-signup-email').value.trim();
-                const password = document.getElementById('student-signup-password').value;
+                
+                // Get email and user ID from the active Supabase session (since they completed Step 1: Social auth!)
+                const sessionResp = await supabase.auth.getSession();
+                const session = sessionResp.data.session;
+                if (!session || !session.user) {
+                    alert('인증 정보가 만료되었습니다. 다시 가입을 시도해 주세요.');
+                    location.reload();
+                    return;
+                }
+
+                const email = session.user.email;
+                const parentName = document.getElementById('student-signup-name').value.trim();
                 const phone = document.getElementById('student-signup-phone').value.trim();
                 const addressBase = document.getElementById('student-signup-address').value.trim();
                 const addressDetail = document.getElementById('student-signup-address-detail').value.trim();
@@ -4313,24 +4383,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const submitBtn = studentSignupForm.querySelector('.btn-modal-submit');
                 const originalText = submitBtn.textContent;
                 submitBtn.disabled = true;
-                submitBtn.textContent = '가입 중...';
+                submitBtn.textContent = '가입 완료 처리 중...';
                 if (signupErrorMsg) signupErrorMsg.style.display = 'none';
 
                 try {
                     // Create locally in mock database with status 'pending'
-                    const newUserId = 'user-' + Date.now();
                     const localPendingUser = {
-                        id: newUserId,
+                        id: session.user.id,
                         email,
-                        password,
-                        name: children[0].name + ' 학부모',
+                        name: parentName,
                         phone,
                         address,
                         role: 'parent',
                         status: 'pending',
                         createdAt: new Date().toISOString(),
                         user_metadata: {
-                            name: children[0].name + ' 학부모',
+                            name: parentName,
                             phone,
                             address,
                             children,
@@ -4340,29 +4408,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     mockUsers.push(localPendingUser);
                     localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
 
-                    // If Supabase is active, register inside Supabase Auth too
-                    if (supabase.auth.signUp) {
-                        await supabase.auth.signUp({
-                            email,
-                            password,
-                            options: {
-                                data: {
-                                    name: children[0].name + ' 학부모',
-                                    phone,
-                                    address,
-                                    children,
-                                    role: 'parent',
-                                    status: 'pending'
-                                }
-                            }
-                        });
-                    }
-
                     // Alert user and close modal
-                    alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 로그인 및 서비스 이용이 가능합니다.');
+                    alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
                     studentSignupModal.classList.remove('open');
                     studentSignupForm.reset();
                     
+                    // Clear signup flow flag
+                    sessionStorage.removeItem('gongbubang_signup_flow');
+
                     // Force signout to clear auto-login session
                     if (supabase.auth.signOut) {
                         await supabase.auth.signOut();
@@ -4930,10 +4983,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hasChildrenMetadata = session.user.user_metadata?.children && session.user.user_metadata.children.length > 0;
                 
                 if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
-                    console.log('[Auth Debug] Signout: Unregistered user');
-                    alert('가입되지 않은 소셜 계정입니다. 먼저 일반 회원가입을 완료해 주세요.');
-                    supabase.auth.signOut();
-                    return;
+                    // Check if they are in the signup flow
+                    if (sessionStorage.getItem('gongbubang_signup_flow') === 'true') {
+                        console.log('[Auth Debug] New social signup detected. Opening profile modal.');
+                        
+                        // Show Step 2 in the signup modal
+                        const stepSocial = document.getElementById('signup-step-social');
+                        const stepProfile = document.getElementById('signup-step-profile');
+                        if (stepSocial) stepSocial.style.display = 'none';
+                        if (stepProfile) stepProfile.style.display = 'block';
+                        
+                        if (studentSignupModal) {
+                            studentSignupModal.classList.add('open');
+                        }
+                        
+                        const parentNameInput = document.getElementById('student-signup-name');
+                        if (parentNameInput) {
+                            parentNameInput.focus();
+                        }
+                        return; // Let them fill the profile form, do not sign out yet
+                    } else {
+                        console.log('[Auth Debug] Signout: Unregistered user');
+                        alert('가입되지 않은 소셜 계정입니다. 먼저 학부모 회원가입을 완료해 주세요.');
+                        supabase.auth.signOut();
+                        return;
+                    }
                 }
 
                 // Check matched user status
