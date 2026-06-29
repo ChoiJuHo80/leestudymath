@@ -4862,12 +4862,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial load & Auth Listener Setup
     supabase.auth.onAuthStateChange((event, session) => {
+        console.log('[Auth Debug] Event:', event, 'Session:', session ? 'Present' : 'Null');
         if (session && session.user) {
-            // Check if they are admin
             const emailLower = String(session.user.email || '').toLowerCase();
+            console.log('[Auth Debug] User Email:', emailLower);
+            
+            // Check if they are admin
             if (['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'].includes(emailLower)) {
+                console.log('[Auth Debug] Match admin: True');
                 handleAdminLoginSetup();
             } else {
+                console.log('[Auth Debug] Match admin: False');
                 // Ensure admin layout is cleaned up when student/parent logs in
                 handleLogoutCleanup();
                 // Check if this is a registered user
@@ -4925,6 +4930,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hasChildrenMetadata = session.user.user_metadata?.children && session.user.user_metadata.children.length > 0;
                 
                 if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
+                    console.log('[Auth Debug] Signout: Unregistered user');
                     alert('가입되지 않은 소셜 계정입니다. 먼저 일반 회원가입을 완료해 주세요.');
                     supabase.auth.signOut();
                     return;
@@ -4932,11 +4938,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Check matched user status
                 if (matchedUser && matchedUser.status === 'pending') {
+                    console.log('[Auth Debug] Signout: Pending user');
                     alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
                     supabase.auth.signOut();
                     return;
                 }
                 if (matchedUser && matchedUser.status === 'terminated') {
+                    console.log('[Auth Debug] Signout: Terminated user');
                     alert('관리자에 의해 종결된 계정입니다.');
                     supabase.auth.signOut();
                     return;
@@ -5044,6 +5052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMyClass();
             }
         } else {
+            console.log('[Auth Debug] No session: cleaning up layout');
             // No session
             handleLogoutCleanup();
         }
