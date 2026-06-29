@@ -15,6 +15,516 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // ==========================================================================
+    // Supabase Database Mappers and Synchronizers
+    // ==========================================================================
+    const mapStudentFromDb = (dbStudent) => ({
+        id: dbStudent.id,
+        name: dbStudent.name,
+        age: dbStudent.age,
+        school: dbStudent.school,
+        phone: dbStudent.phone,
+        parentPhone: dbStudent.parent_phone,
+        sibling: dbStudent.sibling,
+        classId: dbStudent.class_id,
+        username: dbStudent.username,
+        password: dbStudent.password,
+        progress: dbStudent.progress,
+        remarks: dbStudent.remarks,
+        isTerminated: dbStudent.is_terminated,
+        terminationDate: dbStudent.termination_date
+    });
+
+    const mapStudentToDb = (jsStudent) => ({
+        id: jsStudent.id,
+        name: jsStudent.name,
+        age: jsStudent.age,
+        school: jsStudent.school,
+        phone: jsStudent.phone,
+        parent_phone: jsStudent.parentPhone,
+        sibling: jsStudent.sibling,
+        class_id: jsStudent.classId,
+        username: jsStudent.username,
+        password: jsStudent.password,
+        progress: jsStudent.progress,
+        remarks: jsStudent.remarks,
+        is_terminated: jsStudent.isTerminated || false,
+        termination_date: jsStudent.terminationDate || null
+    });
+
+    const mapClassFromDb = (dbClass) => ({
+        id: dbClass.id,
+        name: dbClass.name,
+        subject: dbClass.subject,
+        duration: dbClass.duration,
+        mon: dbClass.mon_start ? `${dbClass.mon_start}~${dbClass.mon_end}` : '',
+        tue: dbClass.tue_start ? `${dbClass.tue_start}~${dbClass.tue_end}` : '',
+        wed: dbClass.wed_start ? `${dbClass.wed_start}~${dbClass.wed_end}` : '',
+        thu: dbClass.thu_start ? `${dbClass.thu_start}~${dbClass.thu_end}` : '',
+        fri: dbClass.fri_start ? `${dbClass.fri_start}~${dbClass.fri_end}` : ''
+    });
+
+    const mapClassToDb = (jsClass) => {
+        const parseTimeRange = (rangeStr) => {
+            if (!rangeStr) return { start: '', end: '' };
+            const parts = rangeStr.split('~');
+            return { start: parts[0] || '', end: parts[1] || '' };
+        };
+        const mon = parseTimeRange(jsClass.mon);
+        const tue = parseTimeRange(jsClass.tue);
+        const wed = parseTimeRange(jsClass.wed);
+        const thu = parseTimeRange(jsClass.thu);
+        const fri = parseTimeRange(jsClass.fri);
+        return {
+            id: jsClass.id,
+            name: jsClass.name,
+            subject: jsClass.subject,
+            duration: jsClass.duration,
+            mon_start: mon.start, mon_end: mon.end,
+            tue_start: tue.start, tue_end: tue.end,
+            wed_start: wed.start, wed_end: wed.end,
+            thu_start: thu.start, thu_end: thu.end,
+            fri_start: fri.start, fri_end: fri.end
+        };
+    };
+
+    const mapNoticeFromDb = (dbNotice) => ({
+        id: dbNotice.id,
+        tag: dbNotice.tag,
+        title: dbNotice.title,
+        content: dbNotice.content,
+        date: dbNotice.date,
+        author: dbNotice.author,
+        titleSize: dbNotice.title_size,
+        titleColor: dbNotice.title_color,
+        pinned: dbNotice.pinned,
+        highlight: dbNotice.highlight
+    });
+
+    const mapNoticeToDb = (jsNotice) => ({
+        id: jsNotice.id,
+        tag: jsNotice.tag,
+        title: jsNotice.title,
+        content: jsNotice.content,
+        date: jsNotice.date,
+        author: jsNotice.author,
+        title_size: jsNotice.titleSize || 'normal',
+        title_color: jsNotice.titleColor || 'default',
+        pinned: jsNotice.pinned || false,
+        highlight: jsNotice.highlight || false
+    });
+
+    const mapHomeworkFromDb = (dbHw) => ({
+        id: dbHw.id,
+        studentId: dbHw.student_id,
+        title: dbHw.title,
+        description: dbHw.description,
+        dueDate: dbHw.due_date,
+        status: dbHw.status,
+        createdAt: dbHw.created_at,
+        feedback: dbHw.feedback,
+        submissionDate: dbHw.submission_date
+    });
+
+    const mapHomeworkToDb = (jsHw) => ({
+        id: jsHw.id,
+        student_id: jsHw.studentId,
+        title: jsHw.title,
+        description: jsHw.description,
+        due_date: jsHw.dueDate,
+        status: jsHw.status,
+        created_at: jsHw.createdAt,
+        feedback: jsHw.feedback || '',
+        submission_date: jsHw.submissionDate || ''
+    });
+
+    const mapResourceFromDb = (dbRes) => ({
+        id: dbRes.id,
+        title: dbRes.title,
+        fileUrl: dbRes.file_url,
+        date: dbRes.date,
+        category: dbRes.category,
+        downloads: dbRes.downloads || 0
+    });
+
+    const mapResourceToDb = (jsRes) => ({
+        id: jsRes.id,
+        title: jsRes.title,
+        file_url: jsRes.fileUrl,
+        date: jsRes.date,
+        category: jsRes.category,
+        downloads: jsRes.downloads || 0
+    });
+
+    const mapMessageFromDb = (m) => ({
+        id: m.id,
+        sender: m.sender,
+        receiver: m.receiver,
+        content: m.content,
+        timestamp: m.timestamp,
+        isRead: m.is_read
+    });
+    const mapMessageToDb = (m) => ({
+        id: m.id,
+        sender: m.sender,
+        receiver: m.receiver,
+        content: m.content,
+        timestamp: m.timestamp,
+        is_read: m.isRead || false
+    });
+
+    const mapFeedbackFromDb = (dbFb) => ({
+        id: dbFb.id,
+        studentId: dbFb.student_id,
+        content: dbFb.content,
+        date: dbFb.date,
+        author: dbFb.author
+    });
+    const mapFeedbackToDb = (jsFb) => ({
+        id: jsFb.id,
+        student_id: jsFb.studentId,
+        content: jsFb.content,
+        date: jsFb.date,
+        author: jsFb.author
+    });
+
+    const mapProgressFromDb = (dbP) => ({
+        id: dbP.id,
+        studentId: dbP.student_id,
+        date: dbP.date,
+        content: dbP.content,
+        category: dbP.category
+    });
+    const mapProgressToDb = (jsP) => ({
+        id: jsP.id,
+        student_id: jsP.studentId,
+        date: jsP.date,
+        content: jsP.content,
+        category: jsP.category
+    });
+
+    const mapAttendanceFromDb = (dbA) => ({
+        id: dbA.id,
+        studentId: dbA.student_id,
+        date: dbA.date,
+        checkIn: dbA.check_in,
+        checkOut: dbA.check_out,
+        status: dbA.status,
+        temp: dbA.temp
+    });
+    const mapAttendanceToDb = (jsA) => ({
+        id: jsA.id,
+        student_id: jsA.studentId,
+        date: jsA.date,
+        check_in: jsA.checkIn || '',
+        check_out: jsA.checkOut || '',
+        status: jsA.status,
+        temp: jsA.temp || ''
+    });
+
+    const mapCurriculumFromDb = (dbC) => ({
+        id: dbC.id,
+        title: dbC.title,
+        level: dbC.level,
+        orderNum: dbC.order_num
+    });
+    const mapCurriculumToDb = (jsC) => ({
+        id: jsC.id,
+        title: jsC.title,
+        level: jsC.level,
+        order_num: jsC.orderNum
+    });
+
+    const mapAiQueryFromDb = (dbQ) => ({
+        id: dbQ.id,
+        studentId: dbQ.student_id,
+        query: dbQ.query,
+        response: dbQ.response,
+        date: dbQ.date,
+        rating: dbQ.rating
+    });
+    const mapAiQueryToDb = (jsQ) => ({
+        id: jsQ.id,
+        student_id: jsQ.studentId,
+        query: jsQ.query,
+        response: jsQ.response,
+        date: jsQ.date,
+        rating: jsQ.rating
+    });
+
+    const saveResources = async () => {
+        try { localStorage.setItem('gongbubang_resources', JSON.stringify(resources)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = resources.map(mapResourceToDb);
+                await supabase.from('sb_resources').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving resources to Supabase:', e);
+            }
+        }
+    };
+
+    const saveStudentHabits = async (studentId, habitsList) => {
+        try {
+            const key = studentId === 'admin' ? 'gongbubang_habits_admin' : 'gongbubang_habits_' + studentId;
+            localStorage.setItem(key, JSON.stringify(habitsList));
+        } catch(e){}
+
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_habits').delete().eq('student_id', String(studentId));
+                if (habitsList && habitsList.length > 0) {
+                    const mapped = habitsList.map(h => ({
+                        id: studentId + '_' + h.id,
+                        student_id: String(studentId),
+                        habit_id: h.id,
+                        habit_name: h.text,
+                        frequency: h.frequency || 7,
+                        is_active: true
+                    }));
+                    await supabase.from('sb_habits').insert(mapped);
+                }
+            } catch(e) {
+                console.error(`Error saving habits for ${studentId} to Supabase:`, e);
+            }
+        }
+    };
+
+    const saveStudentHabitRecords = async (studentId, recordsObj) => {
+        try {
+            const key = studentId === 'admin' ? 'gongbubang_habit_records_admin' : 'gongbubang_habit_records_' + studentId;
+            localStorage.setItem(key, JSON.stringify(recordsObj));
+        } catch(e){}
+
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const rows = [];
+                Object.keys(recordsObj).forEach(date => {
+                    const dayRecs = recordsObj[date] || {};
+                    Object.keys(dayRecs).forEach(habitId => {
+                        rows.push({
+                            id: studentId + '_' + habitId + '_' + date,
+                            student_id: String(studentId),
+                            habit_id: habitId,
+                            date: date,
+                            is_completed: !!dayRecs[habitId]
+                        });
+                    });
+                });
+                if (rows.length > 0) {
+                    await supabase.from('sb_habit_records').upsert(rows);
+                }
+            } catch(e) {
+                console.error(`Error saving habit records for ${studentId} to Supabase:`, e);
+            }
+        }
+    const saveMockUsers = async (usersArray) => {
+        try { localStorage.setItem('gongbubang_mock_users', JSON.stringify(usersArray)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_mock_users').upsert(usersArray);
+            } catch(e) {
+                console.error('Error saving mock users to Supabase:', e);
+            }
+        }
+    };
+
+    const initializeDataFromSupabase = async () => {
+        if (typeof supabase === 'undefined' || !supabase || !supabase.auth || isMock) {
+            console.log('[Database Debug] Supabase client is not available or isMock is true. Using local storage fallback.');
+            return;
+        }
+
+        console.log('[Database Debug] Starting initialization from Supabase...');
+        try {
+            const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
+                const { data, error } = await supabase.from(tableName).select('*');
+                if (error) {
+                    console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
+                    return null;
+                }
+                
+                let localData = [];
+                try {
+                    const stored = localStorage.getItem(localKey);
+                    if (stored) localData = JSON.parse(stored);
+                } catch(e){}
+                
+                if (data.length === 0) {
+                    const dataToMigrate = localData.length > 0 ? localData : defaultData;
+                    if (dataToMigrate && dataToMigrate.length > 0) {
+                        console.log(`[Database Debug] Migrating ${dataToMigrate.length} rows to ${tableName}...`);
+                        const mappedRows = dataToMigrate.map(mapperToDb);
+                        const { error: insertErr } = await supabase.from(tableName).insert(mappedRows);
+                        if (insertErr) {
+                            console.error(`[Database Debug] Migration insert error for ${tableName}:`, insertErr.message);
+                        } else {
+                            console.log(`[Database Debug] Migration to ${tableName} succeeded.`);
+                        }
+                    }
+                    return dataToMigrate;
+                } else {
+                    const fetchedData = data.map(mapperFromDb);
+                    localStorage.setItem(localKey, JSON.stringify(fetchedData));
+                    return fetchedData;
+                }
+            };
+
+            const syncResults = await Promise.all([
+                syncTable('sb_notices', mapNoticeFromDb, mapNoticeToDb, defaultNotices, 'gongbubang_notices'),
+                syncTable('sb_classes', mapClassFromDb, mapClassToDb, defaultClasses, 'gongbubang_classes'),
+                syncTable('sb_students', mapStudentFromDb, mapStudentToDb, defaultStudents, 'gongbubang_students'),
+                syncTable('sb_mock_users', u => u, u => u, [], 'gongbubang_mock_users'),
+                syncTable('sb_resources', mapResourceFromDb, mapResourceToDb, defaultResources, 'gongbubang_resources'),
+                syncTable('sb_homework', mapHomeworkFromDb, mapHomeworkToDb, defaultHomework, 'gongbubang_homework'),
+                syncTable('sb_messages', mapMessageFromDb, mapMessageToDb, defaultMessages, 'gongbubang_messages'),
+                syncTable('sb_feedbacks', mapFeedbackFromDb, mapFeedbackToDb, defaultFeedbacks, 'gongbubang_feedbacks'),
+                syncTable('sb_progress', mapProgressFromDb, mapProgressToDb, defaultProgressList, 'gongbubang_progress'),
+                syncTable('sb_attendance', mapAttendanceFromDb, mapAttendanceToDb, defaultAttendance, 'gongbubang_attendance'),
+                syncTable('sb_consultations', u => u, u => u, defaultConsultations, 'gongbubang_consultations'),
+                syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
+                syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries')
+            ]);
+
+            if (syncResults[0]) notices = syncResults[0];
+            if (syncResults[1]) classes = syncResults[1];
+            if (syncResults[2]) students = syncResults[2];
+            if (syncResults[3]) {
+                let mockUsersData = syncResults[3];
+                const adminEmails = ['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'];
+                let updated = false;
+                adminEmails.forEach(email => {
+                    if (!mockUsersData.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+                        mockUsersData.push({
+                            id: 'admin-' + email.split('@')[0],
+                            email: email,
+                            name: '관리자',
+                            role: 'admin',
+                            status: 'approved',
+                            createdAt: new Date().toISOString()
+                        });
+                        updated = true;
+                    }
+                });
+                if (updated) {
+                    localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsersData));
+                    await supabase.from('sb_mock_users').upsert(mockUsersData);
+                }
+            }
+            if (syncResults[4]) resources = syncResults[4];
+            if (syncResults[5]) homework = syncResults[5];
+            if (syncResults[6]) messages = syncResults[6];
+            if (syncResults[7]) feedbacks = syncResults[7];
+            if (syncResults[8]) progressList = syncResults[8];
+            if (syncResults[9]) attendance = syncResults[9];
+            if (syncResults[10]) consultations = syncResults[10];
+            if (syncResults[11]) curriculums = syncResults[11];
+            if (syncResults[12]) aiQueries = syncResults[12];
+
+            // 1. Sync habits
+            const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
+            if (!habitsErr) {
+                if (dbHabits.length === 0) {
+                    const allHabitKeys = Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_'));
+                    for (const key of allHabitKeys) {
+                        const sId = key.replace('gongbubang_habits_', '');
+                        try {
+                            const hList = JSON.parse(localStorage.getItem(key));
+                            if (hList && hList.length > 0) {
+                                const mapped = hList.map(h => ({
+                                    id: sId + '_' + h.id,
+                                    student_id: String(sId),
+                                    habit_id: h.id,
+                                    habit_name: h.text,
+                                    frequency: h.frequency || 7,
+                                    is_active: true
+                                }));
+                                await supabase.from('sb_habits').insert(mapped);
+                            }
+                        } catch(e){}
+                    }
+                } else {
+                    const grouped = {};
+                    dbHabits.forEach(h => {
+                        if (!grouped[h.student_id]) grouped[h.student_id] = [];
+                        grouped[h.student_id].push({
+                            id: h.habit_id,
+                            text: h.habit_name,
+                            frequency: h.frequency
+                        });
+                    });
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_')).forEach(k => localStorage.removeItem(k));
+                    Object.keys(grouped).forEach(sId => {
+                        const key = sId === 'admin' ? 'gongbubang_habits_admin' : 'gongbubang_habits_' + sId;
+                        localStorage.setItem(key, JSON.stringify(grouped[sId]));
+                    });
+                }
+            }
+
+            // 2. Sync habit records
+            const { data: dbRecords, error: recordsErr } = await supabase.from('sb_habit_records').select('*');
+            if (!recordsErr) {
+                if (dbRecords.length === 0) {
+                    const allRecordKeys = Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habit_records_'));
+                    for (const key of allRecordKeys) {
+                        const sId = key.replace('gongbubang_habit_records_', '');
+                        try {
+                            const recordsObj = JSON.parse(localStorage.getItem(key));
+                            const rows = [];
+                            Object.keys(recordsObj).forEach(date => {
+                                const dayRecs = recordsObj[date] || {};
+                                Object.keys(dayRecs).forEach(habitId => {
+                                    rows.push({
+                                        id: sId + '_' + habitId + '_' + date,
+                                        student_id: String(sId),
+                                        habit_id: habitId,
+                                        date: date,
+                                        is_completed: !!dayRecs[habitId]
+                                    });
+                                });
+                            });
+                            if (rows.length > 0) {
+                                await supabase.from('sb_habit_records').insert(rows);
+                            }
+                        } catch(e){}
+                    }
+                } else {
+                    const grouped = {};
+                    dbRecords.forEach(r => {
+                        if (!grouped[r.student_id]) grouped[r.student_id] = {};
+                        if (!grouped[r.student_id][r.date]) grouped[r.student_id][r.date] = {};
+                        grouped[r.student_id][r.date][r.habit_id] = r.is_completed;
+                    });
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habit_records_')).forEach(k => localStorage.removeItem(k));
+                    Object.keys(grouped).forEach(sId => {
+                        const key = sId === 'admin' ? 'gongbubang_habit_records_admin' : 'gongbubang_habit_records_' + sId;
+                        localStorage.setItem(key, JSON.stringify(grouped[sId]));
+                    });
+                }
+            }
+
+            console.log('[Database Debug] All tables synchronized with Supabase.');
+
+            // Refresh all views dynamically
+            renderNotices();
+            if (isAdmin) {
+                renderStudents();
+                renderConsultList();
+                renderAdminCurriculumList();
+                renderAiQueryManagement();
+                if (typeof renderApprovalList === 'function') renderApprovalList();
+            }
+            if (isStudent) {
+                renderMyClass();
+            }
+        } catch (err) {
+            console.error('[Database Debug] Exceptional error during Supabase sync:', err);
+        }
+    };
+
+    // Trigger initial Supabase sync immediately
+    initializeDataFromSupabase();
+
     // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
     const parseStudentId = (rawId) => {
         if (!rawId) return rawId;
@@ -924,9 +1434,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     // Seed resources if empty
-    if (!localStorage.getItem('gongbubang_resources')) {
-        localStorage.setItem('gongbubang_resources', JSON.stringify(defaultResources));
-    }
+        resources = defaultResources;
+        saveResources();
 
     const renderResources = () => {
         const listContainer = document.querySelector('.resources-list');
@@ -983,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     safeCreateIcons();
                     
                     res.downloads = (res.downloads || 0) + 1;
-                    localStorage.setItem('gongbubang_resources', JSON.stringify(resources));
+                    saveResources();
                     renderResources();
                     if (isAdmin) renderAdminResources();
                     
@@ -1034,8 +1543,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             item.querySelector('.btn-resource-delete').addEventListener('click', () => {
                 if (confirm('이 자료를 삭제하시겠습니까?')) {
-                    const filtered = resources.filter(r => r.id !== res.id);
-                    localStorage.setItem('gongbubang_resources', JSON.stringify(filtered));
+                    resources = resources.filter(r => r.id !== res.id);
+                    saveResources();
                     renderResources();
                     renderAdminResources();
                     showToast('자료가 삭제되었습니다.');
@@ -1253,26 +1762,81 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('localStorage is not accessible for state tables.', e);
     }
 
-    const saveHomework = () => {
+    const saveHomework = async () => {
         try { localStorage.setItem('gongbubang_homework', JSON.stringify(homework)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = homework.map(mapHomeworkToDb);
+                await supabase.from('sb_homework').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving homework to Supabase:', e);
+            }
+        }
     };
-    const saveFeedbacks = () => {
+    const saveFeedbacks = async () => {
         try { localStorage.setItem('gongbubang_feedbacks', JSON.stringify(feedbacks)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = feedbacks.map(mapFeedbackToDb);
+                await supabase.from('sb_feedbacks').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving feedbacks to Supabase:', e);
+            }
+        }
     };
-    const saveProgressList = () => {
+    const saveProgressList = async () => {
         try { localStorage.setItem('gongbubang_progress', JSON.stringify(progressList)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = progressList.map(mapProgressToDb);
+                await supabase.from('sb_progress').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving progress list to Supabase:', e);
+            }
+        }
     };
-    const saveMessages = () => {
+    const saveMessages = async () => {
         try { localStorage.setItem('gongbubang_messages', JSON.stringify(messages)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = messages.map(mapMessageToDb);
+                await supabase.from('sb_messages').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving messages to Supabase:', e);
+            }
+        }
     };
-    const saveAttendance = () => {
+    const saveAttendance = async () => {
         try { localStorage.setItem('gongbubang_attendance', JSON.stringify(attendance)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = attendance.map(mapAttendanceToDb);
+                await supabase.from('sb_attendance').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving attendance to Supabase:', e);
+            }
+        }
     };
-    const saveConsultations = () => {
+    const saveConsultations = async () => {
         try { localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_consultations').upsert(consultations);
+            } catch(e) {
+                console.error('Error saving consultations to Supabase:', e);
+            }
+        }
     };
-    const saveCurriculums = () => {
+    const saveCurriculums = async () => {
         try { localStorage.setItem('gongbubang_curriculums', JSON.stringify(curriculums)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = curriculums.map(mapCurriculumToDb);
+                await supabase.from('sb_curriculums').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving curriculums to Supabase:', e);
+            }
+        }
     };
     
     // Default classes dummy data
@@ -1413,11 +1977,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const saveClasses = () => {
+    const saveClasses = async () => {
         try { 
             localStorage.setItem('gongbubang_classes', JSON.stringify(classes)); 
             renderMainScheduleTable();
         } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = classes.map(mapClassToDb);
+                await supabase.from('sb_classes').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving classes to Supabase:', e);
+            }
+        }
     };
 
     let currentCalStudentId = null;
@@ -1455,11 +2027,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const formModalTitle = document.getElementById('form-modal-title');
 
     // Safe localStorage Write
-    const saveNotices = () => {
+    const saveNotices = async () => {
         try {
             localStorage.setItem('gongbubang_notices', JSON.stringify(notices));
         } catch (e) {
             console.error('Failed to save to localStorage.', e);
+        }
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = notices.map(mapNoticeToDb);
+                await supabase.from('sb_notices').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving notices to Supabase:', e);
+            }
         }
     };
 
@@ -1603,6 +2183,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (confirm('이 공지사항을 정말 삭제하시겠습니까?')) {
                     notices = notices.filter(n => n.id !== id);
                     saveNotices();
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        supabase.from('sb_notices').delete().eq('id', id).then(() => {});
+                    }
                     renderNotices();
                     showToast('공지사항이 삭제되었습니다.');
                 }
@@ -1785,12 +2368,20 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Safe localStorage Write for students
-    const saveStudents = () => {
+    const saveStudents = async () => {
         try {
             localStorage.setItem('gongbubang_students', JSON.stringify(students));
             updateTotalStudentsCount();
         } catch (e) {
             console.error('Failed to save students to localStorage.', e);
+        }
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = students.map(mapStudentToDb);
+                await supabase.from('sb_students').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving students to Supabase:', e);
+            }
         }
     };
 
@@ -2422,6 +3013,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (confirm('이 원생의 모든 관리 정보를 삭제하시겠습니까?')) {
                     students = students.filter(s => s.id !== id);
                     saveStudents();
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        supabase.from('sb_students').delete().eq('id', String(id)).then(() => {});
+                    }
                     renderStudents(studentSearchInput ? studentSearchInput.value : '');
                     showToast('원생 정보가 삭제되었습니다.');
                 }
@@ -2751,7 +3345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                                 return u;
                             });
-                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            saveMockUsers(mockUsers);
                         }
                         
                         return updated;
@@ -3286,7 +3880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 { id: 'ah4', text: '신규 상담 예약 문의 내역 확인 및 연락하기', frequency: 7 },
                 { id: 'ah5', text: '블로그 소식지 및 교육 정보 업데이트하기', frequency: 5 }
             ];
-            localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+            saveStudentHabits('admin', habits);
         }
 
         // Fill missing frequencies (defaults to 7)
@@ -3435,7 +4029,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!records[selectedDate]) records[selectedDate] = {};
                 records[selectedDate][id] = isChecked;
                 
-                localStorage.setItem('gongbubang_habit_records_admin', JSON.stringify(records));
+                saveStudentHabitRecords('admin', records);
                 renderAdminHabits();
             });
         });
@@ -3447,7 +4041,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = btn.getAttribute('data-id');
                 if (confirm('이 항목을 체크리스트에서 삭제하시겠습니까?')) {
                     habits = habits.filter(h => h.id !== id);
-                    localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+                    saveStudentHabits('admin', habits);
                     
                     // Clean up records
                     Object.keys(records).forEach(d => {
@@ -3455,7 +4049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             delete records[d][id];
                         }
                     });
-                    localStorage.setItem('gongbubang_habit_records_admin', JSON.stringify(records));
+                    saveStudentHabitRecords('admin', records);
                     
                     renderAdminHabits();
                 }
@@ -3488,7 +4082,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     frequency: parseInt(freqSelect.value)
                 };
                 habits.push(newHabit);
-                localStorage.setItem('gongbubang_habits_admin', JSON.stringify(habits));
+                saveStudentHabits('admin', habits);
                 newInput.value = '';
                 renderAdminHabits();
             };
@@ -3548,7 +4142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 { id: 'h6', text: '물 1.5~2L 마시기', frequency: 7 },
                 { id: 'h7', text: '오후 2시 이후 카페인 줄이기', frequency: 7 }
             ];
-            localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+            saveStudentHabits(studentId, habits);
         }
 
         // Fill missing frequencies (defaults to 7)
@@ -3697,7 +4291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!records[selectedDate]) records[selectedDate] = {};
                 records[selectedDate][id] = isChecked;
                 
-                localStorage.setItem('gongbubang_habit_records_' + studentId, JSON.stringify(records));
+                saveStudentHabitRecords(studentId, records);
                 renderMyClassDailyHabits(studentId);
             });
         });
@@ -3709,7 +4303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = btn.getAttribute('data-id');
                 if (confirm('이 습관을 체크리스트에서 삭제하시겠습니까?')) {
                     habits = habits.filter(h => h.id !== id);
-                    localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+                    saveStudentHabits(studentId, habits);
                     
                     // Clean up records for this habit
                     Object.keys(records).forEach(d => {
@@ -3717,7 +4311,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             delete records[d][id];
                         }
                     });
-                    localStorage.setItem('gongbubang_habit_records_' + studentId, JSON.stringify(records));
+                    saveStudentHabitRecords(studentId, records);
                     
                     renderMyClassDailyHabits(studentId);
                 }
@@ -3750,7 +4344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     frequency: parseInt(freqSelect.value)
                 };
                 habits.push(newHabit);
-                localStorage.setItem('gongbubang_habits_' + studentId, JSON.stringify(habits));
+                saveStudentHabits(studentId, habits);
                 newInput.value = '';
                 renderMyClassDailyHabits(studentId);
             };
@@ -4909,7 +5503,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Link Kakao/Google/Naver email to local user if not already linked
                     if (matchedUser.email.toLowerCase() !== userEmail.toLowerCase()) {
                         matchedUser.email = userEmail;
-                        localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                        saveMockUsers(mockUsers);
                     }
                     
                     // Override session user_metadata with registered user info
@@ -4966,7 +5560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 // Push and save
                                 mockUsers.push(localPendingUser);
-                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                saveMockUsers(mockUsers);
                                 
                                 alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
                             } catch (e) {
@@ -5342,6 +5936,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (confirm(`'${c.name}' 반을 삭제하시겠습니까? (이 반에 소속된 학생들은 '반 없음'으로 변경됩니다.)`)) {
                                 classes = classes.filter(cls => cls.id !== c.id);
                                 saveClasses();
+                                if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                                    supabase.from('sb_classes').delete().eq('id', c.id).then(() => {});
+                                }
                                 
                                 // Update students classId to null
                                 students = students.map(s => {
@@ -6653,7 +7250,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             });
                             
-                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            saveMockUsers(mockUsers);
                             saveStudents();
                             renderApprovalList();
                             renderStudents();
@@ -6679,7 +7276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     return s;
                                 });
                                 
-                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                saveMockUsers(mockUsers);
                                 saveStudents();
                                 renderApprovalList();
                                 renderStudents();
@@ -6707,7 +7304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return s;
                             });
                             
-                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                            saveMockUsers(mockUsers);
                             saveStudents();
                             renderApprovalList();
                             renderStudents();
@@ -6827,7 +7424,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                     return u;
                                 });
-                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                saveMockUsers(mockUsers);
                             }
                             showToast('학생 정보가 수정되었습니다.');
                         } else {
@@ -6847,7 +7444,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                     return u;
                                 });
-                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                saveMockUsers(mockUsers);
                                 
                                 if (supabase.auth.updateUser) {
                                     const updateData = { data: { phone: newPhone } };
@@ -6918,7 +7515,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('자료가 새로 등록되었습니다.');
                 }
                 
-                localStorage.setItem('gongbubang_resources', JSON.stringify(resources));
+                saveResources();
                 resourceForm.reset();
                 document.getElementById('edit-resource-id').value = '';
                 document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정`;
