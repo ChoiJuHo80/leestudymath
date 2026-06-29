@@ -729,11 +729,11 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             studentLoginModal.classList.remove('open');
             
-            // Reset to Step 1: Social 인증 선택
+            // Show Step 1 (Profile Info) and hide Step 2 (Social Auth)
             const stepSocial = document.getElementById('signup-step-social');
             const stepProfile = document.getElementById('signup-step-profile');
-            if (stepSocial) stepSocial.style.display = 'block';
-            if (stepProfile) stepProfile.style.display = 'none';
+            if (stepSocial) stepSocial.style.display = 'none';
+            if (stepProfile) stepProfile.style.display = 'block';
 
             // Clear and add first child
             if (signupChildrenContainer) {
@@ -749,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Social Signup buttons
     const btnSignupGoogle = document.getElementById('btn-signup-google');
     const btnSignupKakao = document.getElementById('btn-signup-kakao');
+    const btnSignupPrevStep = document.getElementById('btn-signup-prev-step');
 
     if (btnSignupGoogle) {
         btnSignupGoogle.addEventListener('click', async () => {
@@ -790,10 +791,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (btnSignupPrevStep) {
+        btnSignupPrevStep.addEventListener('click', () => {
+            const stepSocial = document.getElementById('signup-step-social');
+            const stepProfile = document.getElementById('signup-step-profile');
+            if (stepSocial) stepSocial.style.display = 'none';
+            if (stepProfile) stepProfile.style.display = 'block';
+        });
+    }
+
     if (btnStudentSignupClose && studentSignupModal) {
         btnStudentSignupClose.addEventListener('click', async () => {
             studentSignupModal.classList.remove('open');
             sessionStorage.removeItem('gongbubang_signup_flow');
+            sessionStorage.removeItem('pending_signup_data');
             
             // If they authenticated but closed the signup modal before saving profile, sign out
             const sessionResp = await supabase.auth.getSession();
@@ -4275,7 +4286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Submit Signup Form (Social OAuth Complete)
+        // Submit Signup Form (Save profile locally and trigger Step 2: Social OAuth)
         const studentSignupForm = document.getElementById('student-signup-form');
         const signupErrorMsg = document.getElementById('signup-error-msg');
 
@@ -4283,16 +4294,6 @@ document.addEventListener('DOMContentLoaded', () => {
             studentSignupForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                // Get email and user ID from the active Supabase session (since they completed Step 1: Social auth!)
-                const sessionResp = await supabase.auth.getSession();
-                const session = sessionResp.data.session;
-                if (!session || !session.user) {
-                    alert('인증 정보가 만료되었습니다. 다시 가입을 시도해 주세요.');
-                    location.reload();
-                    return;
-                }
-
-                const email = session.user.email;
                 const parentName = document.getElementById('student-signup-name').value.trim();
                 const phone = document.getElementById('student-signup-phone').value.trim();
                 const addressBase = document.getElementById('student-signup-address').value.trim();
@@ -4307,16 +4308,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
-
-                // Check email duplication locally
-                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
-                if (mockUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-                    if (signupErrorMsg) {
-                        signupErrorMsg.textContent = '이미 가입 완료되었거나 가입 승인 요청 대기 중인 이메일입니다.';
-                        signupErrorMsg.style.display = 'block';
-                    }
-                    return;
-                }
 
                 // Collect children info dynamically
                 const children = [];
@@ -4355,6 +4346,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Check child username duplication
                 let childUsernameDuplicate = false;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const students = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
                 children.forEach(c => {
                     const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === c.username.toLowerCase());
                     let takenInMock = false;
@@ -4380,61 +4373,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                const submitBtn = studentSignupForm.querySelector('.btn-modal-submit');
-                const originalText = submitBtn.textContent;
-                submitBtn.disabled = true;
-                submitBtn.textContent = '가입 완료 처리 중...';
                 if (signupErrorMsg) signupErrorMsg.style.display = 'none';
 
-                try {
-                    // Create locally in mock database with status 'pending'
-                    const localPendingUser = {
-                        id: session.user.id,
-                        email,
-                        name: parentName,
-                        phone,
-                        address,
-                        role: 'parent',
-                        status: 'pending',
-                        createdAt: new Date().toISOString(),
-                        user_metadata: {
-                            name: parentName,
-                            phone,
-                            address,
-                            children,
-                            role: 'parent'
-                        }
-                    };
-                    mockUsers.push(localPendingUser);
-                    localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                // Save data to sessionStorage for retrieval after OAuth redirect
+                const pendingData = {
+                    parentName,
+                    phone,
+                    address,
+                    children
+                };
+                sessionStorage.setItem('pending_signup_data', JSON.stringify(pendingData));
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
 
-                    // Alert user and close modal
-                    alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
-                    studentSignupModal.classList.remove('open');
-                    studentSignupForm.reset();
-                    
-                    // Clear signup flow flag
-                    sessionStorage.removeItem('gongbubang_signup_flow');
-
-                    // Force signout to clear auto-login session
-                    if (supabase.auth.signOut) {
-                        await supabase.auth.signOut();
-                    }
-                } catch (err) {
-                    console.error('Signup error:', err);
-                    if (signupErrorMsg) {
-                        signupErrorMsg.textContent = err.message || '회원가입 중 오류가 발생했습니다.';
-                        signupErrorMsg.style.display = 'block';
-                        const authBox = studentSignupModal.querySelector('.modal-box');
-                        if (authBox) {
-                            authBox.classList.add('shake');
-                            setTimeout(() => authBox.classList.remove('shake'), 400);
-                        }
-                    }
-                } finally {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalText;
-                }
+                // Transition to Step 2 (Social Authentication Option)
+                const stepSocial = document.getElementById('signup-step-social');
+                const stepProfile = document.getElementById('signup-step-profile');
+                if (stepSocial) stepSocial.style.display = 'block';
+                if (stepProfile) stepProfile.style.display = 'none';
             });
         }
     }
@@ -4985,23 +4940,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
                     // Check if they are in the signup flow
                     if (sessionStorage.getItem('gongbubang_signup_flow') === 'true') {
-                        console.log('[Auth Debug] New social signup detected. Opening profile modal.');
-                        
-                        // Show Step 2 in the signup modal
-                        const stepSocial = document.getElementById('signup-step-social');
-                        const stepProfile = document.getElementById('signup-step-profile');
-                        if (stepSocial) stepSocial.style.display = 'none';
-                        if (stepProfile) stepProfile.style.display = 'block';
-                        
-                        if (studentSignupModal) {
-                            studentSignupModal.classList.add('open');
+                        const pendingDataStr = sessionStorage.getItem('pending_signup_data');
+                        if (pendingDataStr) {
+                            try {
+                                const pendingData = JSON.parse(pendingDataStr);
+                                
+                                // Create locally in mock database with status 'pending'
+                                const localPendingUser = {
+                                    id: session.user.id,
+                                    email: userEmail,
+                                    name: pendingData.parentName,
+                                    phone: pendingData.phone,
+                                    address: pendingData.address,
+                                    role: 'parent',
+                                    status: 'pending',
+                                    createdAt: new Date().toISOString(),
+                                    user_metadata: {
+                                        name: pendingData.parentName,
+                                        phone: pendingData.phone,
+                                        address: pendingData.address,
+                                        children: pendingData.children,
+                                        role: 'parent'
+                                    }
+                                };
+                                
+                                // Push and save
+                                mockUsers.push(localPendingUser);
+                                localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsers));
+                                
+                                alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
+                            } catch (e) {
+                                console.error('Error parsing pending signup data:', e);
+                                alert('가입 진행 정보가 손실되었습니다. 다시 입력해 주세요.');
+                            }
+                        } else {
+                            alert('가입 진행 정보가 존재하지 않습니다. 처음부터 다시 입력해 주세요.');
                         }
                         
-                        const parentNameInput = document.getElementById('student-signup-name');
-                        if (parentNameInput) {
-                            parentNameInput.focus();
-                        }
-                        return; // Let them fill the profile form, do not sign out yet
+                        // Clear signup flow flags and close modal
+                        sessionStorage.removeItem('pending_signup_data');
+                        sessionStorage.removeItem('gongbubang_signup_flow');
+                        if (studentSignupModal) studentSignupModal.classList.remove('open');
+                        
+                        // Force signout to clear auto-login session
+                        supabase.auth.signOut();
+                        return;
                     } else {
                         console.log('[Auth Debug] Signout: Unregistered user');
                         alert('가입되지 않은 소셜 계정입니다. 먼저 학부모 회원가입을 완료해 주세요.');

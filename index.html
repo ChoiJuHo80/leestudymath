@@ -1284,28 +1284,10 @@
         <div class="modal-box auth-box">
             <button class="modal-close-btn" id="btn-student-signup-close"><i data-lucide="x"></i></button>
             
-            <!-- Step 1: Social Authentication Setup -->
-            <div id="signup-step-social" class="signup-step-container">
-                <h3 class="modal-title">학부모 가입 (1단계)</h3>
-                <p class="modal-desc">자녀 등록을 진행하기 위해 구글 또는 카카오 본인 인증을 먼저 완료해 주세요.</p>
-                <div class="social-login-buttons" style="margin-top: 24px; grid-template-columns: 1fr 1fr;">
-                    <button type="button" class="btn-social btn-google" id="btn-signup-google">
-                        <i data-lucide="chrome"></i>
-                        <span>Google로 인증</span>
-                    </button>
-                    <button type="button" class="btn-social btn-kakao" id="btn-signup-kakao">
-                        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 14px; height: 14px;">
-                            <path d="M12 3c-5.52 0-10 3.73-10 8.33 0 2.98 1.87 5.6 4.7 7.07l-1.18 4.34c-.1.38.13.77.52.88.14.04.28.02.4-.04l5.12-3.4c.48.06.96.09 1.44.09 5.52 0 10-3.73 10-8.33S17.52 3 12 3z"/>
-                        </svg>
-                        <span>Kakao로 인증</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Step 2: Additional Profile Details -->
-            <div id="signup-step-profile" class="signup-step-container" style="display: none;">
-                <h3 class="modal-title">학부모 가입 (2단계)</h3>
-                <p class="modal-desc">가입을 완료하기 위해 학부모님 정보와 자녀 정보를 입력해 주세요.</p>
+            <!-- Step 1: Profile Information Input -->
+            <div id="signup-step-profile" class="signup-step-container">
+                <h3 class="modal-title">학부모 가입</h3>
+                <p class="modal-desc">학부모님 정보와 자녀 정보를 먼저 입력해 주세요.</p>
                 <form id="student-signup-form" class="modal-form">
                     <div class="form-group-modal">
                         <label for="student-signup-name">학부모 이름</label>
@@ -1343,8 +1325,27 @@
                         </div>
                         <span class="auth-error-msg" id="signup-error-msg" style="margin-top: 10px;">회원가입 중 오류가 발생했습니다.</span>
                     </div>
-                    <button type="submit" class="btn-modal-submit" style="margin-top: 20px;">가입 완료 및 승인 요청</button>
+                    <button type="submit" class="btn-modal-submit" style="margin-top: 20px;">정보 입력 완료 및 인증 진행</button>
                 </form>
+            </div>
+            
+            <!-- Step 2: Social Authentication Setup -->
+            <div id="signup-step-social" class="signup-step-container" style="display: none;">
+                <h3 class="modal-title">학부모 가입 (마지막 단계)</h3>
+                <p class="modal-desc">가입을 완료하기 위해 구글 또는 카카오 계정으로 본인 인증을 진행해 주세요.</p>
+                <div class="social-login-buttons" style="margin-top: 24px; grid-template-columns: 1fr 1fr;">
+                    <button type="button" class="btn-social btn-google" id="btn-signup-google">
+                        <i data-lucide="chrome"></i>
+                        <span>Google로 가입 완료</span>
+                    </button>
+                    <button type="button" class="btn-social btn-kakao" id="btn-signup-kakao">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 14px; height: 14px;">
+                            <path d="M12 3c-5.52 0-10 3.73-10 8.33 0 2.98 1.87 5.6 4.7 7.07l-1.18 4.34c-.1.38.13.77.52.88.14.04.28.02.4-.04l5.12-3.4c.48.06.96.09 1.44.09 5.52 0 10-3.73 10-8.33S17.52 3 12 3z"/>
+                        </svg>
+                        <span>Kakao로 가입 완료</span>
+                    </button>
+                </div>
+                <button type="button" class="btn-modal-submit" id="btn-signup-prev-step" style="margin-top: 24px; background: #64748b;">이전 단계로</button>
             </div>
         </div>
     </div>
