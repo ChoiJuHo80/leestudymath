@@ -4864,7 +4864,7 @@ document.addEventListener('DOMContentLoaded', () => {
     supabase.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
             // Check if they are admin
-            if (['rlfn100@naver.com', 'raenisise@naver.com'].includes(session.user.email)) {
+            if (['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'].includes(session.user.email)) {
                 handleAdminLoginSetup();
             } else {
                 // Ensure admin layout is cleaned up when student/parent logs in
