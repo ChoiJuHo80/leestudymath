@@ -21,7 +21,13 @@ const isValidKey = (key) => {
 
 if (isValidUrl(supabaseUrl) && isValidKey(supabaseAnonKey)) {
   try {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: 'implicit',
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    });
     isMock = false;
   } catch (err) {
     console.error('Failed to initialize Supabase client:', err);
