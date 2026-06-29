@@ -456,6 +456,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (error) {
                     console.error('Kakao login error:', error.message);
                     alert('Kakao 로그인 오류: ' + error.message);
+                } else {
+                    // Successful login: close login modal and update UI
+                    const loginModal = document.getElementById('student-login-modal');
+                    if (loginModal) loginModal.classList.remove('open');
+                    updateLoginButton();
                 }
             } catch (err) {
                 console.error('Kakao login exceptional error:', err);
@@ -4859,7 +4864,7 @@ document.addEventListener('DOMContentLoaded', () => {
     supabase.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
             // Check if they are admin
-            if (session.user.email === 'teacher@math.com') {
+            if (['rlfn100@naver.com', 'raenisise@naver.com'].includes(session.user.email)) {
                 handleAdminLoginSetup();
             } else {
                 // Ensure admin layout is cleaned up when student/parent logs in
