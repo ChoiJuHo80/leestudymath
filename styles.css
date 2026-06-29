@@ -1168,6 +1168,23 @@ a {
     position: relative;
     transform: translateY(30px);
     transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Custom scrollbar for modal boxes */
+.modal-box::-webkit-scrollbar {
+    width: 6px;
+}
+.modal-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+.modal-box::-webkit-scrollbar-thumb {
+    background: rgba(142, 68, 173, 0.2);
+    border-radius: 10px;
+}
+.modal-box::-webkit-scrollbar-thumb:hover {
+    background: rgba(142, 68, 173, 0.4);
 }
 
 .modal-overlay.open .modal-box {
