@@ -155,26 +155,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapHomeworkFromDb = (dbHw) => ({
         id: dbHw.id,
-        studentId: dbHw.student_id,
+        studentId: String(dbHw.student_id),
         title: dbHw.title,
         description: dbHw.description,
         dueDate: dbHw.due_date,
-        status: dbHw.status,
+        isCompleted: dbHw.status === 'completed',
+        completedAt: dbHw.submission_date || null,
         createdAt: dbHw.created_at,
-        feedback: dbHw.feedback,
-        submissionDate: dbHw.submission_date
+        feedback: dbHw.feedback
     });
 
     const mapHomeworkToDb = (jsHw) => ({
         id: jsHw.id,
-        student_id: jsHw.studentId,
+        student_id: String(jsHw.studentId),
         title: jsHw.title,
-        description: jsHw.description,
+        description: jsHw.description || '',
         due_date: jsHw.dueDate,
-        status: jsHw.status,
-        created_at: jsHw.createdAt,
-        feedback: jsHw.feedback || '',
-        submission_date: jsHw.submissionDate || ''
+        status: jsHw.isCompleted ? 'completed' : 'pending',
+        submission_date: jsHw.completedAt || '',
+        created_at: jsHw.createdAt || null,
+        feedback: jsHw.feedback || ''
     });
 
     const mapResourceFromDb = (dbRes) => ({
@@ -2669,13 +2669,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             });
 
-            // Calculate homework count
-            const studentHomework = homework.filter(h => h.studentId === student.id);
-            const totalHw = studentHomework.length;
-            const completedHw = studentHomework.filter(h => h.isCompleted).length;
-            const hwStatusHtml = totalHw > 0 
-                ? `<span style="color: #18181b; font-weight: 700;">완료 ${completedHw}개 / 전체 ${totalHw}개</span>` 
-                : `<span style="color: var(--text-muted); font-weight: normal;">배정된 과제 없음</span>`;
+            // Calculate homework count and lists for admin
+            const studentHomework = homework.filter(h => String(h.studentId) === String(student.id));
+            const pendingHwList = studentHomework.filter(h => !h.isCompleted);
+            const completedHwList = studentHomework.filter(h => h.isCompleted);
+
+            let adminHwHtml = '';
+            if (studentHomework.length === 0) {
+                adminHwHtml = '<div style="color: var(--text-muted); font-size: 0.78rem; font-style: italic;">배정된 과제가 없습니다.</div>';
+            } else {
+                adminHwHtml = `
+                    <div style="font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">
+                        완료 ${completedHwList.length}개 / 전체 ${studentHomework.length}개
+                    </div>
+                    <div style="max-height: 120px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 6px;">
+                `;
+                pendingHwList.forEach(hw => {
+                    adminHwHtml += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #fff5f5; border: 1px solid #ffe3e3; padding: 6px 10px; border-radius: 8px; font-size: 0.78rem;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
+                                <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" style="cursor: pointer; width: 14px; height: 14px;">
+                                <span style="font-weight: 600; color: #c53030; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                            </div>
+                            <span style="font-size: 0.7rem; color: #e53e3e; background: #fff5f5; border: 1px solid #fed7d7; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">미완료 (기한: ${hw.dueDate})</span>
+                        </div>
+                    `;
+                });
+                completedHwList.forEach(hw => {
+                    adminHwHtml += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; border: 1px solid #dcfce7; padding: 6px 10px; border-radius: 8px; font-size: 0.78rem; opacity: 0.85;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
+                                <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" checked style="cursor: pointer; width: 14px; height: 14px;">
+                                <span style="text-decoration: line-through; color: #166534; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                            </div>
+                            <span style="font-size: 0.7rem; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">완료됨</span>
+                        </div>
+                    `;
+                });
+                adminHwHtml += `</div>`;
+            }
 
             // Calculate attendance logs (today)
             const today = new Date();
@@ -2803,10 +2835,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="student-progress-box" style="margin-top: 12px;">
                     <h4 style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>과제 수행 현황
+                        <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>과제 수행 현황 및 히스토리
                     </h4>
                     <div style="font-size: 0.84rem;">
-                        ${hwStatusHtml}
+                        ${adminHwHtml}
                     </div>
                 </div>
                 <div class="student-remarks-box">
@@ -3449,6 +3481,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         tChatModal.classList.add('open');
                     }
                 }
+            });
+        });
+
+        // Homework checkbox listener for admin student card
+        const adminHwCheckboxes = document.querySelectorAll('.admin-homework-checkbox');
+        adminHwCheckboxes.forEach(box => {
+            box.addEventListener('change', () => {
+                const hwId = box.getAttribute('data-hw-id');
+                homework = homework.map(h => {
+                    if (String(h.id) === String(hwId)) {
+                        return { ...h, isCompleted: box.checked, completedAt: box.checked ? new Date().toISOString() : null };
+                    }
+                    return h;
+                });
+                saveHomework();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                showToast(box.checked ? '과제 완료 처리가 완료되었습니다!' : '과제 대기 상태로 변경되었습니다.');
             });
         });
     };
@@ -4964,7 +5013,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Homework list render
         if (homeworkList) {
             homeworkList.innerHTML = '';
-            const studentHomework = homework.filter(h => h.studentId === loggedInStudentId);
+            const studentHomework = homework.filter(h => String(h.studentId) === String(loggedInStudentId));
+            
             if (studentHomework.length === 0) {
                 homeworkList.innerHTML = `
                     <div style="text-align: center; padding: 30px; color: var(--text-secondary); font-size: 0.88rem;">
@@ -4972,29 +5022,77 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
             } else {
-                studentHomework.forEach(hw => {
-                    const item = document.createElement('div');
-                    item.className = `homework-item ${hw.isCompleted ? 'completed' : ''}`;
-                    item.innerHTML = `
-                        <div style="flex-grow: 1;">
-                            <div class="homework-item-left">
-                                <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" ${hw.isCompleted ? 'checked' : ''}>
-                                <span class="homework-text">${hw.title}</span>
-                            </div>
-                            <div class="homework-desc">${hw.description}</div>
-                        </div>
-                        <span class="homework-date">기한: ${hw.dueDate}</span>
-                    `;
-                    homeworkList.appendChild(item);
-                });
+                const pending = studentHomework.filter(h => !h.isCompleted);
+                const completed = studentHomework.filter(h => h.isCompleted);
 
-                // Attach homework checkbox changes
+                let pendingHtml = '';
+                if (pending.length === 0) {
+                    pendingHtml = '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 12px 0; font-style: italic;">대기 중인 과제가 없습니다.</div>';
+                } else {
+                    pending.forEach(hw => {
+                        pendingHtml += `
+                            <div class="homework-item pending" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #ffffff; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                                <div style="flex-grow: 1; padding-right: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                        <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" style="width: 16px; height: 16px; cursor: pointer;">
+                                        <strong style="color: var(--text-primary); font-size: 0.88rem;">${hw.title}</strong>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary); padding-left: 24px; line-height: 1.4;">${hw.description || '과제 내용이 없습니다.'}</div>
+                                </div>
+                                <span style="font-size: 0.72rem; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 6px; white-space: nowrap;">기한: ${hw.dueDate}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                let completedHtml = '';
+                if (completed.length === 0) {
+                    completedHtml = '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 12px 0; font-style: italic;">완료된 과제 기록이 없습니다.</div>';
+                } else {
+                    completed.forEach(hw => {
+                        const dateText = hw.completedAt ? new Date(hw.completedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                        completedHtml += `
+                            <div class="homework-item completed" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafc; margin-bottom: 8px; opacity: 0.85; box-shadow: 0 1px 3px rgba(0,0,0,0.01);">
+                                <div style="flex-grow: 1; padding-right: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                        <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" checked style="width: 16px; height: 16px; cursor: pointer;">
+                                        <span style="color: var(--text-muted); text-decoration: line-through; font-size: 0.88rem; font-weight: 600;">${hw.title}</span>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); padding-left: 24px; text-decoration: line-through;">${hw.description || ''}</div>
+                                </div>
+                                <div style="text-align: right; white-space: nowrap;">
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-green-bg); background: rgba(39, 39, 42, 0.08); padding: 2px 6px; border-radius: 6px; display: block; margin-bottom: 2px;">완료됨</span>
+                                    ${dateText ? `<span style="font-size: 0.65rem; color: var(--text-muted); display: block;">${dateText}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                homeworkList.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="font-size: 0.9rem; font-weight: 800; color: #ef4444; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
+                            미완료 과제 (${pending.length})
+                        </h4>
+                        <div>${pendingHtml}</div>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 0.9rem; font-weight: 800; color: var(--mascot-green-bg); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--mascot-green-bg); display: inline-block;"></span>
+                            완료된 과제 히스토리 (${completed.length})
+                        </h4>
+                        <div>${completedHtml}</div>
+                    </div>
+                `;
+
+                // Attach checkbox listeners
                 const checkboxes = homeworkList.querySelectorAll('.homework-checkbox');
                 checkboxes.forEach(box => {
                     box.addEventListener('change', () => {
-                        const hwId = parseInt(box.getAttribute('data-hw-id'));
+                        const hwId = box.getAttribute('data-hw-id');
                         homework = homework.map(h => {
-                            if (h.id === hwId) {
+                            if (String(h.id) === String(hwId)) {
                                 return { ...h, isCompleted: box.checked, completedAt: box.checked ? new Date().toISOString() : null };
                             }
                             return h;
