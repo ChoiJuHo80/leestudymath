@@ -752,6 +752,239 @@
                         </div>
                     </div>
                 </section>
+                <!-- Section: 마이클래스 (Student/Parent Portal) -->
+                <section id="myclass" class="feed-section student-only-section" style="display: none; scroll-margin-top: 80px;">
+                    <div class="section-title-bar">
+                        <h2><i data-lucide="graduation-cap" class="sec-title-icon green-icon"></i>마이클래스 (My Class)</h2>
+                        <span class="section-subtext" id="myclass-subtitle">자녀의 학습 진도, 과제 현황 및 1:1 상담 피드백입니다.</span>
+                    </div>
+
+                    <!-- Parent Quick Menu Bar -->
+                    <div id="parent-quick-menu" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="compass" style="width: 16px; height: 16px; color: var(--primary-color);"></i> 마이클래스 바로가기:
+                        </span>
+                        <a href="#myclass-info-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="graduation-cap" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 학습 현황 및 피드백 <span id="parent-menu-feedback-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                        <a href="#myclass-textbook-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청
+                        </a>
+                        <a href="#myclass-calendar-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 출결/보강 달력
+                        </a>
+                        <a href="#myclass-daily-habit-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='#8e44ad';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="calendar-check-2" style="width: 14px; height: 14px; color: #8e44ad;"></i> 일일 생활 습관
+                        </a>
+                        <a href="#myclass-homework-list" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 과제 체크리스트 <span id="parent-menu-homework-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                        <a href="#ai-solver-widget-container" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 풀이 질문
+                        </a>
+                        <a href="#chat-messages-container-anchor" id="parent-menu-chat" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="message-square" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 1:1 상담 메신저 <span id="parent-menu-chat-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                    </div>
+                    
+                    <div class="myclass-dashboard" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 24px;">
+                        <!-- Left Panel: Student Profile & Assignments -->
+                        <div class="myclass-left" style="display: flex; flex-direction: column; gap: 24px;">
+                            <!-- Child Selector Widget (visible if multiple children) -->
+                            <div class="widget child-selector-widget" id="myclass-child-selector-container" style="display: none; padding: 20px; border: 1px solid var(--border-color); border-radius: 20px;">
+                                <label for="myclass-child-select" style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; color: var(--text-primary);">
+                                    <i data-lucide="users" style="color: var(--mascot-purple-bg); width: 18px; height: 18px;"></i> 자녀 선택
+                                </label>
+                                <select id="myclass-child-select" style="width: 100%; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; margin-top: 10px; font-family: var(--ff-primary); font-size: 0.95rem; cursor: pointer; background-color: #ffffff;">
+                                    <!-- Options populated dynamically -->
+                                </select>
+                            </div>
+
+                            <!-- Info Widget -->
+                            <div class="widget" id="myclass-info-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
+                                <!-- Will be rendered dynamically -->
+                            </div>
+
+                            <!-- Homework Widget -->
+                            <div class="widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="check-square" style="color: var(--primary-color);"></i>과제 체크리스트
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">과제를 완료한 후 체크박스를 선택하면 원장 선생님에게 실시간 공유됩니다.</p>
+                                <div id="myclass-homework-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                    <!-- Will be rendered dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Right Panel: AI & 1:1 Chatroom -->
+                        <div class="myclass-right" style="display: flex; flex-direction: column; gap: 24px;">
+                            <!-- AI Solver Widget -->
+                            <div class="widget ai-solver-widget" id="ai-solver-widget-container" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px; background-color: #fcfcfd;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--primary-color);">
+                                    <i data-lucide="sparkles" style="color: var(--primary-color); width: 20px; height: 20px;"></i> AI에게 풀이과정 물어보기
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">수학 문제의 풀이과정이 막힐 때 물어보세요. AI 선생님이 단계별로 친절하게 설명해 드립니다. (LaTeX 수식 지원)</p>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <textarea id="ai-query-input" placeholder="예: x^2 - 5x + 6 = 0의 풀이과정을 알려줘&#10;또는&#10;피타고라스 정리 공식이 뭐야?" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; height: 90px; resize: none; font-family: var(--ff-primary); font-size: 0.88rem; transition: var(--transition-smooth);"></textarea>
+                                    <button type="button" id="btn-ask-ai" class="btn-modal-submit" style="margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border-radius: 8px;">
+                                        <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기
+                                    </button>
+                                </div>
+                                
+                                <div id="ai-response-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; flex-direction: column; gap: 8px;">
+                                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="bot" style="color: var(--primary-color); width: 18px; height: 18px;"></i> AI 답변 결과:
+                                    </h4>
+                                    <div id="ai-response-content" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; font-size: 0.88rem; line-height: 1.6; color: var(--text-primary); overflow-x: auto; white-space: pre-wrap; font-family: var(--ff-primary);">
+                                        <!-- AI output goes here -->
+                                    </div>
+                                </div>
+
+                                <div id="myclass-ai-history-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 14px; flex-direction: column; gap: 8px;">
+                                    <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="history" style="width: 14px; height: 14px;"></i> 나의 최근 AI 질문 기록
+                                    </h4>
+                                    <div id="myclass-ai-history-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 1:1 Chatroom -->
+                            <div id="chat-messages-container-anchor"></div>
+                            <div class="widget chat-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; min-height: 450px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 메신저
+                                </h3>
+                                <div id="chat-messages-container" style="flex-grow: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; max-height: 300px; min-height: 250px;">
+                                    <!-- Messages rendered here -->
+                                </div>
+                                <form id="chat-send-form" style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                    <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
+                                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Full Width Section for Textbook, Attendance, Habit widgets -->
+                    <div class="myclass-full-width" style="display: flex; flex-direction: column; gap: 30px; margin-top: 30px; width: 100%;">
+                        <!-- Textbook Purchase Widget -->
+                        <div class="widget" id="myclass-textbook-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                            <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 20px; height: 20px;"></i> 반 교재 및 구매 요청
+                            </h3>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">현재 반에 등록된 교재 목록입니다. 구매 요청 및 모바일 결제를 진행할 수 있습니다.</p>
+                            <div id="myclass-textbook-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                        
+                        <!-- Monthly Attendance Calendar Widget -->
+                        <div class="widget" id="myclass-calendar-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
+                            <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <i data-lucide="calendar" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 나의 출결 & 보강 달력
+                            </h3>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">출석, 결석 현황 및 예정된 보강 일정을 달력에서 확인하세요.</p>
+                            
+                            <div id="myclass-total-classes-banner" style="background: rgba(142, 68, 173, 0.06); border: 1px solid rgba(142, 68, 173, 0.15); border-radius: 12px; padding: 10px 16px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
+                                <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="award" style="color: var(--mascot-purple-bg); width: 18px; height: 18px;"></i> 이번 달 총 수업 일수 (보강 포함):</span>
+                                <span id="myclass-total-classes-count" style="font-size: 1.05rem; color: var(--mascot-purple-bg);">0일</span>
+                            </div>
+
+                            <div class="calendar-container" style="margin-top: 0; padding: 10px; border: none;">
+                                <div class="calendar-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                                    <button type="button" class="calendar-nav-btn" id="btn-myclass-cal-prev" style="background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;"><i data-lucide="chevron-left" style="width: 16px; height: 16px; vertical-align: middle;"></i> 이전 달</button>
+                                    <h4 id="myclass-calendar-month-year" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">2026년 6월</h4>
+                                    <button type="button" class="calendar-nav-btn" id="btn-myclass-cal-next" style="background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">다음 달 <i data-lucide="chevron-right" style="width: 16px; height: 16px; vertical-align: middle;"></i></button>
+                                </div>
+                                
+                                <div class="calendar-grid-header" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; font-weight: bold; margin-bottom: 6px; font-size: 0.8rem; color: var(--text-secondary);">
+                                    <div style="color: #ef4444;">일</div>
+                                    <div>월</div>
+                                    <div>화</div>
+                                    <div>수</div>
+                                    <div>목</div>
+                                    <div>금</div>
+                                    <div style="color: #3b82f6;">토</div>
+                                </div>
+                                
+                                <div class="calendar-grid" id="myclass-calendar-grid-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;">
+                                    <!-- Parent portal calendar days rendered dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Daily Habit Checklist Widget -->
+                        <div class="widget" id="myclass-daily-habit-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    <i data-lucide="calendar-check-2" style="color: var(--mascot-purple-bg);"></i>일일 생활 습관 체크리스트
+                                </h3>
+                                <!-- Date selector -->
+                                <input type="date" id="habit-record-date" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; color: var(--text-primary);">
+                            </div>
+                            
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">나만의 좋은 습관들을 정하고 매일 실천하여 달성률을 체크해 보세요.</p>
+                            
+                            <!-- Progress bar banner -->
+                            <div style="background: rgba(142, 68, 173, 0.04); border: 1px solid rgba(142, 68, 173, 0.1); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">
+                                    <span>오늘의 실천 달성률</span>
+                                    <span id="habit-achievement-percentage" style="color: var(--mascot-purple-bg); font-size: 1.1rem;">0% (0/0 완료)</span>
+                                </div>
+                                <!-- ProgressBar Track -->
+                                <div style="background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; overflow: hidden;">
+                                    <div id="habit-achievement-bar" style="background: linear-gradient(90deg, var(--mascot-purple-bg), var(--primary-color)); height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Checklist Table -->
+                            <div style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff;">
+                                <table class="schedule-table" style="width: 100%; border-collapse: collapse; min-width: auto; margin: 0;">
+                                    <thead>
+                                        <tr style="background: #fafafa; border-bottom: 1px solid var(--border-color);">
+                                            <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">체크</th>
+                                            <th style="padding: 10px; text-align: left; font-size: 0.82rem; font-weight: 700;">내용</th>
+                                            <th style="padding: 10px; text-align: center; width: 90px; font-size: 0.82rem; font-weight: 700;">주간 달성</th>
+                                            <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">삭제</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="daily-habit-tbody">
+                                        <!-- Dynamically populated habits -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Add Habit Input Form -->
+                            <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                                <input type="text" id="habit-new-input" placeholder="새로운 생활 습관 입력 (예: 30분 걷기)" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; min-width: 150px;">
+                                <select id="habit-new-freq" style="padding: 0 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; font-weight: 600; color: var(--text-primary); cursor: pointer; background: #ffffff;">
+                                    <option value="7">주 7회 (매일)</option>
+                                    <option value="6">주 6회</option>
+                                    <option value="5">주 5회</option>
+                                    <option value="4">주 4회</option>
+                                    <option value="3">주 3회</option>
+                                    <option value="2">주 2회</option>
+                                    <option value="1">주 1회</option>
+                                </select>
+                                <button type="button" id="btn-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
+                            </div>
+
+                            <!-- Monthly Statistics Section -->
+                            <div style="border-top: 1px dashed var(--border-color); padding-top: 16px; margin-top: 8px;">
+                                <h4 style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-primary);">
+                                    <i data-lucide="bar-chart-3" style="color: var(--mascot-pink-bg); width: 18px; height: 18px;"></i> 월간 항목별 달성 리포트
+                                </h4>
+                                <div id="myclass-monthly-habit-report" style="display: flex; flex-direction: column; gap: 12px;">
+                                    <!-- Monthly stats rendered dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
                 <!-- Section: 공지사항 -->
                 <section id="notice" class="feed-section">
                     <div class="section-title-bar notice-header-bar">
@@ -880,237 +1113,6 @@
                 <!-- Section: 학생 관리 (Admin Only) -->
                 
 
-                <!-- Section: 마이클래스 (Student/Parent Portal) -->
-                <section id="myclass" class="feed-section student-only-section" style="display: none; scroll-margin-top: 80px;">
-                    <div class="section-title-bar">
-                        <h2><i data-lucide="graduation-cap" class="sec-title-icon green-icon"></i>마이클래스 (My Class)</h2>
-                        <span class="section-subtext" id="myclass-subtitle">자녀의 학습 진도, 과제 현황 및 1:1 상담 피드백입니다.</span>
-                    </div>
-
-                    <!-- Parent Quick Menu Bar -->
-                    <div id="parent-quick-menu" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
-                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
-                            <i data-lucide="compass" style="width: 16px; height: 16px; color: var(--primary-color);"></i> 마이클래스 바로가기:
-                        </span>
-                        <a href="#myclass-info-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="graduation-cap" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 학습 현황 및 피드백 <span id="parent-menu-feedback-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
-                        </a>
-                        <a href="#myclass-textbook-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청
-                        </a>
-                        <a href="#myclass-calendar-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 출결/보강 달력
-                        </a>
-                        <a href="#myclass-daily-habit-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='#8e44ad';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="calendar-check-2" style="width: 14px; height: 14px; color: #8e44ad;"></i> 일일 생활 습관
-                        </a>
-                        <a href="#myclass-homework-list" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 과제 체크리스트 <span id="parent-menu-homework-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
-                        </a>
-                        <a href="#ai-solver-widget-container" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 풀이 질문
-                        </a>
-                        <a href="#chat-messages-container-anchor" id="parent-menu-chat" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="message-square" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 1:1 상담 메신저 <span id="parent-menu-chat-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
-                        </a>
-                    </div>
-                    
-                    <div class="myclass-dashboard" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 24px;">
-                        <!-- Left Panel: Student Profile & Assignments -->
-                        <div class="myclass-left" style="display: flex; flex-direction: column; gap: 24px;">
-                            <!-- Child Selector Widget (visible if multiple children) -->
-                            <div class="widget child-selector-widget" id="myclass-child-selector-container" style="display: none; padding: 20px; border: 1px solid var(--border-color); border-radius: 20px;">
-                                <label for="myclass-child-select" style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; color: var(--text-primary);">
-                                    <i data-lucide="users" style="color: var(--mascot-purple-bg); width: 18px; height: 18px;"></i> 자녀 선택
-                                </label>
-                                <select id="myclass-child-select" style="width: 100%; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; margin-top: 10px; font-family: var(--ff-primary); font-size: 0.95rem; cursor: pointer; background-color: #ffffff;">
-                                    <!-- Options populated dynamically -->
-                                </select>
-                            </div>
-
-                            <!-- Info Widget -->
-                            <div class="widget" id="myclass-info-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
-                                <!-- Will be rendered dynamically -->
-                            </div>
-
-                            <!-- Textbook Purchase Widget -->
-                            <div class="widget" id="myclass-textbook-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
-                                    <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 20px; height: 20px;"></i> 반 교재 및 구매 요청
-                                </h3>
-                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">현재 반에 등록된 교재 목록입니다. 구매 요청 및 모바일 결제를 진행할 수 있습니다.</p>
-                                <div id="myclass-textbook-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                                    <!-- Dynamic content -->
-                                </div>
-                            </div>
-                            
-                            <!-- Monthly Attendance Calendar Widget -->
-                            <div class="widget" id="myclass-calendar-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                    <i data-lucide="calendar" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 나의 출결 & 보강 달력
-                                </h3>
-                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">출석, 결석 현황 및 예정된 보강 일정을 달력에서 확인하세요.</p>
-                                
-                                <div id="myclass-total-classes-banner" style="background: rgba(142, 68, 173, 0.06); border: 1px solid rgba(142, 68, 173, 0.15); border-radius: 12px; padding: 10px 16px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
-                                    <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="award" style="color: var(--mascot-purple-bg); width: 18px; height: 18px;"></i> 이번 달 총 수업 일수 (보강 포함):</span>
-                                    <span id="myclass-total-classes-count" style="font-size: 1.05rem; color: var(--mascot-purple-bg);">0일</span>
-                                </div>
-
-                                <div class="calendar-container" style="margin-top: 0; padding: 10px; border: none;">
-                                    <div class="calendar-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                                        <button type="button" class="calendar-nav-btn" id="btn-myclass-cal-prev" style="background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;"><i data-lucide="chevron-left" style="width: 16px; height: 16px; vertical-align: middle;"></i> 이전 달</button>
-                                        <h4 id="myclass-calendar-month-year" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">2026년 6월</h4>
-                                        <button type="button" class="calendar-nav-btn" id="btn-myclass-cal-next" style="background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">다음 달 <i data-lucide="chevron-right" style="width: 16px; height: 16px; vertical-align: middle;"></i></button>
-                                    </div>
-                                    
-                                    <div class="calendar-grid-header" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; font-weight: bold; margin-bottom: 6px; font-size: 0.8rem; color: var(--text-secondary);">
-                                        <div style="color: #ef4444;">일</div>
-                                        <div>월</div>
-                                        <div>화</div>
-                                        <div>수</div>
-                                        <div>목</div>
-                                        <div>금</div>
-                                        <div style="color: #3b82f6;">토</div>
-                                    </div>
-                                    
-                                    <div class="calendar-grid" id="myclass-calendar-grid-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;">
-                                        <!-- Parent portal calendar days rendered dynamically -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            
-                            <!-- Daily Habit Checklist Widget -->
-                            <div class="widget" id="myclass-daily-habit-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                                    <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
-                                        <i data-lucide="calendar-check-2" style="color: var(--mascot-purple-bg);"></i>일일 생활 습관 체크리스트
-                                    </h3>
-                                    <!-- Date selector -->
-                                    <input type="date" id="habit-record-date" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; color: var(--text-primary);">
-                                </div>
-                                
-                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">나만의 좋은 습관들을 정하고 매일 실천하여 달성률을 체크해 보세요.</p>
-                                
-                                <!-- Progress bar banner -->
-                                <div style="background: rgba(142, 68, 173, 0.04); border: 1px solid rgba(142, 68, 173, 0.1); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">
-                                        <span>오늘의 실천 달성률</span>
-                                        <span id="habit-achievement-percentage" style="color: var(--mascot-purple-bg); font-size: 1.1rem;">0% (0/0 완료)</span>
-                                    </div>
-                                    <!-- ProgressBar Track -->
-                                    <div style="background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; overflow: hidden;">
-                                        <div id="habit-achievement-bar" style="background: linear-gradient(90deg, var(--mascot-purple-bg), var(--primary-color)); height: 100%; width: 0%; transition: width 0.4s ease;"></div>
-                                    </div>
-                                </div>
-
-                                <!-- Checklist Table -->
-                                <div style="overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff;">
-                                    <table class="schedule-table" style="width: 100%; border-collapse: collapse; min-width: auto; margin: 0;">
-                                        <thead>
-                                            <tr style="background: #fafafa; border-bottom: 1px solid var(--border-color);">
-                                                <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">체크</th>
-                                                <th style="padding: 10px; text-align: left; font-size: 0.82rem; font-weight: 700;">내용</th>
-                                                <th style="padding: 10px; text-align: center; width: 90px; font-size: 0.82rem; font-weight: 700;">주간 달성</th>
-                                                <th style="padding: 10px; text-align: center; width: 60px; font-size: 0.82rem; font-weight: 700;">삭제</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="daily-habit-tbody">
-                                            <!-- Dynamically populated habits -->
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <!-- Add Habit Input Form -->
-                                <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
-                                    <input type="text" id="habit-new-input" placeholder="새로운 생활 습관 입력 (예: 30분 걷기)" style="flex-grow: 1; padding: 10px 14px; font-size: 0.88rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; min-width: 150px;">
-                                    <select id="habit-new-freq" style="padding: 0 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; height: 38px; font-weight: 600; color: var(--text-primary); cursor: pointer; background: #ffffff;">
-                                        <option value="7">주 7회 (매일)</option>
-                                        <option value="6">주 6회</option>
-                                        <option value="5">주 5회</option>
-                                        <option value="4">주 4회</option>
-                                        <option value="3">주 3회</option>
-                                        <option value="2">주 2회</option>
-                                        <option value="1">주 1회</option>
-                                    </select>
-                                    <button type="button" id="btn-add-habit" style="padding: 0 16px; font-size: 0.85rem; font-weight: 700; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; height: 38px;">추가</button>
-                                </div>
-
-                                <!-- Monthly Statistics Section -->
-                                <div style="border-top: 1px dashed var(--border-color); padding-top: 16px; margin-top: 8px;">
-                                    <h4 style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-primary);">
-                                        <i data-lucide="bar-chart-3" style="color: var(--mascot-pink-bg); width: 18px; height: 18px;"></i> 월간 항목별 달성 리포트
-                                    </h4>
-                                    <div id="myclass-monthly-habit-report" style="display: flex; flex-direction: column; gap: 12px;">
-                                        <!-- Monthly stats rendered dynamically -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Homework Widget -->
-                            <div class="widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
-                                    <i data-lucide="check-square" style="color: var(--primary-color);"></i>과제 체크리스트
-                                </h3>
-                                <p style="font-size: 0.85rem; color: var(--text-secondary);">과제를 완료한 후 체크박스를 선택하면 원장 선생님에게 실시간 공유됩니다.</p>
-                                <div id="myclass-homework-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                                    <!-- Will be rendered dynamically -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Right Panel: AI & 1:1 Chatroom -->
-                        <div class="myclass-right" style="display: flex; flex-direction: column; gap: 24px;">
-                            <!-- AI Solver Widget -->
-                            <div class="widget ai-solver-widget" id="ai-solver-widget-container" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px; background-color: #fcfcfd;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--primary-color);">
-                                    <i data-lucide="sparkles" style="color: var(--primary-color); width: 20px; height: 20px;"></i> AI에게 풀이과정 물어보기
-                                </h3>
-                                <p style="font-size: 0.85rem; color: var(--text-secondary);">수학 문제의 풀이과정이 막힐 때 물어보세요. AI 선생님이 단계별로 친절하게 설명해 드립니다. (LaTeX 수식 지원)</p>
-                                
-                                <div style="display: flex; flex-direction: column; gap: 10px;">
-                                    <textarea id="ai-query-input" placeholder="예: x^2 - 5x + 6 = 0의 풀이과정을 알려줘&#10;또는&#10;피타고라스 정리 공식이 뭐야?" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; height: 90px; resize: none; font-family: var(--ff-primary); font-size: 0.88rem; transition: var(--transition-smooth);"></textarea>
-                                    <button type="button" id="btn-ask-ai" class="btn-modal-submit" style="margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border-radius: 8px;">
-                                        <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기
-                                    </button>
-                                </div>
-                                
-                                <div id="ai-response-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; flex-direction: column; gap: 8px;">
-                                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                                        <i data-lucide="bot" style="color: var(--primary-color); width: 18px; height: 18px;"></i> AI 답변 결과:
-                                    </h4>
-                                    <div id="ai-response-content" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; font-size: 0.88rem; line-height: 1.6; color: var(--text-primary); overflow-x: auto; white-space: pre-wrap; font-family: var(--ff-primary);">
-                                        <!-- AI output goes here -->
-                                    </div>
-                                </div>
-
-                                <div id="myclass-ai-history-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 14px; flex-direction: column; gap: 8px;">
-                                    <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                                        <i data-lucide="history" style="width: 14px; height: 14px;"></i> 나의 최근 AI 질문 기록
-                                    </h4>
-                                    <div id="myclass-ai-history-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;">
-                                        <!-- Rendered dynamically -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 1:1 Chatroom with Sticky Follow -->
-                            <div id="chat-messages-container-anchor"></div>
-                            <div class="widget chat-widget myclass-chat-sticky" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; min-height: 450px; position: sticky; top: 160px; z-index: 5; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
-                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 메신저
-                                </h3>
-                                <div id="chat-messages-container" style="flex-grow: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; max-height: 300px; min-height: 250px;">
-                                    <!-- Messages rendered here -->
-                                </div>
-                                <form id="chat-send-form" style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-                                    <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
-                                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </main>
         </div>
     </div>
