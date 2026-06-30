@@ -1495,8 +1495,15 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     // Seed resources if empty
-        resources = defaultResources;
-        saveResources();
+    let resources = defaultResources;
+    try {
+        const storedRes = localStorage.getItem('gongbubang_resources');
+        if (storedRes) {
+            resources = JSON.parse(storedRes);
+        } else {
+            localStorage.setItem('gongbubang_resources', JSON.stringify(defaultResources));
+        }
+    } catch(e) {}
 
     const renderResources = () => {
         const listContainer = document.querySelector('.resources-list');
