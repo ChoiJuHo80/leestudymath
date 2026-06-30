@@ -5975,17 +5975,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const sessionPhone = normalizePhone(session.user.user_metadata?.phone);
 
-                // Find matching user in mockUsers by email or phone number
+                // Find matching user in mockUsers by ID, email, or phone number
                 let matchedUser = mockUsers.find(u => {
+                    if (u.id === session.user.id) return true;
                     const uEmail = String(u.email || '').toLowerCase();
                     const uPhone = normalizePhone(u.phone);
                     return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
                 });
 
                 if (matchedUser) {
-                    // Link Kakao/Google/Naver email to local user if not already linked
+                    // Update user ID and email in local database if different
+                    let changed = false;
+                    if (matchedUser.id !== session.user.id) {
+                        matchedUser.id = session.user.id;
+                        changed = true;
+                    }
                     if (matchedUser.email.toLowerCase() !== userEmail.toLowerCase()) {
                         matchedUser.email = userEmail;
+                        changed = true;
+                    }
+                    if (changed) {
                         saveMockUsers(mockUsers);
                     }
                     
@@ -6002,6 +6011,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const existsInMockUsers = mockUsers.some(u => {
+                    if (u.id === session.user.id) return true;
                     const uEmail = String(u.email || '').toLowerCase();
                     const uPhone = normalizePhone(u.phone);
                     return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
