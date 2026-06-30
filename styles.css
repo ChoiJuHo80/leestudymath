@@ -1368,6 +1368,9 @@ a {
     border-radius: 6px;
     font-weight: 700;
     white-space: nowrap;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .student-contact-section {

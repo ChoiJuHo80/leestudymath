@@ -2731,10 +2731,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="student-info-title">
                         <h3>${student.name}</h3>
                         <span>${student.age}세 &middot; ${student.school}</span>
+                        ${siblingTag}
                         ${classNameTag}
                         ${terminationTag}
                     </div>
-                    ${siblingTag}
                 </div>
                 <div class="student-contact-section">
                     <div class="student-contact-item">
