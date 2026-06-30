@@ -3233,10 +3233,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     students = students.filter(s => s.id !== id);
                     saveStudents();
                     if (typeof supabase !== 'undefined' && supabase && !isMock) {
-                        supabase.from('sb_students').delete().eq('id', String(id)).then(() => {});
+                        supabase.from('sb_students').delete().eq('id', String(id)).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        window.location.reload();
                     }
-                    renderStudents(studentSearchInput ? studentSearchInput.value : '');
-                    showToast('원생 정보가 삭제되었습니다.');
                 }
             });
         });
