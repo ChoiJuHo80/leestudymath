@@ -106,13 +106,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const parseTimeRange = (rangeStr) => {
             if (!rangeStr) return { start: '', end: '' };
             const parts = rangeStr.split('~');
-            return { start: parts[0] || '', end: parts[1] || '' };
+            return { start: parts[0] ? parts[0].trim() : '', end: parts[1] ? parts[1].trim() : '' };
         };
-        const mon = parseTimeRange(jsClass.mon);
-        const tue = parseTimeRange(jsClass.tue);
-        const wed = parseTimeRange(jsClass.wed);
-        const thu = parseTimeRange(jsClass.thu);
-        const fri = parseTimeRange(jsClass.fri);
+        const mon = parseTimeRange(jsClass.schedule ? jsClass.schedule.mon : jsClass.mon);
+        const tue = parseTimeRange(jsClass.schedule ? jsClass.schedule.tue : jsClass.tue);
+        const wed = parseTimeRange(jsClass.schedule ? jsClass.schedule.wed : jsClass.wed);
+        const thu = parseTimeRange(jsClass.schedule ? jsClass.schedule.thu : jsClass.thu);
+        const fri = parseTimeRange(jsClass.schedule ? jsClass.schedule.fri : jsClass.fri);
         return {
             id: jsClass.id,
             name: jsClass.name,
@@ -6601,7 +6601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (editId) {
                     const id = parseStudentId(editId);
                     classes = classes.map(c => {
-                        if (c.id === id) {
+                        if (String(c.id) === String(id)) {
                             return { ...c, name, duration, schedule };
                         }
                         return c;

@@ -1346,6 +1346,11 @@ a {
     padding-bottom: 12px;
 }
 
+.student-info-title {
+    padding-right: 85px;
+    box-sizing: border-box;
+}
+
 .student-info-title h3 {
     font-family: var(--ff-logo);
     font-size: 1.3rem;
