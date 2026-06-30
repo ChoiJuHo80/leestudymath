@@ -6588,6 +6588,124 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Batch Textbook list rendering
+        const renderBatchTextbookList = (classId) => {
+            const listEl = document.getElementById('batch-textbook-list');
+            if (!listEl) return;
+
+            if (!classId) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">반을 선택하면 등록된 교재 목록이 표시됩니다.</div>';
+                return;
+            }
+
+            const targetClass = classes.find(c => c.id === classId);
+            if (!targetClass) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">반 정보를 찾을 수 없습니다.</div>';
+                return;
+            }
+
+            const tbs = targetClass.textbooks || [];
+            if (tbs.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">등록된 교재가 없습니다.</div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            tbs.forEach((tb, index) => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '8px 12px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '8px';
+                item.style.background = '#ffffff';
+
+                item.innerHTML = `
+                    <div style="text-align: left;">
+                        <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary);">${tb.name}</span>
+                        <span style="font-size: 0.78rem; color: var(--primary-color); font-weight: 600; margin-left: 6px;">${Number(tb.price).toLocaleString()}원</span>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button type="button" class="btn-edit-batch-tb" data-index="${index}" style="border: none; background: #e0f2fe; color: #0284c7; font-size: 0.72rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 2px;"><i data-lucide="edit-2" style="width: 10px; height: 10px;"></i>수정</button>
+                        <button type="button" class="btn-delete-batch-tb" data-index="${index}" style="border: none; background: #fee2e2; color: #ef4444; font-size: 0.72rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 2px;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i>삭제</button>
+                    </div>
+                `;
+
+                // Bind edit button
+                item.querySelector('.btn-edit-batch-tb').addEventListener('click', () => {
+                    const nameInput = document.getElementById('batch-textbook-name-input');
+                    const priceInput = document.getElementById('batch-textbook-price-input');
+                    const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                    const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                    const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
+
+                    if (nameInput && priceInput && editIndexInput && submitBtn && cancelBtn) {
+                        nameInput.value = tb.name;
+                        priceInput.value = tb.price;
+                        editIndexInput.value = index;
+                        submitBtn.textContent = '교재 수정';
+                        cancelBtn.style.display = 'inline-block';
+                        nameInput.focus();
+                    }
+                });
+
+                // Bind delete button
+                item.querySelector('.btn-delete-batch-tb').addEventListener('click', async () => {
+                    if (confirm(`'${tb.name}' 교재를 삭제하시겠습니까?`)) {
+                        targetClass.textbooks.splice(index, 1);
+                        await saveClasses();
+                        renderBatchTextbookList(classId);
+                        if (typeof renderClassList === 'function') renderClassList();
+                        showToast(`'${tb.name}' 교재가 삭제되었습니다.`);
+                    }
+                });
+
+                listEl.appendChild(item);
+            });
+
+            safeCreateIcons();
+        };
+
+        // Class select change listener
+        const batchTbClassSelect = document.getElementById('batch-textbook-class-select');
+        if (batchTbClassSelect) {
+            batchTbClassSelect.addEventListener('change', (e) => {
+                const classId = parseStudentId(e.target.value);
+                // Reset edit mode
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
+
+                if (nameInput) nameInput.value = '';
+                if (priceInput) priceInput.value = '';
+                if (editIndexInput) editIndexInput.value = '';
+                if (submitBtn) submitBtn.textContent = '교재 등록';
+                if (cancelBtn) cancelBtn.style.display = 'none';
+
+                renderBatchTextbookList(classId);
+            });
+        }
+
+        // Cancel edit button click listener
+        const btnBatchTextbookCancel = document.getElementById('btn-batch-textbook-cancel');
+        if (btnBatchTextbookCancel) {
+            btnBatchTextbookCancel.addEventListener('click', () => {
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                
+                if (nameInput) nameInput.value = '';
+                if (priceInput) priceInput.value = '';
+                if (editIndexInput) editIndexInput.value = '';
+                if (submitBtn) submitBtn.textContent = '교재 등록';
+                btnBatchTextbookCancel.style.display = 'none';
+            });
+        }
+
         // Batch Textbook Registration Form Submit Listener
         const classTextbookBatchForm = document.getElementById('class-textbook-batch-form');
         if (classTextbookBatchForm) {
@@ -6596,15 +6714,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const classSelect = document.getElementById('batch-textbook-class-select');
                 const nameInput = document.getElementById('batch-textbook-name-input');
                 const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
                 
-                if (!classSelect || !nameInput || !priceInput) return;
+                if (!classSelect || !nameInput || !priceInput || !editIndexInput || !submitBtn || !cancelBtn) return;
 
                 const classId = parseStudentId(classSelect.value);
                 const tbName = nameInput.value.trim();
                 const tbPrice = parseInt(priceInput.value);
+                const editIndexStr = editIndexInput.value;
 
                 if (!classId) {
-                    showToast('교재를 등록할 반을 선택해 주세요.');
+                    showToast('반을 선택해 주세요.');
                     return;
                 }
 
@@ -6618,7 +6740,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Add textbook to the class
                 let targetClass = classes.find(c => c.id === classId);
                 if (!targetClass) {
                     showToast('반 정보를 찾을 수 없습니다.');
@@ -6629,16 +6750,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     targetClass.textbooks = [];
                 }
 
-                // Check duplicate
-                if (targetClass.textbooks.some(t => t.name === tbName)) {
-                    showToast('이미 등록된 교재명입니다.');
-                    return;
-                }
+                if (editIndexStr !== '') {
+                    // Edit Mode
+                    const editIdx = parseInt(editIndexStr);
+                    // Check duplicate (except itself)
+                    if (targetClass.textbooks.some((t, idx) => t.name === tbName && idx !== editIdx)) {
+                        showToast('이미 다른 교재명으로 등록되어 있습니다.');
+                        return;
+                    }
 
-                targetClass.textbooks.push({ name: tbName, price: tbPrice });
-                await saveClasses();
+                    const oldName = targetClass.textbooks[editIdx].name;
+                    targetClass.textbooks[editIdx] = { name: tbName, price: tbPrice };
+                    await saveClasses();
+
+                    showToast(`[교재 수정 완료] '${oldName}' 교재가 '${tbName}' (${tbPrice.toLocaleString()}원)으로 수정되었습니다.`);
+                    
+                    // Reset edit state
+                    editIndexInput.value = '';
+                    submitBtn.textContent = '교재 등록';
+                    cancelBtn.style.display = 'none';
+                } else {
+                    // Registration Mode
+                    if (targetClass.textbooks.some(t => t.name === tbName)) {
+                        showToast('이미 등록된 교재명입니다.');
+                        return;
+                    }
+
+                    targetClass.textbooks.push({ name: tbName, price: tbPrice });
+                    await saveClasses();
+
+                    showToast(`[교재 등록 완료] ${targetClass.name} 반에 '${tbName}' (${tbPrice.toLocaleString()}원) 교재가 등록되었습니다.`);
+                }
                 
-                // Refresh class list UI if visible
+                // Refresh UIs
+                renderBatchTextbookList(classId);
                 if (typeof renderClassList === 'function') {
                     renderClassList();
                 }
@@ -6646,8 +6791,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reset inputs
                 nameInput.value = '';
                 priceInput.value = '';
-
-                showToast(`[교재 등록 완료] ${targetClass.name} 반에 '${tbName}' (${tbPrice.toLocaleString()}원) 교재가 등록되었습니다.`);
             });
         }
 
