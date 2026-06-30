@@ -6094,6 +6094,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     batchSelect.appendChild(opt);
                 });
             }
+
+            const batchTbSelect = document.getElementById('batch-textbook-class-select');
+            if (batchTbSelect) {
+                batchTbSelect.innerHTML = '<option value="">-- 반 선택 --</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    batchTbSelect.appendChild(opt);
+                });
+            }
         };
 
         const populateClassFilter = () => {
@@ -6574,6 +6585,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const selectedClass = classes.find(c => c.id === classId);
                 showToast(`[진도 일괄 등록 완료] ${selectedClass ? selectedClass.name : '해당 반'} 원생 ${classStudents.length}명의 진도가 일괄 등록되었습니다.`);
+            });
+        }
+
+        // Batch Textbook Registration Form Submit Listener
+        const classTextbookBatchForm = document.getElementById('class-textbook-batch-form');
+        if (classTextbookBatchForm) {
+            classTextbookBatchForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('batch-textbook-class-select');
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                
+                if (!classSelect || !nameInput || !priceInput) return;
+
+                const classId = parseStudentId(classSelect.value);
+                const tbName = nameInput.value.trim();
+                const tbPrice = parseInt(priceInput.value);
+
+                if (!classId) {
+                    showToast('교재를 등록할 반을 선택해 주세요.');
+                    return;
+                }
+
+                if (!tbName) {
+                    showToast('교재명을 입력해 주세요.');
+                    return;
+                }
+
+                if (isNaN(tbPrice) || tbPrice < 0) {
+                    showToast('올바른 금액을 입력해 주세요.');
+                    return;
+                }
+
+                // Add textbook to the class
+                let targetClass = classes.find(c => c.id === classId);
+                if (!targetClass) {
+                    showToast('반 정보를 찾을 수 없습니다.');
+                    return;
+                }
+
+                if (!targetClass.textbooks) {
+                    targetClass.textbooks = [];
+                }
+
+                // Check duplicate
+                if (targetClass.textbooks.some(t => t.name === tbName)) {
+                    showToast('이미 등록된 교재명입니다.');
+                    return;
+                }
+
+                targetClass.textbooks.push({ name: tbName, price: tbPrice });
+                await saveClasses();
+                
+                // Refresh class list UI if visible
+                if (typeof renderClassList === 'function') {
+                    renderClassList();
+                }
+
+                // Reset inputs
+                nameInput.value = '';
+                priceInput.value = '';
+
+                showToast(`[교재 등록 완료] ${targetClass.name} 반에 '${tbName}' (${tbPrice.toLocaleString()}원) 교재가 등록되었습니다.`);
             });
         }
 

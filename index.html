@@ -424,31 +424,61 @@
                                 </div>
                             </div>
                             
-                            <!-- Right: Batch Progress Registration -->
-                            <div class="class-form-container" id="class-progress-batch-container">
-                                <h4 style="font-size: 0.95rem; font-weight: 700; color: #8e44ad; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
-                                    <i data-lucide="book-open" style="width: 18px; height: 18px;"></i> 반별 진도 일괄 등록
-                                </h4>
-                                <form id="class-progress-batch-form" style="display: grid; gap: 14px;">
-                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
-                                        <label for="batch-progress-class-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">반 선택</label>
-                                        <select id="batch-progress-class-select" required style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
-                                            <option value="">-- 반 선택 --</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
-                                        <label for="batch-progress-date-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">일자 선택</label>
-                                        <input type="date" id="batch-progress-date-input" required style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
-                                    </div>
-                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
-                                        <label for="batch-progress-content-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">진도 내용</label>
-                                        <textarea id="batch-progress-content-input" required placeholder="예: 디딤돌 3단원 소수의 곱셈 강의 완료" rows="3" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; resize: none; background: #ffffff;"></textarea>
-                                    </div>
-                                    
-                                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
-                                        <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto; background: #8e44ad; white-space: nowrap;">진도 일괄 등록</button>
-                                    </div>
-                                </form>
+                            <!-- Right Column: Progress & Textbook Batch -->
+                            <div style="display: flex; flex-direction: column; gap: 20px;">
+                                <!-- Batch Progress Registration -->
+                                <div class="class-form-container" id="class-progress-batch-container" style="margin: 0;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: #8e44ad; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="book-open" style="width: 18px; height: 18px;"></i> 반별 진도 일괄 등록
+                                    </h4>
+                                    <form id="class-progress-batch-form" style="display: grid; gap: 14px;">
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-progress-class-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">반 선택</label>
+                                            <select id="batch-progress-class-select" required style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                                <option value="">-- 반 선택 --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-progress-date-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">일자 선택</label>
+                                            <input type="date" id="batch-progress-date-input" required style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-progress-content-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">진도 내용</label>
+                                            <textarea id="batch-progress-content-input" required placeholder="예: 디딤돌 3단원 소수의 곱셈 강의 완료" rows="3" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; resize: none; background: #ffffff;"></textarea>
+                                        </div>
+                                        
+                                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+                                            <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto; background: #8e44ad; white-space: nowrap; margin-bottom: 0;">진도 일괄 등록</button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <!-- Batch Textbook Registration -->
+                                <div class="class-form-container" id="class-textbook-batch-container" style="margin: 0;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: #8e44ad; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="book" style="width: 18px; height: 18px;"></i> 반별 교재 등록
+                                    </h4>
+                                    <form id="class-textbook-batch-form" style="display: grid; gap: 14px;">
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-textbook-class-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">반 선택</label>
+                                            <select id="batch-textbook-class-select" required style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                                <option value="">-- 반 선택 --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-textbook-name-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">교재 명</label>
+                                            <input type="text" id="batch-textbook-name-input" required placeholder="예: 개념원리 수학(상)" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                        </div>
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="batch-textbook-price-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">금액 (원)</label>
+                                            <input type="number" id="batch-textbook-price-input" required placeholder="예: 15000" min="0" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                        </div>
+                                        
+                                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+                                            <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto; background: #8e44ad; white-space: nowrap; margin-bottom: 0;">교재 등록</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
