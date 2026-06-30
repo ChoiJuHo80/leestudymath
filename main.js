@@ -3154,23 +3154,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    const monTime = splitTimeRange(student.schedule.mon);
+                    const studentSched = getStudentSchedule(student);
+                    const monTime = splitTimeRange(studentSched.mon);
                     studentTimeMonStart.value = monTime.start;
                     studentTimeMonEnd.value = monTime.end;
 
-                    const tueTime = splitTimeRange(student.schedule.tue);
+                    const tueTime = splitTimeRange(studentSched.tue);
                     studentTimeTueStart.value = tueTime.start;
                     studentTimeTueEnd.value = tueTime.end;
 
-                    const wedTime = splitTimeRange(student.schedule.wed);
+                    const wedTime = splitTimeRange(studentSched.wed);
                     studentTimeWedStart.value = wedTime.start;
                     studentTimeWedEnd.value = wedTime.end;
 
-                    const thuTime = splitTimeRange(student.schedule.thu);
+                    const thuTime = splitTimeRange(studentSched.thu);
                     studentTimeThuStart.value = thuTime.start;
                     studentTimeThuEnd.value = thuTime.end;
 
-                    const friTime = splitTimeRange(student.schedule.fri);
+                    const friTime = splitTimeRange(studentSched.fri);
                     studentTimeFriStart.value = friTime.start;
                     studentTimeFriEnd.value = friTime.end;
                     studentProgressInput.value = student.progress;
@@ -6435,9 +6436,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!c) return;
                     const item = document.createElement('div');
                     item.style.display = 'flex';
-                    item.style.justifyContent = 'space-between';
-                    item.style.alignItems = 'center';
-                    item.style.padding = '10px 12px';
+                    item.style.flexDirection = 'column';
+                    item.style.gap = '8px';
+                    item.style.padding = '12px';
                     item.style.border = '1px solid var(--border-color)';
                     item.style.borderRadius = '8px';
                     item.style.background = '#ffffff';
@@ -6453,14 +6454,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const schedSummary = schedList.length > 0 ? schedList.join(', ') : '지정된 수업시간 없음';
                     
                     item.innerHTML = `
-                        <div style="flex-grow: 1; padding-right: 12px; text-align: left;">
-                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${c.name}</div>
-                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">${schedSummary}</div>
+                        <div style="text-align: left; width: 100%;">
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary); line-height: 1.4;">${c.name}</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">${schedSummary}</div>
                         </div>
-                        <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                            <button type="button" class="btn-class-textbooks" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: #fdfafd; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 600;">교재</button>
-                            <button type="button" class="btn-class-edit" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: #f8fafc; cursor: pointer;">수정</button>
-                            <button type="button" class="btn-class-delete" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer;">삭제</button>
+                        <div style="display: flex; gap: 6px; width: 100%; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 2px;">
+                            <button type="button" class="btn-class-textbooks" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: #fdfafd; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 600; flex-grow: 1;">교재</button>
+                            <button type="button" class="btn-class-edit" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: #f8fafc; cursor: pointer; flex-grow: 1;">수정</button>
+                            <button type="button" class="btn-class-delete" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer; flex-grow: 1;">삭제</button>
                         </div>
                     `;
                     
