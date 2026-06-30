@@ -3381,15 +3381,31 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => {
                 const id = parseStudentId(btn.getAttribute('data-id'));
                 const student = students.find(s => s.id === id);
-                const tChatModal = document.getElementById('teacher-chat-modal');
-                const tChatTitle = document.getElementById('teacher-chat-title');
-                const tChatStudentIdInput = document.getElementById('teacher-chat-student-id');
+                if (!student) return;
 
-                if (student && tChatModal && tChatTitle && tChatStudentIdInput) {
-                    tChatStudentIdInput.value = id;
-                    tChatTitle.textContent = `1:1 상담 메신저 - ${student.name} 학부모`;
+                const adminChatWidget = document.getElementById('admin-chat-widget');
+                const adminChatHeader = document.getElementById('admin-chat-header');
+                const adminChatStudentId = document.getElementById('admin-chat-student-id');
+                const adminChatSendForm = document.getElementById('admin-chat-send-form');
+
+                if (adminChatWidget && adminChatHeader && adminChatStudentId && adminChatSendForm) {
+                    adminChatStudentId.value = id;
+                    adminChatHeader.innerHTML = `<i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 - ${student.name} 학부모`;
                     renderTeacherChat(id);
-                    tChatModal.classList.add('open');
+                    adminChatSendForm.style.display = 'flex';
+                    adminChatWidget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    safeCreateIcons();
+                } else {
+                    const tChatModal = document.getElementById('teacher-chat-modal');
+                    const tChatTitle = document.getElementById('teacher-chat-title');
+                    const tChatStudentIdInput = document.getElementById('teacher-chat-student-id');
+
+                    if (tChatModal && tChatTitle && tChatStudentIdInput) {
+                        tChatStudentIdInput.value = id;
+                        tChatTitle.textContent = `1:1 상담 메신저 - ${student.name} 학부모`;
+                        renderTeacherChat(id);
+                        tChatModal.classList.add('open');
+                    }
                 }
             });
         });
@@ -3982,7 +3998,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render Chat inside Teacher Modal
     const renderTeacherChat = (studentId) => {
-        const container = document.getElementById('teacher-chat-messages-container');
+        const container = document.getElementById('admin-chat-messages-container') || document.getElementById('teacher-chat-messages-container');
         if (!container) return;
 
         container.innerHTML = '';
@@ -5841,6 +5857,38 @@ document.addEventListener('DOMContentLoaded', () => {
             messages.push(newMsg);
             saveMessages();
             teacherChatInput.value = '';
+            renderTeacherChat(studentId);
+
+            // If student portal is open, update student portal chat
+            if (isStudent && loggedInStudentId === studentId) {
+                renderStudentChat();
+            }
+        });
+    }
+
+    // Admin Chat Widget (inline) Submit Handler
+    const adminChatSendForm = document.getElementById('admin-chat-send-form');
+    const adminChatInput = document.getElementById('admin-chat-input-message');
+    const adminChatStudentIdInput = document.getElementById('admin-chat-student-id');
+
+    if (adminChatSendForm && adminChatInput && adminChatStudentIdInput) {
+        adminChatSendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(adminChatStudentIdInput.value);
+            const text = adminChatInput.value.trim();
+            if (!text || !studentId) return;
+
+            const newMsg = {
+                id: Date.now(),
+                studentId,
+                sender: 'teacher',
+                text,
+                time: getFormattedTime()
+            };
+
+            messages.push(newMsg);
+            saveMessages();
+            adminChatInput.value = '';
             renderTeacherChat(studentId);
 
             // If student portal is open, update student portal chat

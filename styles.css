@@ -2276,3 +2276,15 @@ a {
     top: 160px !important;
     z-index: 5;
 }
+
+/* ==========================================================================
+   Admin LMS Dashboard Responsive Layout
+   ========================================================================== */
+@media (max-width: 991px) {
+    .admin-lms-dashboard {
+        grid-template-columns: 1fr !important;
+    }
+    .admin-lms-right {
+        position: static !important;
+    }
+}
