@@ -92,11 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
         name: dbClass.name,
         subject: dbClass.subject,
         duration: dbClass.duration,
-        mon: dbClass.mon_start ? `${dbClass.mon_start}~${dbClass.mon_end}` : '',
-        tue: dbClass.tue_start ? `${dbClass.tue_start}~${dbClass.tue_end}` : '',
-        wed: dbClass.wed_start ? `${dbClass.wed_start}~${dbClass.wed_end}` : '',
-        thu: dbClass.thu_start ? `${dbClass.thu_start}~${dbClass.thu_end}` : '',
-        fri: dbClass.fri_start ? `${dbClass.fri_start}~${dbClass.fri_end}` : '',
+        schedule: {
+            mon: dbClass.mon_start ? `${dbClass.mon_start} ~ ${dbClass.mon_end}` : '',
+            tue: dbClass.tue_start ? `${dbClass.tue_start} ~ ${dbClass.tue_end}` : '',
+            wed: dbClass.wed_start ? `${dbClass.wed_start} ~ ${dbClass.wed_end}` : '',
+            thu: dbClass.thu_start ? `${dbClass.thu_start} ~ ${dbClass.thu_end}` : '',
+            fri: dbClass.fri_start ? `${dbClass.fri_start} ~ ${dbClass.fri_end}` : ''
+        },
         textbooks: dbClass.textbooks ? (typeof dbClass.textbooks === 'string' ? JSON.parse(dbClass.textbooks) : dbClass.textbooks) : []
     });
 
