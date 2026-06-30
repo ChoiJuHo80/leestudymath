@@ -5866,10 +5866,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Admin Chat Widget (inline) Submit Handler
+    // Admin Chat Widget (inline/floating) Submit & Toggle Handler
+    const adminChatWidget = document.getElementById('admin-chat-widget');
     const adminChatSendForm = document.getElementById('admin-chat-send-form');
     const adminChatInput = document.getElementById('admin-chat-input-message');
     const adminChatStudentIdInput = document.getElementById('admin-chat-student-id');
+    const btnAdminChatClose = document.getElementById('btn-admin-chat-close');
 
     if (adminChatSendForm && adminChatInput && adminChatStudentIdInput) {
         adminChatSendForm.addEventListener('submit', (e) => {
@@ -5895,6 +5897,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isStudent && loggedInStudentId === studentId) {
                 renderStudentChat();
             }
+        });
+    }
+
+    if (btnAdminChatClose && adminChatWidget) {
+        btnAdminChatClose.addEventListener('click', () => {
+            adminChatWidget.style.display = 'none';
         });
     }
 
@@ -5929,6 +5937,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (myclassSection) myclassSection.style.display = 'none';
         if (navLinkMyclass) navLinkMyclass.style.display = 'none';
         if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+        
+        const adminChatWidget = document.getElementById('admin-chat-widget');
+        if (adminChatWidget) adminChatWidget.style.display = 'none';
         
         updateLoginButton();
         safeCreateIcons();
