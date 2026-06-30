@@ -2266,3 +2266,13 @@ a {
 .btn-signup-remove-child:hover {
     background: #fff1f0;
 }
+
+/* ==========================================================================
+   Sticky Chat Widget in Portal
+   ========================================================================== */
+.myclass-chat-sticky {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 160px !important;
+    z-index: 5;
+}

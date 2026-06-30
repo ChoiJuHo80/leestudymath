@@ -48,9 +48,13 @@
                             <span id="logged-user-name">사용자</span> 님
                         </a>
                     </span>
-                    <button class="btn-admin-mode" id="btn-login-toggle">
+                    <button class="btn-admin-mode" id="btn-login-toggle" style="background: var(--primary-color); border: 1px solid var(--primary-color);">
                         <span class="student-icon-wrapper"><i data-lucide="log-in"></i></span>
-                        <span>로그인</span>
+                        <span>학생 로그인</span>
+                    </button>
+                    <button class="btn-admin-mode" id="btn-parent-login-toggle" style="background: var(--mascot-purple-bg); border: 1px solid var(--mascot-purple-bg);">
+                        <span class="parent-icon-wrapper" style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.2);"><i data-lucide="users" style="width: 12px; height: 12px; color: white;"></i></span>
+                        <span>학부모 로그인</span>
                     </button>
                 </div>
             </div>
@@ -882,6 +886,34 @@
                         <h2><i data-lucide="graduation-cap" class="sec-title-icon green-icon"></i>마이클래스 (My Class)</h2>
                         <span class="section-subtext" id="myclass-subtitle">자녀의 학습 진도, 과제 현황 및 1:1 상담 피드백입니다.</span>
                     </div>
+
+                    <!-- Parent Quick Menu Bar -->
+                    <div id="parent-quick-menu" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="compass" style="width: 16px; height: 16px; color: var(--primary-color);"></i> 마이클래스 바로가기:
+                        </span>
+                        <a href="#myclass-info-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="graduation-cap" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 학습 현황 및 피드백 <span id="parent-menu-feedback-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                        <a href="#myclass-textbook-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청
+                        </a>
+                        <a href="#myclass-calendar-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 출결/보강 달력
+                        </a>
+                        <a href="#myclass-daily-habit-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='#8e44ad';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="calendar-check-2" style="width: 14px; height: 14px; color: #8e44ad;"></i> 일일 생활 습관
+                        </a>
+                        <a href="#myclass-homework-list" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 과제 체크리스트 <span id="parent-menu-homework-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                        <a href="#ai-solver-widget-container" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 풀이 질문
+                        </a>
+                        <a href="#chat-messages-container-anchor" id="parent-menu-chat" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="message-square" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 1:1 상담 메신저 <span id="parent-menu-chat-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                    </div>
                     
                     <div class="myclass-dashboard" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 24px;">
                         <!-- Left Panel: Student Profile & Assignments -->
@@ -1027,23 +1059,10 @@
                             </div>
                         </div>
                         
-                        <!-- Right Panel: 1:1 Chatroom -->
-                        <div class="myclass-right">
-                            <div class="widget chat-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; height: 100%; min-height: 450px;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
-                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 메신저
-                                </h3>
-                                <div id="chat-messages-container" style="flex-grow: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; max-height: 300px; min-height: 250px;">
-                                    <!-- Messages rendered here -->
-                                </div>
-                                <form id="chat-send-form" style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-                                    <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
-                                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
-                                </form>
-                            </div>
-
+                        <!-- Right Panel: AI & 1:1 Chatroom -->
+                        <div class="myclass-right" style="display: flex; flex-direction: column; gap: 24px;">
                             <!-- AI Solver Widget -->
-                            <div class="widget ai-solver-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; margin-top: 24px; display: flex; flex-direction: column; gap: 16px; background-color: #fcfcfd;">
+                            <div class="widget ai-solver-widget" id="ai-solver-widget-container" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px; background-color: #fcfcfd;">
                                 <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--primary-color);">
                                     <i data-lucide="sparkles" style="color: var(--primary-color); width: 20px; height: 20px;"></i> AI에게 풀이과정 물어보기
                                 </h3>
@@ -1073,6 +1092,21 @@
                                         <!-- Rendered dynamically -->
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- 1:1 Chatroom with Sticky Follow -->
+                            <div id="chat-messages-container-anchor"></div>
+                            <div class="widget chat-widget myclass-chat-sticky" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; min-height: 450px; position: sticky; top: 160px; z-index: 5; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 메신저
+                                </h3>
+                                <div id="chat-messages-container" style="flex-grow: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; max-height: 300px; min-height: 250px;">
+                                    <!-- Messages rendered here -->
+                                </div>
+                                <form id="chat-send-form" style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                    <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
+                                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -1304,22 +1338,15 @@
         </div>
     </div>
 
-    <!-- Student/Parent Login Modal -->
+    <!-- Student Login Modal -->
     <div class="modal-overlay" id="student-login-modal">
         <div class="modal-box auth-box">
             <button class="modal-close-btn" id="btn-student-login-close"><i data-lucide="x"></i></button>
-            <h3 class="modal-title">로그인</h3>
-            
-            <!-- Login Type Tabs -->
-            <div class="login-tabs">
-                <button type="button" class="login-tab-btn active" id="btn-tab-easy">학생 로그인</button>
-                <button type="button" class="login-tab-btn" id="btn-tab-email">학부모 로그인</button>
-                <button type="button" class="login-tab-btn" id="btn-tab-admin" style="display: none;">관리자 로그인</button>
-            </div>
+            <h3 class="modal-title">학생 로그인</h3>
 
-            <!-- Tab 1: Student Login (ID & Password) -->
+            <!-- Student Login (ID & Password) -->
             <form id="student-login-form" class="modal-form">
-                <p class="modal-desc">학생의 개별 아이디와 비밀번호를 입력하세요.</p>
+                <p class="modal-desc" style="margin-bottom: 12px; font-weight: 600; color: var(--text-secondary); text-align: left;">학생은 부여받은 아이디와 비밀번호로 로그인하세요.</p>
                 <div class="form-group-modal">
                     <label for="student-login-name">학생 아이디</label>
                     <input type="text" id="student-login-name" required placeholder="학생 아이디 입력" autocomplete="off">
@@ -1329,46 +1356,26 @@
                     <input type="password" id="student-login-phone" required placeholder="비밀번호 입력" autocomplete="off">
                     <span class="auth-error-msg" id="student-auth-error-msg">아이디 또는 비밀번호가 잘못되었습니다.</span>
                 </div>
-                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">로그인</button>
+                <button type="submit" class="btn-modal-submit" style="margin-top: 12px; background: var(--primary-color);">학생 로그인</button>
             </form>
+        </div>
+    </div>
 
-            <!-- Tab 2: Email Login (Supabase Auth) -->
-            <form id="student-email-login-form" class="modal-form" style="display: none;">
-                <p class="modal-desc">가입한 이메일 주소와 비밀번호로 로그인합니다.</p>
-                <div class="form-group-modal">
-                    <label for="student-login-email">이메일 주소</label>
-                    <input type="email" id="student-login-email" required placeholder="example@mail.com" autocomplete="off">
-                </div>
-                <div class="form-group-modal">
-                    <label for="student-login-password">비밀번호</label>
-                    <input type="password" id="student-login-password" required placeholder="비밀번호 입력" autocomplete="off">
-                    <span class="auth-error-msg" id="student-email-auth-error-msg">이메일 또는 비밀번호가 올바르지 않습니다.</span>
-                </div>
-                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">로그인</button>
-            </form>
-
-            <!-- Tab 3: Admin Login -->
-            <form id="admin-login-form" class="modal-form" style="display: none;">
-                <p class="modal-desc">관리자 비밀번호를 입력해주세요.</p>
-                <div class="form-group-modal">
-                    <label for="admin-login-password">비밀번호</label>
-                    <input type="password" id="admin-login-password" required placeholder="비밀번호 입력" autocomplete="off">
-                    <span class="auth-error-msg" id="admin-login-auth-error-msg">비밀번호가 올바르지 않습니다. (테스트용: 9999)</span>
-                </div>
-                <button type="submit" class="btn-modal-submit" style="margin-top: 12px;">인증하기</button>
-            </form>
-
-            <!-- Social Login Divider & Buttons -->
-            <div class="social-login-divider">
-                <span>또는 소셜 계정으로 로그인</span>
-            </div>
-            <div class="social-login-buttons">
-                <button type="button" class="btn-social btn-google" id="btn-google-login">
+    <!-- Parent Login Modal -->
+    <div class="modal-overlay" id="parent-login-modal">
+        <div class="modal-box auth-box">
+            <button class="modal-close-btn" id="btn-parent-login-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title">학부모 / 관리자 로그인</h3>
+            <p class="modal-desc" style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; margin-bottom: 20px;">연동된 소셜 계정으로 편리하게 로그인해 주세요.</p>
+            
+            <!-- Social Login Buttons -->
+            <div class="social-login-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                <button type="button" class="btn-social btn-google" id="btn-parent-google-login">
                     <i data-lucide="chrome"></i>
                     <span>Google 로그인</span>
                 </button>
 
-                <button type="button" class="btn-social btn-kakao" id="btn-kakao-login">
+                <button type="button" class="btn-social btn-kakao" id="btn-parent-kakao-login">
                     <svg viewBox="0 0 24 24" fill="currentColor" style="width: 14px; height: 14px;">
                         <path d="M12 3c-5.52 0-10 3.73-10 8.33 0 2.98 1.87 5.6 4.7 7.07l-1.18 4.34c-.1.38.13.77.52.88.14.04.28.02.4-.04l5.12-3.4c.48.06.96.09 1.44.09 5.52 0 10-3.73 10-8.33S17.52 3 12 3z"/>
                     </svg>
@@ -1376,11 +1383,9 @@
                 </button>
             </div>
 
-            <!-- Signup & Find Credentials Links -->
-            <div class="signup-prompt" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <span>아직 계정이 없으신가요? <a href="#" id="link-go-signup">회원가입 하기</a></span>
-                <span style="color: #d9d9d9;">|</span>
-                <a href="#" id="link-find-credentials" style="color: var(--primary-color);">ID/비밀번호 찾기</a>
+            <!-- Signup Prompt -->
+            <div class="signup-prompt" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px dashed var(--border-color); padding-top: 16px; margin-top: 10px;">
+                <span>학부모님이신가요? <a href="#" id="link-parent-go-signup" style="font-weight: 700; color: var(--primary-color);">학부모 회원가입 하기</a></span>
             </div>
         </div>
     </div>

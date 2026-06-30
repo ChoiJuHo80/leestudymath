@@ -158,22 +158,66 @@ document.addEventListener('DOMContentLoaded', () => {
         downloads: jsRes.downloads || 0
     });
 
-    const mapMessageFromDb = (m) => ({
-        id: m.id,
-        sender: m.sender,
-        receiver: m.receiver,
-        content: m.content,
-        timestamp: m.timestamp,
-        isRead: m.is_read
-    });
-    const mapMessageToDb = (m) => ({
-        id: m.id,
-        sender: m.sender,
-        receiver: m.receiver,
-        content: m.content,
-        timestamp: m.timestamp,
-        is_read: m.isRead || false
-    });
+    const parseTimeStrToIso = (timeStr) => {
+        if (!timeStr) return new Date().toISOString();
+        if (timeStr.includes('T') && timeStr.endsWith('Z')) return timeStr;
+        try {
+            const now = new Date();
+            const match = timeStr.match(/(오전|오후)\s*(\d+):(\d+)/);
+            if (match) {
+                const ampm = match[1];
+                let hour = parseInt(match[2], 10);
+                const min = parseInt(match[3], 10);
+                if (ampm === '오후' && hour < 12) hour += 12;
+                if (ampm === '오전' && hour === 12) hour = 0;
+                
+                now.setHours(hour, min, 0, 0);
+                return now.toISOString();
+            }
+        } catch(e) {}
+        return new Date().toISOString();
+    };
+
+    const formatIsoToTimeStr = (isoStr) => {
+        if (!isoStr) return '';
+        if (isoStr.includes('오전') || isoStr.includes('오후')) return isoStr;
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return isoStr;
+            const hours = d.getHours();
+            const ampm = hours >= 12 ? '오후' : '오전';
+            const displayHours = hours % 12 || 12;
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${ampm} ${displayHours}:${minutes}`;
+        } catch(e) {
+            return isoStr;
+        }
+    };
+
+    const mapMessageFromDb = (m) => {
+        const isTeacher = m.sender === 'teacher';
+        return {
+            id: m.id,
+            studentId: isTeacher ? m.receiver : m.sender,
+            sender: isTeacher ? 'teacher' : 'parent',
+            text: m.content || '',
+            time: formatIsoToTimeStr(m.timestamp),
+            isRead: !!m.is_read
+        };
+    };
+
+    const mapMessageToDb = (m) => {
+        const isTeacher = m.sender === 'teacher';
+        return {
+            id: m.id,
+            sender: isTeacher ? 'teacher' : String(m.studentId),
+            receiver: isTeacher ? String(m.studentId) : 'teacher',
+            content: m.text || '',
+            timestamp: parseTimeStrToIso(m.time),
+            is_read: !!m.isRead
+        };
+    };
+
 
     const mapFeedbackFromDb = (dbFb) => ({
         id: dbFb.id,
@@ -284,6 +328,59 @@ document.addEventListener('DOMContentLoaded', () => {
         created_at: jsReq.createdAt || new Date().toISOString()
     });
 
+    const mapMockUserFromDb = (u) => ({
+        id: u.id,
+        email: u.email,
+        password: u.password,
+        name: u.name,
+        phone: u.phone,
+        address: u.address,
+        role: u.role,
+        status: u.status,
+        createdAt: u.created_at,
+        approvedAt: u.approved_at,
+        terminatedAt: u.terminated_at,
+        user_metadata: u.user_metadata ? (typeof u.user_metadata === 'string' ? JSON.parse(u.user_metadata) : u.user_metadata) : null
+    });
+
+    const mapMockUserToDb = (u) => ({
+        id: u.id,
+        email: u.email,
+        password: u.password || '',
+        name: u.name || '',
+        phone: u.phone || '',
+        address: u.address || '',
+        role: u.role || 'parent',
+        status: u.status || 'pending',
+        created_at: u.createdAt || new Date().toISOString(),
+        approved_at: u.approvedAt || null,
+        terminated_at: u.terminatedAt || null,
+        user_metadata: u.user_metadata || null
+    });
+
+    const mapConsultationFromDb = (c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        school: c.student_name || '',
+        grade: c.student_age || '',
+        memo: c.content || '',
+        status: c.status || 'pending',
+        date: c.created_at ? c.created_at.split('T')[0] : ''
+    });
+
+    const mapConsultationToDb = (c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        student_name: c.school || '',
+        student_age: c.grade || '',
+        content: c.memo || '',
+        status: c.status || 'pending',
+        created_at: c.date ? `${c.date}T00:00:00.000Z` : new Date().toISOString()
+    });
+
+
     const saveAiQueries = async () => {
         try { localStorage.setItem('gongbubang_ai_queries', JSON.stringify(aiQueries)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
@@ -381,12 +478,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try { localStorage.setItem('gongbubang_mock_users', JSON.stringify(usersArray)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
             try {
-                await supabase.from('sb_mock_users').upsert(usersArray);
+                const mapped = usersArray.map(mapMockUserToDb);
+                await supabase.from('sb_mock_users').upsert(mapped);
             } catch(e) {
                 console.error('Error saving mock users to Supabase:', e);
             }
         }
     };
+
 
     const initializeDataFromSupabase = async () => {
         if (typeof supabase === 'undefined' || !supabase || !supabase.auth || isMock) {
@@ -433,14 +532,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_notices', mapNoticeFromDb, mapNoticeToDb, defaultNotices, 'gongbubang_notices'),
                 syncTable('sb_classes', mapClassFromDb, mapClassToDb, defaultClasses, 'gongbubang_classes'),
                 syncTable('sb_students', mapStudentFromDb, mapStudentToDb, defaultStudents, 'gongbubang_students'),
-                syncTable('sb_mock_users', u => u, u => u, [], 'gongbubang_mock_users'),
+                syncTable('sb_mock_users', mapMockUserFromDb, mapMockUserToDb, [], 'gongbubang_mock_users'),
                 syncTable('sb_resources', mapResourceFromDb, mapResourceToDb, defaultResources, 'gongbubang_resources'),
                 syncTable('sb_homework', mapHomeworkFromDb, mapHomeworkToDb, defaultHomework, 'gongbubang_homework'),
                 syncTable('sb_messages', mapMessageFromDb, mapMessageToDb, defaultMessages, 'gongbubang_messages'),
                 syncTable('sb_feedbacks', mapFeedbackFromDb, mapFeedbackToDb, defaultFeedbacks, 'gongbubang_feedbacks'),
                 syncTable('sb_progress', mapProgressFromDb, mapProgressToDb, defaultProgressList, 'gongbubang_progress'),
                 syncTable('sb_attendance', mapAttendanceFromDb, mapAttendanceToDb, defaultAttendance, 'gongbubang_attendance'),
-                syncTable('sb_consultations', u => u, u => u, defaultConsultations, 'gongbubang_consultations'),
+                syncTable('sb_consultations', mapConsultationFromDb, mapConsultationToDb, defaultConsultations, 'gongbubang_consultations'),
                 syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
                 syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
                 syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests')
@@ -583,8 +682,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Trigger initial Supabase sync immediately
-    initializeDataFromSupabase();
+    // Trigger initial Supabase sync immediately after initialization (moved to end of DOMContentLoaded)
+
 
     // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
     const parseStudentId = (rawId) => {
@@ -666,6 +765,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const getLoggedInUserName = () => {
         if (isAdmin) return '원장님';
         if (isStudent) {
+            if (userRole === 'parent') {
+                return (loggedInParentName || '학부모') + ' (학부모)';
+            }
             const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
             if (studentSession) {
                 return studentSession.name + ' (학생)';
@@ -675,18 +777,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return (user.user_metadata?.name || user.email) + ' (학부모)';
             }
             const s = students.find(x => x.id === loggedInStudentId);
-            if (s) return s.name;
+            if (s) return s.name + ' (학생)';
         }
         return '사용자';
     };
 
     const updateLoginButton = () => {
         const btnLoginToggle = document.getElementById('btn-login-toggle');
+        const btnParentLoginToggle = document.getElementById('btn-parent-login-toggle');
         const displayContainer = document.getElementById('user-profile-display-container');
         const loggedUserName = document.getElementById('logged-user-name');
         if (!btnLoginToggle) return;
 
         if (isAdmin || isStudent) {
+            if (btnParentLoginToggle) btnParentLoginToggle.style.display = 'none';
             btnLoginToggle.classList.add('active-admin');
             btnLoginToggle.querySelector('span:last-child').textContent = '로그아웃';
             const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
@@ -699,11 +803,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             btnLoginToggle.classList.remove('active-admin');
-            btnLoginToggle.querySelector('span:last-child').textContent = '로그인';
+            btnLoginToggle.querySelector('span:last-child').textContent = '학생 로그인';
             const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
             if (iconWrapper) {
                 iconWrapper.innerHTML = '<i data-lucide="log-in"></i>';
             }
+            if (btnParentLoginToggle) btnParentLoginToggle.style.display = 'inline-flex';
             if (displayContainer) {
                 displayContainer.style.display = 'none';
             }
@@ -1683,6 +1788,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isStudent = false;
     let loggedInStudentId = null;
     let userRole = null; // "admin" | "parent" | "student"
+    let loggedInParentName = '';
     let currentNoticeTag = 'all';
     let currentNoticeQuery = '';
 
@@ -1895,7 +2001,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try { localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
             try {
-                await supabase.from('sb_consultations').upsert(consultations);
+                const mapped = consultations.map(mapConsultationToDb);
+                await supabase.from('sb_consultations').upsert(mapped);
             } catch(e) {
                 console.error('Error saving consultations to Supabase:', e);
             }
@@ -3827,6 +3934,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('chat-messages-container');
         if (!container || !loggedInStudentId) return;
 
+        // Mark all teacher messages for this student as read
+        let hasUnread = false;
+        messages.forEach(m => {
+            if (m.studentId === loggedInStudentId && m.sender === 'teacher' && !m.isRead) {
+                m.isRead = true;
+                hasUnread = true;
+            }
+        });
+        if (hasUnread) {
+            saveMessages();
+            updateParentQuickMenuBadges();
+        }
+
         container.innerHTML = '';
         const studentMessages = messages.filter(m => m.studentId === loggedInStudentId);
 
@@ -4566,6 +4686,63 @@ document.addEventListener('DOMContentLoaded', () => {
         safeCreateIcons();
     };
 
+    // Update Parent Quick Menu Badges
+    const updateParentQuickMenuBadges = () => {
+        const parentQuickMenu = document.getElementById('parent-quick-menu');
+        if (!parentQuickMenu) return;
+
+        if (userRole !== 'parent' || !loggedInStudentId) {
+            parentQuickMenu.style.display = 'none';
+            return;
+        }
+
+        parentQuickMenu.style.display = 'flex';
+
+        // 1. Unread feedbacks badge
+        const fbBadge = document.getElementById('parent-menu-feedback-badge');
+        if (fbBadge) {
+            const studentFeedbacks = feedbacks.filter(f => f.studentId === loggedInStudentId);
+            const lastViewStr = localStorage.getItem('gongbubang_last_feedback_view_' + loggedInStudentId);
+            let unreadFb = 0;
+            if (lastViewStr) {
+                const lastView = new Date(lastViewStr);
+                unreadFb = studentFeedbacks.filter(f => new Date(f.date) > lastView).length;
+            } else {
+                unreadFb = Math.min(studentFeedbacks.length, 3);
+            }
+            if (unreadFb > 0) {
+                fbBadge.textContent = unreadFb;
+                fbBadge.style.display = 'inline-block';
+            } else {
+                fbBadge.style.display = 'none';
+            }
+        }
+
+        // 2. Unread chat messages badge
+        const chatBadge = document.getElementById('parent-menu-chat-badge');
+        if (chatBadge) {
+            const unreadMessages = messages.filter(m => m.studentId === loggedInStudentId && m.sender === 'teacher' && !m.isRead);
+            if (unreadMessages.length > 0) {
+                chatBadge.textContent = unreadMessages.length;
+                chatBadge.style.display = 'inline-block';
+            } else {
+                chatBadge.style.display = 'none';
+            }
+        }
+
+        // 3. Pending homeworks badge
+        const hwBadge = document.getElementById('parent-menu-homework-badge');
+        if (hwBadge) {
+            const studentHw = homework.filter(h => h.studentId === loggedInStudentId && !h.isCompleted);
+            if (studentHw.length > 0) {
+                hwBadge.textContent = studentHw.length;
+                hwBadge.style.display = 'inline-block';
+            } else {
+                hwBadge.style.display = 'none';
+            }
+        }
+    };
+
     // Render My Class Portal
     const renderMyClass = () => {
         const infoWidget = document.getElementById('myclass-info-widget');
@@ -4576,6 +4753,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!loggedInStudentId) return;
         const student = students.find(s => s.id === loggedInStudentId);
         if (!student) return;
+
+        // Update badges before setting new view timestamp
+        updateParentQuickMenuBadges();
+
+        // Now set feedback viewed timestamp
+        localStorage.setItem('gongbubang_last_feedback_view_' + student.id, new Date().toISOString());
 
         // Determine all children for the logged-in parent
         let parentChildren = [];
@@ -5904,6 +6087,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // They are a student/parent
                 isStudent = true;
                 isAdmin = false;
+                userRole = 'parent';
+                loggedInParentName = session.user.user_metadata?.name || (matchedUser ? matchedUser.name : '') || '학부모';
 
                 const parentPhone = session.user.user_metadata?.phone || '';
                 const childrenData = session.user.user_metadata?.children || [];
@@ -8269,6 +8454,69 @@ document.addEventListener('DOMContentLoaded', () => {
             inputAdminAddress.addEventListener('click', handler);
         }
 
+        // Parent Login Modal Event Listeners
+        const parentLoginModal = document.getElementById('parent-login-modal');
+        const btnParentLoginToggle = document.getElementById('btn-parent-login-toggle');
+        const btnParentLoginClose = document.getElementById('btn-parent-login-close');
+        const linkParentGoSignup = document.getElementById('link-parent-go-signup');
+        const btnParentGoogleLogin = document.getElementById('btn-parent-google-login');
+        const btnParentKakaoLogin = document.getElementById('btn-parent-kakao-login');
+
+        if (btnParentLoginToggle && parentLoginModal) {
+            btnParentLoginToggle.addEventListener('click', () => {
+                if (isAdmin || isStudent) {
+                    (async () => {
+                        try {
+                            await supabase.auth.signOut();
+                        } catch(e) {}
+                        handleLogoutCleanup();
+                        showToast('로그아웃 되었습니다.');
+                    })();
+                } else {
+                    parentLoginModal.classList.add('open');
+                }
+                safeCreateIcons();
+            });
+
+            if (btnParentLoginClose) {
+                btnParentLoginClose.addEventListener('click', () => {
+                    parentLoginModal.classList.remove('open');
+                });
+            }
+
+            if (linkParentGoSignup && studentSignupModal) {
+                linkParentGoSignup.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    parentLoginModal.classList.remove('open');
+                    studentSignupModal.classList.add('open');
+                });
+            }
+
+            if (btnParentGoogleLogin) {
+                btnParentGoogleLogin.addEventListener('click', async () => {
+                    try {
+                        const { error } = await supabase.auth.signInWithOAuth({
+                            provider: 'google',
+                            options: { redirectTo: window.location.origin }
+                        });
+                        if (error) alert('Google 로그인 오류: ' + error.message);
+                    } catch(err) { console.error(err); }
+                });
+            }
+
+            if (btnParentKakaoLogin) {
+                btnParentKakaoLogin.addEventListener('click', async () => {
+                    try {
+                        const { error } = await supabase.auth.signInWithOAuth({
+                            provider: 'kakao',
+                            options: { redirectTo: window.location.origin }
+                        });
+                        if (error) alert('Kakao 로그인 오류: ' + error.message);
+                    } catch(err) { console.error(err); }
+                });
+            }
+        }
+
         // Initial Renders
         renderCurriculumGrid();
 
@@ -8287,4 +8535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTextbookRequests();
             renderAdminResources();
         }
+
+        // Trigger initial Supabase sync now that all variables are declared
+        initializeDataFromSupabase();
 });
