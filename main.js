@@ -18,8 +18,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // Supabase Database Mappers and Synchronizers
     // ==========================================================================
+    const sortClassesByName = (classList) => {
+        if (!Array.isArray(classList)) return [];
+        return [...classList].sort((a, b) => {
+            const getLevelNum = (name) => {
+                const n = String(name);
+                if (n.includes('초등')) return 1;
+                if (n.includes('중등')) return 2;
+                if (n.includes('고등')) return 3;
+                return 9;
+            };
+            const getGradeNum = (name) => {
+                const n = String(name);
+                const match = n.match(/(\d+)학년/);
+                return match ? parseInt(match[1], 10) : 99;
+            };
+            const getClassLetter = (name) => {
+                const n = String(name);
+                const match = n.match(/([A-Z])반/);
+                return match ? match[1] : n;
+            };
+
+            const levelA = getLevelNum(a.name);
+            const levelB = getLevelNum(b.name);
+            if (levelA !== levelB) return levelA - levelB;
+
+            const gradeA = getGradeNum(a.name);
+            const gradeB = getGradeNum(b.name);
+            if (gradeA !== gradeB) return gradeA - gradeB;
+
+            const letterA = getClassLetter(a.name);
+            const letterB = getClassLetter(b.name);
+            return letterA.localeCompare(letterB);
+        });
+    };
+
     const mapStudentFromDb = (dbStudent) => ({
-        id: dbStudent.id,
+        id: String(dbStudent.id),
         name: dbStudent.name,
         age: dbStudent.age,
         school: dbStudent.school,
@@ -546,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ]);
 
             if (syncResults[0]) notices = syncResults[0];
-            if (syncResults[1]) classes = syncResults[1];
+            if (syncResults[1]) classes = sortClassesByName(syncResults[1]);
             if (syncResults[2]) students = syncResults[2];
             if (syncResults[3]) {
                 let mockUsersData = syncResults[3];
@@ -687,8 +722,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
     const parseStudentId = (rawId) => {
-        if (!rawId) return rawId;
-        return /^\d+$/.test(String(rawId)) ? parseInt(rawId, 10) : rawId;
+        if (rawId === null || rawId === undefined) return rawId;
+        return String(rawId);
     };
 
     // Helper to resolve student schedule (dynamic class schedule vs custom schedule)
@@ -2060,7 +2095,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let classes = defaultClasses;
+    let classes = sortClassesByName(defaultClasses);
 
     // Load classes from localStorage
     try {
@@ -2068,7 +2103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (storedClasses) {
             const parsed = JSON.parse(storedClasses);
             if (Array.isArray(parsed)) {
-                classes = parsed.filter(c => c && typeof c === 'object');
+                classes = sortClassesByName(parsed.filter(c => c && typeof c === 'object'));
                 if (!classes.some(c => c.id === 3)) {
                     classes.push({
                         id: 3,
@@ -2081,6 +2116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             fri: ''
                         }
                     });
+                    classes = sortClassesByName(classes);
                     localStorage.setItem('gongbubang_classes', JSON.stringify(classes));
                 }
             } else {
@@ -2091,7 +2127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } catch (e) {
         console.error('localStorage is not accessible for classes data.', e);
-        classes = defaultClasses;
+        classes = sortClassesByName(defaultClasses);
     }
 
     const getEarliestTime = (c) => {
@@ -2159,6 +2195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const saveClasses = async () => {
+        classes = sortClassesByName(classes);
         try { 
             localStorage.setItem('gongbubang_classes', JSON.stringify(classes)); 
             renderMainScheduleTable();
@@ -2437,13 +2474,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let students = defaultStudents;
+    let students = defaultStudents.map(s => ({ ...s, id: String(s.id) }));
     try {
         const stored = localStorage.getItem('gongbubang_students');
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed)) {
-                students = parsed.filter(s => s && typeof s === 'object');
+                students = parsed.filter(s => s && typeof s === 'object').map(s => ({ ...s, id: String(s.id) }));
                 let updated = false;
                 students = students.map(s => {
                     if (s.classId === undefined || s.classId === null) {
@@ -3555,7 +3592,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Create
                 const newStudent = {
-                    id: Date.now(),
+                    id: String(Date.now()),
                     name,
                     age,
                     school,
