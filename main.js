@@ -5298,7 +5298,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 payTbName.textContent = req.textbookName;
                                 payTbPrice.textContent = `${Number(req.price).toLocaleString()}원`;
                                 payReqId.value = req.id;
-                                linkToss.href = `supertoss://send?bank=국민&account=76870201244813&amount=${req.price}`;
+                                linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${req.price}`;
                                 payModal.classList.add('open');
                             }
                         });
@@ -5390,7 +5390,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         payTbName.textContent = tuitionName;
                         payTbPrice.textContent = `${Number(feeAmount).toLocaleString()}원`;
                         payReqId.value = req.id;
-                        linkToss.href = `supertoss://send?bank=국민&account=76870201244813&amount=${feeAmount}`;
+                        linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${feeAmount}`;
                         payModal.classList.add('open');
                     }
                 });
