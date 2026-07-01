@@ -5325,13 +5325,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Find existing tuition payment record
             let req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tuitionName);
             
-            // If no record exists, create a default "미결제" record (in-memory)
+            // If no record exists, create a default "미결제" record and save/sync immediately
             if (!req) {
                 req = {
-                    id: `tuition-${student.id}-${year}-${month}`,
+                    id: Date.now(),
                     studentId: student.id,
                     studentName: student.name,
-                    classId: studentClass ? studentClass.id : 'none',
+                    classId: studentClass ? studentClass.id : 1,
                     className: studentClass ? studentClass.name : '없음',
                     textbookName: tuitionName,
                     price: feeAmount,
@@ -5339,6 +5339,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     paymentStatus: '미결제',
                     createdAt: new Date().toISOString()
                 };
+                textbookRequests.unshift(req);
+                saveTextbookRequests();
             }
             
             const item = document.createElement('div');
@@ -9111,44 +9113,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 const reqId = document.getElementById('pay-request-id').value;
                 
-                if (String(reqId).startsWith('tuition-')) {
-                    // tuition-[studentId]-[year]-[month]
-                    const parts = String(reqId).split('-');
-                    let studentId = parts[1];
-                    // handle UUID with dashes
-                    if (parts.length > 4) {
-                        studentId = parts.slice(1, parts.length - 2).join('-');
+                textbookRequests = textbookRequests.map(r => {
+                    if (String(r.id) === String(reqId)) {
+                        return { ...r, paymentStatus: '입금확인중' };
                     }
-                    const student = students.find(s => s.id === studentId);
-                    const studentClass = student ? classes.find(c => String(c.id) === String(student.classId)) : null;
-                    const textbookName = document.getElementById('pay-textbook-name').textContent;
-                    const priceText = document.getElementById('pay-textbook-price').textContent;
-                    const price = parseInt(priceText.replace(/\D/g, ''), 10) || 250000;
-                    
-                    const newReq = {
-                        id: reqId,
-                        studentId: studentId,
-                        studentName: student ? student.name : '알수없음',
-                        classId: studentClass ? studentClass.id : 'none',
-                        className: studentClass ? studentClass.name : '없음',
-                        textbookName: textbookName,
-                        price: price,
-                        isConfirmed: true,
-                        paymentStatus: '입금확인중',
-                        createdAt: new Date().toISOString()
-                    };
-                    // Ensure no duplicates
-                    if (!textbookRequests.some(r => String(r.id) === String(reqId))) {
-                        textbookRequests.unshift(newReq);
-                    }
-                } else {
-                    textbookRequests = textbookRequests.map(r => {
-                        if (String(r.id) === String(reqId)) {
-                            return { ...r, paymentStatus: '입금확인중' };
-                        }
-                        return r;
-                    });
-                }
+                    return r;
+                });
                 
                 await saveTextbookRequests();
                 payModal.classList.remove('open');
