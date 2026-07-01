@@ -39,6 +39,7 @@
                     <a href="#schedule" class="blog-nav-link">스케줄</a>
                     <a href="#resources" class="blog-nav-link">자료공유</a>
                     <a href="#students" class="blog-nav-link admin-nav-link" id="nav-link-students" style="display: none;">학생 관리</a>
+                    <a href="#tuition-admin" class="blog-nav-link admin-nav-link" id="nav-link-tuition-admin" style="display: none;">회비 관리</a>
                     <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
                 </nav>
                 <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
@@ -71,6 +72,7 @@
         <a href="#schedule" class="drawer-link">스케줄</a>
         <a href="#resources" class="drawer-link">자료공유</a>
         <a href="#students" class="drawer-link admin-drawer-link" id="drawer-link-students" style="display: none;">학생 관리</a>
+        <a href="#tuition-admin" class="drawer-link admin-drawer-link" id="drawer-link-tuition-admin" style="display: none;">회비 관리</a>
         <a href="#myclass" class="drawer-link student-drawer-link" id="drawer-link-myclass" style="display: none;">마이클래스</a>
     </div>
 
@@ -173,6 +175,65 @@
 
             <!-- Main Feed -->
             <main class="blog-feed">
+                    <!-- Admin Tuition Management Section -->
+                    <section id="tuition-admin" class="feed-section admin-only-section" style="display: none; scroll-margin-top: 80px;">
+                        <div class="class-management-card" style="margin-top: 20px;">
+                            <div class="class-management-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+                                <div>
+                                    <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="credit-card" style="color: var(--mascot-pink-bg); width: 22px; height: 22px;"></i> 월별 회비 입금 현황 관리
+                                    </h3>
+                                    <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">원생들의 매월 회비 입금 현황을 모니터링하고 송금 확인 요청을 승인합니다.</p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <label for="tuition-month-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">조회 월 선택:</label>
+                                    <select id="tuition-month-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; outline: none; background: #ffffff;">
+                                        <!-- filled dynamically -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Summary Cards -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 20px; margin-bottom: 24px;">
+                                <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; text-align: center;">
+                                    <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px;">총 예상 수납액</div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary);" id="tuition-sum-expected">0원</div>
+                                </div>
+                                <div style="background: #eef2ff; border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 16px; padding: 16px; text-align: center;">
+                                    <div style="font-size: 0.78rem; font-weight: 700; color: #4f46e5; margin-bottom: 6px;">수납 완료액 (입금확정)</div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #4f46e5;" id="tuition-sum-paid">0원</div>
+                                </div>
+                                <div style="background: #fffbeb; border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 16px; padding: 16px; text-align: center;">
+                                    <div style="font-size: 0.78rem; font-weight: 700; color: #d97706; margin-bottom: 6px;">입금 확인 대기액</div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #d97706;" id="tuition-sum-pending">0원</div>
+                                </div>
+                                <div style="background: #fef2f2; border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 16px; padding: 16px; text-align: center;">
+                                    <div style="font-size: 0.78rem; font-weight: 700; color: #dc2626; margin-bottom: 6px;">미납액 (결제대기)</div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #dc2626;" id="tuition-sum-unpaid">0원</div>
+                                </div>
+                            </div>
+
+                            <!-- Payment List Table -->
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); background: #f8fafc;">
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary);">기준일 / 입금요청일</th>
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary);">반 명</th>
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary);">학생명 (학부모)</th>
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); text-align: right;">회비 금액</th>
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); text-align: center;">입금 상태</th>
+                                            <th style="padding: 14px 12px; font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); text-align: center;">작업</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tuition-admin-list-tbody">
+                                        <!-- filled dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
                     <section id="students" class="feed-section admin-only-section" style="display: none; scroll-margin-top: 80px;">
                     <!-- Admin Quick Menu Bar -->
                     <div id="admin-quick-menu" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
@@ -196,6 +257,9 @@
                         </a>
                         <a href="#textbook-request-management-card" id="quick-menu-textbooks" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="if(document.getElementById('quick-menu-textbooks-badge').style.display === 'none') { this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)'; } else { this.style.background='#fef2f2'; this.style.borderColor='#fee2e2'; }">
                             <i data-lucide="book" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청 <span id="quick-menu-textbooks-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
+                        </a>
+                        <a href="#tuition-admin" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 회비 수납 현황
                         </a>
                         <a href="#approval-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--success-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--success-color);"></i> 가입/종결 승인
@@ -887,6 +951,17 @@
                             </div>
                         </div>
                         
+                        <!-- Monthly Tuition Payment Widget -->
+                        <div class="widget" id="myclass-tuition-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                            <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <i data-lucide="credit-card" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 매월 회비 결제
+                            </h3>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">이번 달 교육비 납부 현황 및 입금 요청을 진행합니다.</p>
+                            <div id="myclass-tuition-status-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                        
                         <!-- Monthly Attendance Calendar Widget -->
                         <div class="widget" id="myclass-calendar-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
                             <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -1326,6 +1401,18 @@
                 <div class="form-group-modal" style="margin-top: 12px;">
                     <label for="student-remarks-input">특이사항 기록</label>
                     <textarea id="student-remarks-input" rows="3" placeholder="수업 태도, 학습 조언, 피드백 등 특이사항 기재"></textarea>
+                </div>
+
+                <!-- Row: Tuition Fee Settings -->
+                <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 16px;">
+                    <div class="form-group-modal">
+                        <label for="student-fee-day-input" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">매월 회비 입금 기준일 (일)</label>
+                        <input type="number" id="student-fee-day-input" min="1" max="31" required placeholder="예: 10" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); outline: none; background: #ffffff;">
+                    </div>
+                    <div class="form-group-modal">
+                        <label for="student-fee-amount-input" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">매월 회비 금액 (원)</label>
+                        <input type="number" id="student-fee-amount-input" min="0" required placeholder="예: 250000" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); outline: none; background: #ffffff;">
+                    </div>
                 </div>
 
                 <!-- Row: Student Termination -->

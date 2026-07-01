@@ -53,39 +53,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const mapStudentFromDb = (dbStudent) => ({
-        id: String(dbStudent.id),
-        name: dbStudent.name,
-        age: dbStudent.age,
-        school: dbStudent.school,
-        phone: dbStudent.phone,
-        parentPhone: dbStudent.parent_phone,
-        sibling: dbStudent.sibling,
-        classId: dbStudent.class_id,
-        username: dbStudent.username,
-        password: dbStudent.password,
-        progress: dbStudent.progress,
-        remarks: dbStudent.remarks,
-        isTerminated: dbStudent.is_terminated,
-        terminationDate: dbStudent.termination_date
-    });
+    const mapStudentFromDb = (dbStudent) => {
+        const remarks = dbStudent.remarks || '';
+        const feeMatch = remarks.match(/\[FEE:(\d+),DAY:(\d+)\]/);
+        let cleanRemarks = remarks;
+        let tuitionFeeAmount = 250000;
+        let tuitionFeeDay = 10;
+        if (feeMatch) {
+            tuitionFeeAmount = parseInt(feeMatch[1], 10);
+            tuitionFeeDay = parseInt(feeMatch[2], 10);
+            cleanRemarks = remarks.replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '').trim();
+        }
+        return {
+            id: String(dbStudent.id),
+            name: dbStudent.name,
+            age: dbStudent.age,
+            school: dbStudent.school,
+            phone: dbStudent.phone,
+            parentPhone: dbStudent.parent_phone,
+            sibling: dbStudent.sibling,
+            classId: dbStudent.class_id,
+            username: dbStudent.username,
+            password: dbStudent.password,
+            progress: dbStudent.progress,
+            remarks: cleanRemarks,
+            tuitionFeeDay: tuitionFeeDay,
+            tuitionFeeAmount: tuitionFeeAmount,
+            isTerminated: dbStudent.is_terminated,
+            terminationDate: dbStudent.termination_date
+        };
+    };
 
-    const mapStudentToDb = (jsStudent) => ({
-        id: jsStudent.id,
-        name: jsStudent.name,
-        age: jsStudent.age,
-        school: jsStudent.school,
-        phone: jsStudent.phone,
-        parent_phone: jsStudent.parentPhone,
-        sibling: jsStudent.sibling,
-        class_id: jsStudent.classId,
-        username: jsStudent.username,
-        password: jsStudent.password,
-        progress: jsStudent.progress,
-        remarks: jsStudent.remarks,
-        is_terminated: jsStudent.isTerminated || false,
-        termination_date: jsStudent.terminationDate || null
-    });
+    const mapStudentToDb = (jsStudent) => {
+        const feeSuffix = `\n[FEE:${jsStudent.tuitionFeeAmount || 250000},DAY:${jsStudent.tuitionFeeDay || 10}]`;
+        const remarksWithFee = (jsStudent.remarks || '').trim() + feeSuffix;
+        return {
+            id: jsStudent.id,
+            name: jsStudent.name,
+            age: jsStudent.age,
+            school: jsStudent.school,
+            phone: jsStudent.phone,
+            parent_phone: jsStudent.parentPhone,
+            sibling: jsStudent.sibling,
+            class_id: jsStudent.classId,
+            username: jsStudent.username,
+            password: jsStudent.password,
+            progress: jsStudent.progress,
+            remarks: remarksWithFee,
+            is_terminated: jsStudent.isTerminated || false,
+            termination_date: jsStudent.terminationDate || null
+        };
+    };
 
     const mapClassFromDb = (dbClass) => ({
         id: dbClass.id,
@@ -2521,6 +2539,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Student DOM Elements
     const navLinkStudents = document.getElementById('nav-link-students');
     const drawerLinkStudents = document.getElementById('drawer-link-students');
+    const tuitionAdminSection = document.getElementById('tuition-admin');
+    const navLinkTuitionAdmin = document.getElementById('nav-link-tuition-admin');
+    const drawerLinkTuitionAdmin = document.getElementById('drawer-link-tuition-admin');
 
     // Student Modal Elements
     const studentFormModal = document.getElementById('student-form-modal');
@@ -3265,6 +3286,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     studentTimeFriEnd.value = friTime.end;
                     studentProgressInput.value = student.progress;
                     studentRemarksInput.value = student.remarks || '';
+                    if (document.getElementById('student-fee-day-input')) {
+                        document.getElementById('student-fee-day-input').value = student.tuitionFeeDay || 10;
+                    }
+                    if (document.getElementById('student-fee-amount-input')) {
+                        document.getElementById('student-fee-amount-input').value = student.tuitionFeeAmount || 250000;
+                    }
                     if (studentTerminatedCheckbox) {
                         studentTerminatedCheckbox.checked = !!student.isTerminated;
                     }
@@ -3551,6 +3578,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (document.getElementById('student-password-input')) document.getElementById('student-password-input').value = '';
             if (document.getElementById('student-address-input')) document.getElementById('student-address-input').value = '';
             if (document.getElementById('student-address-detail-input')) document.getElementById('student-address-detail-input').value = '';
+            if (document.getElementById('student-fee-day-input')) document.getElementById('student-fee-day-input').value = 10;
+            if (document.getElementById('student-fee-amount-input')) document.getElementById('student-fee-amount-input').value = 250000;
 
             // Populate and reset class select
             populateClassSelect();
@@ -3616,6 +3645,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const addressDetail = document.getElementById('student-address-detail-input') ? document.getElementById('student-address-detail-input').value.trim() : '';
             const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
 
+            const feeDay = document.getElementById('student-fee-day-input') ? parseInt(document.getElementById('student-fee-day-input').value, 10) || 10 : 10;
+            const feeAmount = document.getElementById('student-fee-amount-input') ? parseInt(document.getElementById('student-fee-amount-input').value, 10) || 250000 : 250000;
+
             if (editId) {
                 // Update
                 const id = parseStudentId(editId);
@@ -3638,7 +3670,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             terminationDate,
                             username,
                             password,
-                            address
+                            address,
+                            tuitionFeeDay: feeDay,
+                            tuitionFeeAmount: feeAmount
                         };
                         
                         // Sync back to parent user in gongbubang_mock_users if they are linked
@@ -3696,7 +3730,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     terminationDate,
                     username,
                     password,
-                    address
+                    address,
+                    tuitionFeeDay: feeDay,
+                    tuitionFeeAmount: feeAmount
                 };
                 students.unshift(newStudent);
                 saveStudents();
@@ -5277,6 +5313,96 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Render Monthly Tuition Fee Status
+        const tuitionContainer = document.getElementById('myclass-tuition-status-container');
+        if (tuitionContainer) {
+            tuitionContainer.innerHTML = '';
+            
+            // Current year and month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const tuitionName = `회비 (${year}년 ${month}월)`;
+            const feeAmount = student.tuitionFeeAmount || 250000;
+            const feeDay = student.tuitionFeeDay || 10;
+            
+            // Find existing tuition payment record
+            let req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tuitionName);
+            
+            // If no record exists, create a default "미결제" record (in-memory)
+            if (!req) {
+                req = {
+                    id: `tuition-${student.id}-${year}-${month}`,
+                    studentId: student.id,
+                    studentName: student.name,
+                    classId: studentClass ? studentClass.id : 'none',
+                    className: studentClass ? studentClass.name : '없음',
+                    textbookName: tuitionName,
+                    price: feeAmount,
+                    isConfirmed: true, // auto confirmed request for tuition
+                    paymentStatus: '미결제',
+                    createdAt: new Date().toISOString()
+                };
+            }
+            
+            const item = document.createElement('div');
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+            item.style.padding = '12px';
+            item.style.border = '1px solid var(--border-color)';
+            item.style.borderRadius = '12px';
+            item.style.background = '#ffffff';
+            
+            let actionHtml = '';
+            if (req.paymentStatus === '입금확인중') {
+                actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
+            } else if (req.paymentStatus === '미결제') {
+                actionHtml = `
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
+                        <button type="button" class="btn-pay-tuition-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;">결제하기</button>
+                    </div>
+                `;
+            } else {
+                actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+            }
+            
+            item.innerHTML = `
+                <div style="text-align: left;">
+                    <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tuitionName}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                        금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(feeAmount).toLocaleString()}원</span> | 
+                        기준일: <span style="font-weight: 600; color: var(--text-primary);">매월 ${feeDay}일</span>
+                    </div>
+                </div>
+                <div>
+                    ${actionHtml}
+                </div>
+            `;
+            
+            const payBtn = item.querySelector('.btn-pay-tuition-toss');
+            if (payBtn) {
+                payBtn.addEventListener('click', () => {
+                    const payModal = document.getElementById('textbook-payment-modal');
+                    const payTbName = document.getElementById('pay-textbook-name');
+                    const payTbPrice = document.getElementById('pay-textbook-price');
+                    const payReqId = document.getElementById('pay-request-id');
+                    const linkToss = document.getElementById('link-toss-transfer');
+                    
+                    if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                        payTbName.textContent = tuitionName;
+                        payTbPrice.textContent = `${Number(feeAmount).toLocaleString()}원`;
+                        payReqId.value = req.id;
+                        linkToss.href = `supertoss://send?bank=국민&account=76870201244813&amount=${feeAmount}`;
+                        payModal.classList.add('open');
+                    }
+                });
+            }
+            
+            tuitionContainer.appendChild(item);
+        }
+
         renderMyClassAiHistory();
         renderStudentChat();
         renderMyClassDailyHabits(loggedInStudentId);
@@ -6150,6 +6276,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (studentSection) studentSection.style.display = 'none';
         if (navLinkStudents) navLinkStudents.style.display = 'none';
         if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+        if (tuitionAdminSection) tuitionAdminSection.style.display = 'none';
+        if (navLinkTuitionAdmin) navLinkTuitionAdmin.style.display = 'none';
+        if (drawerLinkTuitionAdmin) drawerLinkTuitionAdmin.style.display = 'none';
         if (myclassSection) myclassSection.style.display = 'none';
         if (navLinkMyclass) navLinkMyclass.style.display = 'none';
         if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
@@ -6205,6 +6334,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (studentSection) studentSection.style.display = 'block';
         if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
         if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+        if (tuitionAdminSection) tuitionAdminSection.style.display = 'block';
+        if (navLinkTuitionAdmin) navLinkTuitionAdmin.style.display = 'inline-block';
+        if (drawerLinkTuitionAdmin) drawerLinkTuitionAdmin.style.display = 'block';
 
         if (myclassSection) myclassSection.style.display = 'none';
         if (navLinkMyclass) navLinkMyclass.style.display = 'none';
@@ -6217,6 +6349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAiQueryManagement();
         if (typeof renderApprovalList === 'function') renderApprovalList();
         if (typeof renderTextbookRequests === 'function') renderTextbookRequests();
+        if (typeof renderAdminTuition === 'function') renderAdminTuition();
         safeCreateIcons();
     };
 
@@ -8443,6 +8576,126 @@ document.addEventListener('DOMContentLoaded', () => {
             safeCreateIcons();
         };
 
+        const renderAdminTuition = () => {
+            const selectEl = document.getElementById('tuition-month-select');
+            const tbody = document.getElementById('tuition-admin-list-tbody');
+            if (!tbody) return;
+            
+            // Populate select option with last 6 months
+            if (selectEl && selectEl.children.length === 0) {
+                const today = new Date();
+                for (let i = 0; i < 6; i++) {
+                    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    
+                    const opt = document.createElement('option');
+                    opt.value = `${year}년 ${month}월`;
+                    opt.textContent = `${year}년 ${month}월`;
+                    selectEl.appendChild(opt);
+                }
+                
+                selectEl.addEventListener('change', renderAdminTuition);
+            }
+            
+            const selectedMonthStr = selectEl ? selectEl.value : '';
+            if (!selectedMonthStr) return;
+            
+            tbody.innerHTML = '';
+            
+            const tuitionName = `회비 (${selectedMonthStr})`;
+            
+            let expectedTotal = 0;
+            let paidTotal = 0;
+            let pendingTotal = 0;
+            
+            const activeStudents = students.filter(s => !s.isTerminated);
+            
+            if (activeStudents.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">등록된 학생이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            activeStudents.forEach(student => {
+                const studentClass = classes.find(c => String(c.id) === String(student.classId));
+                const className = studentClass ? studentClass.name : '배정 없음';
+                const feeAmount = student.tuitionFeeAmount || 250000;
+                const feeDay = student.tuitionFeeDay || 10;
+                
+                expectedTotal += feeAmount;
+                
+                const req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tuitionName);
+                
+                let paymentStatus = '미결제';
+                let priceVal = feeAmount;
+                let requestDateStr = `매월 ${feeDay}일 (기준)`;
+                let actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">납부 대기</span>`;
+                
+                if (req) {
+                    paymentStatus = req.paymentStatus;
+                    priceVal = req.price;
+                    requestDateStr = req.createdAt ? new Date(req.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : requestDateStr;
+                    
+                    if (paymentStatus === '결제완료') {
+                        paidTotal += priceVal;
+                        actionBtn = `<span style="font-size: 0.78rem; color: var(--success-color); font-weight: 700;">확인 완료</span>`;
+                    } else if (paymentStatus === '입금확인중') {
+                        pendingTotal += priceVal;
+                        actionBtn = `<button type="button" class="btn-approve-tuition btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto; background: #10b981; border: 1px solid #10b981;" data-req-id="${req.id}">입금승인</button>`;
+                    }
+                }
+                
+                let statusBadge = '';
+                if (paymentStatus === '결제완료') {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                } else if (paymentStatus === '입금확인중') {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
+                } else {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미결제</span>`;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                tr.innerHTML = `
+                    <td style="padding: 12px; font-size: 0.85rem; color: var(--text-secondary);">${requestDateStr}</td>
+                    <td style="padding: 12px; font-size: 0.85rem; font-weight: 600;">${className}</td>
+                    <td style="padding: 12px; font-size: 0.85rem;">
+                        <strong>${student.name}</strong><br>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${student.phone || '연락처 없음'}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--primary-color);">${Number(priceVal).toLocaleString()}원</td>
+                    <td style="padding: 12px; text-align: center;">${statusBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${actionBtn}</td>
+                `;
+                
+                const btnApprove = tr.querySelector('.btn-approve-tuition');
+                if (btnApprove) {
+                    btnApprove.addEventListener('click', async () => {
+                        const reqId = btnApprove.getAttribute('data-req-id');
+                        textbookRequests = textbookRequests.map(item => {
+                            if (String(item.id) === String(reqId)) {
+                                return { ...item, paymentStatus: '결제완료' };
+                            }
+                            return item;
+                        });
+                        await saveTextbookRequests();
+                        renderAdminTuition();
+                        showToast('회비 수납 입금 승인이 완료되었습니다.');
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            
+            const unpaidTotal = expectedTotal - paidTotal - pendingTotal;
+            document.getElementById('tuition-sum-expected').textContent = `${Number(expectedTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-paid').textContent = `${Number(paidTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-pending').textContent = `${Number(pendingTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-unpaid').textContent = `${Number(unpaidTotal).toLocaleString()}원`;
+            
+            safeCreateIcons();
+        };
+
         // User Profile update modal logic
         const linkUserProfileEdit = document.getElementById('link-user-profile-edit');
         const userProfileModal = document.getElementById('user-profile-modal');
@@ -8862,17 +9115,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 const reqId = document.getElementById('pay-request-id').value;
                 
-                textbookRequests = textbookRequests.map(r => {
-                    if (String(r.id) === String(reqId)) {
-                        return { ...r, paymentStatus: '입금확인중' };
+                if (String(reqId).startsWith('tuition-')) {
+                    // tuition-[studentId]-[year]-[month]
+                    const parts = String(reqId).split('-');
+                    let studentId = parts[1];
+                    // handle UUID with dashes
+                    if (parts.length > 4) {
+                        studentId = parts.slice(1, parts.length - 2).join('-');
                     }
-                    return r;
-                });
+                    const student = students.find(s => s.id === studentId);
+                    const studentClass = student ? classes.find(c => String(c.id) === String(student.classId)) : null;
+                    const textbookName = document.getElementById('pay-textbook-name').textContent;
+                    const priceText = document.getElementById('pay-textbook-price').textContent;
+                    const price = parseInt(priceText.replace(/\D/g, ''), 10) || 250000;
+                    
+                    const newReq = {
+                        id: reqId,
+                        studentId: studentId,
+                        studentName: student ? student.name : '알수없음',
+                        classId: studentClass ? studentClass.id : 'none',
+                        className: studentClass ? studentClass.name : '없음',
+                        textbookName: textbookName,
+                        price: price,
+                        isConfirmed: true,
+                        paymentStatus: '입금확인중',
+                        createdAt: new Date().toISOString()
+                    };
+                    // Ensure no duplicates
+                    if (!textbookRequests.some(r => String(r.id) === String(reqId))) {
+                        textbookRequests.unshift(newReq);
+                    }
+                } else {
+                    textbookRequests = textbookRequests.map(r => {
+                        if (String(r.id) === String(reqId)) {
+                            return { ...r, paymentStatus: '입금확인중' };
+                        }
+                        return r;
+                    });
+                }
                 
                 await saveTextbookRequests();
                 payModal.classList.remove('open');
                 renderMyClass();
-                if (isAdmin) renderTextbookRequests();
+                if (isAdmin) {
+                    renderTextbookRequests();
+                    if (typeof renderAdminTuition === 'function') renderAdminTuition();
+                }
                 showToast('송금 완료 요청이 접수되었습니다. 원장님 확인 후 승인됩니다.');
             });
         }
@@ -8884,6 +9172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAiQueryManagement();
             renderApprovalList();
             renderTextbookRequests();
+            renderAdminTuition();
             renderAdminResources();
         }
 
