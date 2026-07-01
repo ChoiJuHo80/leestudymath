@@ -162,7 +162,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isCompleted: dbHw.status === 'completed',
         completedAt: dbHw.submission_date || null,
         createdAt: dbHw.created_at,
-        feedback: dbHw.feedback
+        feedback: dbHw.feedback,
+        parentConfirmed: dbHw.parent_confirmed || false,
+        teacherConfirmed: dbHw.teacher_confirmed || false
     });
 
     const mapHomeworkToDb = (jsHw) => ({
@@ -174,7 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
         status: jsHw.isCompleted ? 'completed' : 'pending',
         submission_date: jsHw.completedAt || '',
         created_at: jsHw.createdAt || null,
-        feedback: jsHw.feedback || ''
+        feedback: jsHw.feedback || '',
+        parent_confirmed: jsHw.parentConfirmed || false,
+        teacher_confirmed: jsHw.teacherConfirmed || false
     });
 
     const mapResourceFromDb = (dbRes) => ({
@@ -2696,13 +2700,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 });
                 completedHwList.forEach(hw => {
+                    const teacherChecked = hw.teacherConfirmed ? 'checked' : '';
+                    const parentConfirmTag = hw.parentConfirmed
+                        ? `<span style="font-size: 0.68rem; font-weight: 700; color: #8e44ad; background: rgba(142, 68, 173, 0.08); border: 1px solid rgba(142, 68, 173, 0.2); padding: 2px 4px; border-radius: 4px; white-space: nowrap;">학부모 확인 완료</span>`
+                        : `<span style="font-size: 0.68rem; color: var(--text-muted); background: #f1f5f9; border: 1px solid var(--border-color); padding: 2px 4px; border-radius: 4px; white-space: nowrap;">학부모 대기</span>`;
+
                     adminHwHtml += `
-                        <div style="display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; border: 1px solid #dcfce7; padding: 6px 10px; border-radius: 8px; font-size: 0.78rem; opacity: 0.85;">
-                            <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
-                                <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" checked style="cursor: pointer; width: 14px; height: 14px;">
-                                <span style="text-decoration: line-through; color: #166534; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                        <div style="display: flex; flex-direction: column; background: #f0fdf4; border: 1px solid #dcfce7; padding: 8px 10px; border-radius: 8px; font-size: 0.78rem; opacity: 0.95;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
+                                    <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" checked style="cursor: pointer; width: 14px; height: 14px;">
+                                    <span style="text-decoration: line-through; color: #166534; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                                </div>
+                                <span style="font-size: 0.7rem; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">완료됨</span>
                             </div>
-                            <span style="font-size: 0.7rem; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">완료됨</span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #bbf7d0; padding-top: 6px; margin-top: 4px;">
+                                <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: #166534; cursor: pointer;">
+                                    <input type="checkbox" class="admin-teacher-confirm-checkbox" data-hw-id="${hw.id}" ${teacherChecked} style="width: 12px; height: 12px;">
+                                    원장 확인
+                                </label>
+                                ${parentConfirmTag}
+                            </div>
                         </div>
                     `;
                 });
@@ -3498,6 +3516,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveHomework();
                 renderStudents(studentSearchInput ? studentSearchInput.value : '');
                 showToast(box.checked ? '과제 완료 처리가 완료되었습니다!' : '과제 대기 상태로 변경되었습니다.');
+            });
+        });
+
+        // Teacher confirmation checkbox listener for admin student card
+        const adminTeacherConfirmBoxes = document.querySelectorAll('.admin-teacher-confirm-checkbox');
+        adminTeacherConfirmBoxes.forEach(box => {
+            box.addEventListener('change', () => {
+                const hwId = box.getAttribute('data-hw-id');
+                homework = homework.map(h => {
+                    if (String(h.id) === String(hwId)) {
+                        return { ...h, teacherConfirmed: box.checked };
+                    }
+                    return h;
+                });
+                saveHomework();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                showToast(box.checked ? '원장님 확인이 등록되었습니다.' : '원장님 확인이 취소되었습니다.');
             });
         });
     };
@@ -5051,18 +5086,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     completed.forEach(hw => {
                         const dateText = hw.completedAt ? new Date(hw.completedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                        
+                        // Check if the current user is a parent to enable the confirmation checkbox
+                        const isParentUser = userRole === 'parent';
+                        const parentChecked = hw.parentConfirmed ? 'checked' : '';
+                        const parentDisableAttr = isParentUser ? '' : 'disabled';
+                        
+                        const teacherConfirmTag = hw.teacherConfirmed 
+                            ? `<span style="font-size: 0.68rem; font-weight: 700; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 2px 6px; border-radius: 6px; display: inline-block;">원장님 확인 완료</span>`
+                            : `<span style="font-size: 0.68rem; font-weight: 600; color: var(--text-muted); background: #f1f5f9; border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 6px; display: inline-block;">원장님 확인 대기</span>`;
+
                         completedHtml += `
-                            <div class="homework-item completed" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafc; margin-bottom: 8px; opacity: 0.85; box-shadow: 0 1px 3px rgba(0,0,0,0.01);">
-                                <div style="flex-grow: 1; padding-right: 12px;">
-                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                        <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" checked style="width: 16px; height: 16px; cursor: pointer;">
-                                        <span style="color: var(--text-muted); text-decoration: line-through; font-size: 0.88rem; font-weight: 600;">${hw.title}</span>
+                            <div class="homework-item completed" style="display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafc; margin-bottom: 8px; opacity: 0.95; box-shadow: 0 1px 3px rgba(0,0,0,0.01);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                                    <div style="flex-grow: 1; padding-right: 12px;">
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                            <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" checked style="width: 16px; height: 16px; cursor: pointer;">
+                                            <span style="color: var(--text-muted); text-decoration: line-through; font-size: 0.88rem; font-weight: 600;">${hw.title}</span>
+                                        </div>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted); padding-left: 24px; text-decoration: line-through;">${hw.description || ''}</div>
                                     </div>
-                                    <div style="font-size: 0.8rem; color: var(--text-muted); padding-left: 24px; text-decoration: line-through;">${hw.description || ''}</div>
+                                    <div style="text-align: right; white-space: nowrap;">
+                                        <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-green-bg); background: rgba(39, 39, 42, 0.08); padding: 2px 6px; border-radius: 6px; display: block; margin-bottom: 2px;">완료됨</span>
+                                        ${dateText ? `<span style="font-size: 0.65rem; color: var(--text-muted); display: block;">${dateText}</span>` : ''}
+                                    </div>
                                 </div>
-                                <div style="text-align: right; white-space: nowrap;">
-                                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-green-bg); background: rgba(39, 39, 42, 0.08); padding: 2px 6px; border-radius: 6px; display: block; margin-bottom: 2px;">완료됨</span>
-                                    ${dateText ? `<span style="font-size: 0.65rem; color: var(--text-muted); display: block;">${dateText}</span>` : ''}
+                                <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 4px; flex-wrap: wrap; gap: 8px;">
+                                    <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); cursor: ${isParentUser ? 'pointer' : 'default'};">
+                                        <input type="checkbox" class="parent-confirm-checkbox" data-hw-id="${hw.id}" ${parentChecked} ${parentDisableAttr} style="width: 14px; height: 14px;">
+                                        학부모 확인
+                                    </label>
+                                    <div>
+                                        ${teacherConfirmTag}
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -5101,6 +5157,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderMyClass();
                         if (isAdmin) renderStudents(studentSearchInput ? studentSearchInput.value : '');
                         showToast(box.checked ? '과제 완료 처리가 완료되었습니다!' : '과제 대기 상태로 변경되었습니다.');
+                    });
+                });
+
+                // Attach parent confirmation checkbox changes
+                const parentConfirmBoxes = homeworkList.querySelectorAll('.parent-confirm-checkbox');
+                parentConfirmBoxes.forEach(box => {
+                    box.addEventListener('change', () => {
+                        const hwId = box.getAttribute('data-hw-id');
+                        homework = homework.map(h => {
+                            if (String(h.id) === String(hwId)) {
+                                return { ...h, parentConfirmed: box.checked };
+                            }
+                            return h;
+                        });
+                        saveHomework();
+                        renderMyClass();
+                        if (isAdmin) renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                        showToast(box.checked ? '학부모 확인이 등록되었습니다.' : '학부모 확인이 취소되었습니다.');
                     });
                 });
             }
