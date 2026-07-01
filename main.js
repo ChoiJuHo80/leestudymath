@@ -3607,11 +3607,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        studentFormModal.addEventListener('click', (e) => {
-            if (e.target === studentFormModal) {
-                studentFormModal.classList.remove('open');
-            }
-        });
+
 
         // Add / Edit form submit
         studentEditorForm.addEventListener('submit', (e) => {
