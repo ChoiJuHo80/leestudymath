@@ -1536,6 +1536,53 @@
         </div>
     </div>
 
+    <!-- Textbook Payment Modal -->
+    <div class="modal-overlay" id="textbook-payment-modal">
+        <div class="modal-box form-box" style="max-width: 420px; border-radius: 20px;">
+            <button class="modal-close-btn" id="btn-textbook-payment-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px; font-family: var(--ff-logo); font-size: 1.3rem;">
+                <i data-lucide="credit-card" style="color: var(--mascot-purple-bg);"></i>교재비 간편 결제
+            </h3>
+            <p class="modal-desc">안내된 계좌로 송금하시거나 토스 앱으로 편리하게 입금하실 수 있습니다.</p>
+            
+            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.88rem;">
+                    <span style="color: var(--text-secondary); font-weight: 500;">구매 교재:</span>
+                    <strong style="color: var(--text-primary);" id="pay-textbook-name">-</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.88rem; border-top: 1px dashed var(--border-color); padding-top: 10px; margin-bottom: 4px;">
+                    <span style="color: var(--text-secondary); font-weight: 500;">결제 금액:</span>
+                    <strong style="color: var(--primary-color); font-size: 1.05rem;" id="pay-textbook-price">0원</strong>
+                </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 18px; margin-bottom: 20px; text-align: left;">
+                <div style="font-size: 0.82rem; font-weight: 800; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+                    <i data-lucide="info" style="width: 14px; height: 14px;"></i> 무통장 입금 계좌 안내
+                </div>
+                <div style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.6;">
+                    <strong>KB국민은행</strong><br>
+                    <span style="font-family: monospace; font-size: 1.05rem; letter-spacing: -0.5px; font-weight: 700; color: #1e293b;" id="pay-account-number">768702-01-244813</span>
+                    <button type="button" id="btn-copy-account" style="margin-left: 6px; padding: 2px 8px; font-size: 0.72rem; border-radius: 6px; border: 1px solid var(--border-color); background: #f8fafc; font-weight: 700; cursor: pointer; transition: all 0.2s;">복사</button>
+                    <br>
+                    예금주: <strong>이강현</strong>
+                </div>
+            </div>
+
+            <!-- Toss App Launch Button -->
+            <a href="#" id="link-toss-transfer" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #0064ff; color: #ffffff; text-decoration: none; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 0.9rem; margin-bottom: 12px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0, 100, 255, 0.2);" onmouseover="this.style.background='#0050ff';" onmouseout="this.style.background='#0064ff';">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="color: #ffffff;"><path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.558 1.708 4.8 4.34 6.011l-.814 2.992c-.113.415.138.835.556.929a.747.747 0 00.186.024.757.757 0 00.584-.279l3.529-2.355c.394.062.8.093 1.219.093 4.97 0 9-3.186 9-7.115S16.97 3 12 3z"/></svg>
+                Toss 토스 앱으로 즉시 송금하기
+            </a>
+            <p style="font-size: 0.7rem; color: var(--text-muted); text-align: center; margin-top: -6px; margin-bottom: 18px;">※ 모바일 기기에서 클릭 시 토스 앱이 자동으로 실행됩니다.</p>
+
+            <form id="textbook-payment-form" style="display: flex; flex-direction: column;">
+                <input type="hidden" id="pay-request-id">
+                <button type="submit" class="btn-modal-submit" style="background: var(--primary-color); border: 1px solid var(--primary-color);">송금 완료 (입금 확인 요청)</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Add Feedback Modal -->
     <div class="modal-overlay" id="feedback-modal">
         <div class="modal-box form-box">
