@@ -857,24 +857,19 @@
 
                             <!-- 1:1 Chatroom -->
                             <div id="chat-messages-container-anchor"></div>
-                            <div class="widget chat-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; min-height: 450px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin-top: 0; margin-bottom: 14px;">
-                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 메신저
+                            <div class="widget chat-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); gap: 14px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin: 0;">
+                                    <i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담
                                 </h3>
+                                <p style="font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                                    자녀의 학습 상태, 과제 현황 및 기타 특이사항에 대해 원장님과 1:1 실시간 상담이 필요하시면 아래 카카오톡 채널을 통해 언제든지 문의해 주세요.
+                                </p>
                                 
                                 <!-- KakaoTalk Chat Action Banner -->
-                                <a href="http://pf.kakao.com/_gAGPX/chat" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; background: #fee500; color: #191919; text-decoration: none; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; margin-bottom: 16px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(254, 229, 0, 0.25);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(254, 229, 0, 0.35)';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 4px rgba(254, 229, 0, 0.25)';">
+                                <a href="http://pf.kakao.com/_gAGPX/chat" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; background: #fee500; color: #191919; text-decoration: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; transition: all 0.2s; box-shadow: 0 2px 4px rgba(254, 229, 0, 0.25); border: 1px solid #fee500;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(254, 229, 0, 0.35)'; this.style.background='#ffd900';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 4px rgba(254, 229, 0, 0.25)'; this.style.background='#fee500';">
                                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color: #191919;"><path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.558 1.708 4.8 4.34 6.011l-.814 2.992c-.113.415.138.835.556.929a.747.747 0 00.186.024.757.757 0 00.584-.279l3.529-2.355c.394.062.8.093 1.219.093 4.97 0 9-3.186 9-7.115S16.97 3 12 3z"/></svg>
                                     카카오톡 1:1 실시간 채팅 상담하기
                                 </a>
-
-                                <div id="chat-messages-container" style="flex-grow: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 12px; max-height: 250px; min-height: 200px;">
-                                    <!-- Messages rendered here -->
-                                </div>
-                                <form id="chat-send-form" style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-                                    <input type="text" id="chat-input-message" placeholder="선생님에게 메시지를 보내세요..." style="flex-grow: 1; padding: 10px 16px; border-radius: 50px; border: 1px solid var(--border-color); outline: none;" autocomplete="off">
-                                    <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 50px; padding: 10px 20px; height: auto;">전송</button>
-                                </form>
                             </div>
                         </div>
                     </div>
