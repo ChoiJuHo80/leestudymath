@@ -804,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper to update unified login button label/state
     const getLoggedInUserName = () => {
-        if (isAdmin) return '원장님';
+        if (isAdmin) return '원장';
         if (isStudent) {
             if (userRole === 'parent') {
                 return (loggedInParentName || '학부모') + ' (학부모)';
@@ -6225,8 +6225,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const emailLower = String(session.user.email || '').toLowerCase();
             console.log('[Auth Debug] User Email:', emailLower);
             
+            // Check if they are a registered parent to avoid admin conflict
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const matchedUser = mockUsers.find(u => {
+                if (u.id === session.user.id) return true;
+                const uEmail = String(u.email || '').toLowerCase();
+                return (emailLower && uEmail === emailLower);
+            });
+            const isRegisteredParent = matchedUser && matchedUser.role === 'parent';
+            const intendedParentRole = sessionStorage.getItem('login_as_role') === 'parent';
+            
             // Check if they are admin
-            if (['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'].includes(emailLower)) {
+            if (['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'].includes(emailLower) && !isRegisteredParent && !intendedParentRole) {
                 console.log('[Auth Debug] Match admin: True');
                 handleAdminLoginSetup();
             } else {
@@ -8778,6 +8788,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnParentGoogleLogin) {
                 btnParentGoogleLogin.addEventListener('click', async () => {
                     try {
+                        sessionStorage.setItem('login_as_role', 'parent');
                         const { error } = await supabase.auth.signInWithOAuth({
                             provider: 'google',
                             options: { redirectTo: window.location.origin }
@@ -8790,6 +8801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnParentKakaoLogin) {
                 btnParentKakaoLogin.addEventListener('click', async () => {
                     try {
+                        sessionStorage.setItem('login_as_role', 'parent');
                         const { error } = await supabase.auth.signInWithOAuth({
                             provider: 'kakao',
                             options: { redirectTo: window.location.origin }
