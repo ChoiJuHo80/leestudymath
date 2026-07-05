@@ -7792,7 +7792,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // 🤖 AI Solver (Student Query & Admin History Viewer)
         // ==========================================================================
 
-        const getMockAiResponse = (question) => {
+        const getMockAiResponse = (question, hasImage) => {
+            if (hasImage) {
+                return `**[AI 이미지 수식 분석 완료]**
+업로드하신 이미지에서 수학 문제(이차방정식: \\(x^2 - 4x - 5 = 0\\))가 감지되었습니다. 이에 대한 상세 풀이과정을 안내해 드립니다.
+
+**1. 인수분해를 통한 풀이:**
+이차방정식 \\(x^2 - 4x - 5 = 0\\)의 상수항은 \\(-5\\), 일차항의 계수는 \\(-4\\)입니다.
+곱해서 \\(-5\\), 더해서 \\(-4\\)가 되는 두 수는 \\(-5\\)와 \\(1\\)입니다.
+\\[(x - 5)(x + 1) = 0\\]
+
+**2. 해 도출:**
+곱한 결과가 \\(0\\)이 되려면 각각의 인수가 \\(0\\)이어야 하므로:
+\\[x - 5 = 0 \\implies x = 5\\]
+\\[x + 1 = 0 \\implies x = -1\\]
+따라서 구하고자 하는 방정식의 해는 **\\(x = 5\\) 또는 \\(x = -1\\)** 입니다.
+
+추가적인 수식 설명이나 다른 풀이법이 필요하다면 언제든 알려주세요!`;
+            }
             const q = question.toLowerCase();
             if (q.includes('x^2') || q.includes('이차방정식') || q.includes('근의 공식') || q.includes('근의공식')) {
                 return `이차방정식 풀이과정입니다.
@@ -7911,11 +7928,64 @@ document.addEventListener('DOMContentLoaded', () => {
         const aiResponseContainer = document.getElementById('ai-response-container');
         const aiResponseContent = document.getElementById('ai-response-content');
 
+        // Image elements for AI query
+        const btnAiUploadImage = document.getElementById('btn-ai-upload-image');
+        const aiImageInput = document.getElementById('ai-image-input');
+        const aiImagePreviewContainer = document.getElementById('ai-image-preview-container');
+        const aiImagePreview = document.getElementById('ai-image-preview');
+        const aiImageFilename = document.getElementById('ai-image-filename');
+        const aiImageFilesize = document.getElementById('ai-image-filesize');
+        const btnAiRemoveImage = document.getElementById('btn-ai-remove-image');
+
+        let attachedAiImageBase64 = null;
+        let attachedAiImageName = "";
+
+        if (btnAiUploadImage && aiImageInput) {
+            btnAiUploadImage.addEventListener('click', () => aiImageInput.click());
+            
+            aiImageInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (!file.type.startsWith('image/')) {
+                    showToast('이미지 파일만 등록할 수 있습니다.');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    attachedAiImageBase64 = event.target.result;
+                    attachedAiImageName = file.name;
+                    
+                    if (aiImagePreview) aiImagePreview.src = attachedAiImageBase64;
+                    if (aiImageFilename) aiImageFilename.textContent = file.name;
+                    
+                    let sizeStr = (file.size / 1024).toFixed(1) + " KB";
+                    if (file.size > 1024 * 1024) {
+                        sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
+                    }
+                    if (aiImageFilesize) aiImageFilesize.textContent = sizeStr;
+                    
+                    if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'flex';
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        if (btnAiRemoveImage) {
+            btnAiRemoveImage.addEventListener('click', () => {
+                attachedAiImageBase64 = null;
+                attachedAiImageName = "";
+                if (aiImageInput) aiImageInput.value = '';
+                if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'none';
+            });
+        }
+
         if (btnAskAi && aiQueryInput && aiResponseContainer && aiResponseContent) {
             btnAskAi.addEventListener('click', () => {
                 const queryText = aiQueryInput.value.trim();
-                if (!queryText) {
-                    showToast('질문할 수학 문제나 개념을 입력해 주세요.');
+                if (!queryText && !attachedAiImageBase64) {
+                    showToast('질문할 수학 문제나 개념을 입력하거나 문제 사진을 등록해 주세요.');
                     return;
                 }
 
@@ -7926,10 +7996,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 setTimeout(() => {
                     // Generate AI response
-                    const responseText = getMockAiResponse(queryText);
+                    const responseText = getMockAiResponse(queryText, !!attachedAiImageBase64);
                     
-                    // Format response text
-                    aiResponseContent.innerHTML = responseText.replace(/\n/g, '<br>');
+                    // Format response text with optional attached image preview
+                    let imageHtml = '';
+                    if (attachedAiImageBase64) {
+                        imageHtml = `
+                            <div style="margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; max-width: 100%; width: 220px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                <img src="${attachedAiImageBase64}" style="width: 100%; display: block; cursor: pointer;" title="클릭하여 원본 보기" onclick="const w=window.open(); w.document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%;\\' />');">
+                            </div>
+                        `;
+                    }
+                    aiResponseContent.innerHTML = imageHtml + responseText.replace(/\n/g, '<br>');
                     aiResponseContainer.style.display = 'flex';
                     
                     // Re-render LaTeX math expressions using KaTeX
@@ -7958,8 +8036,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         id: Date.now(),
                         studentId: loggedInStudentId,
                         studentName: name,
-                        question: queryText,
+                        question: queryText || `[사진 질문] ${attachedAiImageName}`,
                         answer: responseText,
+                        image: attachedAiImageBase64 || null,
                         date: getFormattedDate().replace(/\.\s/g, '-').replace(/\.$/, ''), // YYYY-MM-DD
                         timestamp: new Date().toTimeString().split(' ')[0] // HH:MM:SS
                     };
@@ -7969,6 +8048,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Clear input
                     aiQueryInput.value = '';
+                    
+                    // Clear image preview and state variables
+                    attachedAiImageBase64 = null;
+                    attachedAiImageName = "";
+                    if (aiImageInput) aiImageInput.value = '';
+                    if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'none';
 
                     // Refresh history and admin panel
                     renderMyClassAiHistory();
@@ -8139,6 +8224,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const queriesHtml = matchingQueries.map(q => {
+                let imageHtml = '';
+                if (q.image) {
+                    imageHtml = `
+                        <div style="margin-top: 8px; margin-bottom: 8px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; max-width: 100%; width: 180px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <img src="${q.image}" style="width: 100%; display: block; cursor: pointer;" title="클릭하여 원본 보기" onclick="const w=window.open(); w.document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%;\\' />');">
+                        </div>
+                    `;
+                }
                 return `
                     <div style="border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; background: #fafafa; display: flex; flex-direction: column; gap: 10px; width: 100%;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
@@ -8146,6 +8239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="font-size: 0.72rem; color: var(--primary-color); background: #e6f4ff; border: 1px solid #91caee; padding: 2px 8px; border-radius: 20px; font-weight: 700;">AI 질문</span>
                         </div>
                         <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); word-break: break-all; white-space: pre-wrap;"><span style="color: var(--primary-color); font-weight: 800; margin-right: 4px;">Q.</span>${q.question}</div>
+                        ${imageHtml}
                         
                         <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
                             <div style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">

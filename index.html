@@ -894,7 +894,28 @@
                                 <p style="font-size: 0.85rem; color: var(--text-secondary);">수학 문제의 풀이과정이 막힐 때 물어보세요. AI 선생님이 단계별로 친절하게 설명해 드립니다. (LaTeX 수식 지원)</p>
                                 
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                                    <textarea id="ai-query-input" placeholder="예: x^2 - 5x + 6 = 0의 풀이과정을 알려줘&#10;또는&#10;피타고라스 정리 공식이 뭐야?" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; height: 90px; resize: none; font-family: var(--ff-primary); font-size: 0.88rem; transition: var(--transition-smooth);"></textarea>
+                                    <div style="position: relative;">
+                                        <textarea id="ai-query-input" placeholder="예: x^2 - 5x + 6 = 0의 풀이과정을 알려줘&#10;또는 수학 문제 사진을 등록해 주세요!" style="width: 100%; padding: 12px; padding-right: 48px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; height: 90px; resize: none; font-family: var(--ff-primary); font-size: 0.88rem; transition: var(--transition-smooth);"></textarea>
+                                        <button type="button" id="btn-ai-upload-image" title="사진 찍기 또는 앨범에서 선택" style="position: absolute; right: 12px; bottom: 12px; background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'; this.style.color='var(--primary-color)';" onmouseout="this.style.background='none'; this.style.color='var(--text-secondary)';">
+                                            <i data-lucide="camera" style="width: 20px; height: 20px;"></i>
+                                        </button>
+                                        <input type="file" id="ai-image-input" accept="image/*" style="display: none;">
+                                    </div>
+                                    
+                                    <!-- Image Preview Container -->
+                                    <div id="ai-image-preview-container" style="display: none; align-items: center; gap: 10px; background: #f8fafc; border: 1px dashed var(--border-color); padding: 8px 12px; border-radius: 10px;">
+                                        <div style="position: relative; width: 50px; height: 50px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color);">
+                                            <img id="ai-image-preview" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                                        </div>
+                                        <div style="flex-grow: 1; min-width: 0;">
+                                            <div id="ai-image-filename" style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">image.png</div>
+                                            <div id="ai-image-filesize" style="font-size: 0.72rem; color: var(--text-secondary);">1.2 MB</div>
+                                        </div>
+                                        <button type="button" id="btn-ai-remove-image" style="background: none; border: none; cursor: pointer; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='#fee2e2';" onmouseout="this.style.background='none';">
+                                            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                                        </button>
+                                    </div>
+                                    
                                     <button type="button" id="btn-ask-ai" class="btn-modal-submit" style="margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border-radius: 8px;">
                                         <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기
                                     </button>
