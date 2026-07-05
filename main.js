@@ -387,6 +387,40 @@ document.addEventListener('DOMContentLoaded', () => {
         created_at: jsReq.createdAt || new Date().toISOString()
     });
 
+    const mapClassFormulaFromDb = (dbItem) => ({
+        id: dbItem.id,
+        classId: dbItem.class_id,
+        formulaName: dbItem.formula_name,
+        latex: dbItem.latex,
+        pieces: dbItem.pieces ? (typeof dbItem.pieces === 'string' ? JSON.parse(dbItem.pieces) : dbItem.pieces) : [],
+        quizzes: dbItem.quizzes ? (typeof dbItem.quizzes === 'string' ? JSON.parse(dbItem.quizzes) : dbItem.quizzes) : []
+    });
+
+    const mapClassFormulaToDb = (jsItem) => ({
+        id: jsItem.id,
+        class_id: jsItem.classId,
+        formula_name: jsItem.formulaName,
+        latex: jsItem.latex,
+        pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
+        quizzes: Array.isArray(jsItem.quizzes) ? JSON.stringify(jsItem.quizzes) : jsItem.quizzes
+    });
+
+    const mapStudentBadgeFromDb = (dbItem) => ({
+        id: dbItem.id,
+        studentId: dbItem.student_id,
+        formulaId: dbItem.formula_id,
+        badgeName: dbItem.badge_name,
+        status: dbItem.status
+    });
+
+    const mapStudentBadgeToDb = (jsItem) => ({
+        id: jsItem.id,
+        student_id: jsItem.studentId,
+        formula_id: jsItem.formulaId,
+        badge_name: jsItem.badgeName,
+        status: jsItem.status
+    });
+
     const mapMockUserFromDb = (u) => ({
         id: u.id,
         email: u.email,
@@ -601,7 +635,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_consultations', mapConsultationFromDb, mapConsultationToDb, defaultConsultations, 'gongbubang_consultations'),
                 syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
                 syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
-                syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests')
+                syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests'),
+                syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, [], 'gongbubang_class_formulas'),
+                syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges')
             ]);
 
             if (syncResults[0]) notices = syncResults[0];
@@ -639,6 +675,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[11]) curriculums = syncResults[11];
             if (syncResults[12]) aiQueries = syncResults[12];
             if (syncResults[13]) textbookRequests = syncResults[13];
+            if (syncResults[14]) classFormulas = syncResults[14];
+            if (syncResults[15]) studentBadges = syncResults[15];
 
             // 1. Sync habits
             const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
@@ -1961,6 +1999,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultTextbookRequests = [];
     let textbookRequests = defaultTextbookRequests;
 
+    let classFormulas = [];
+    let studentBadges = [];
+
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
         if (storedHw) homework = JSON.parse(storedHw);
@@ -1997,6 +2038,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedTextbookReqs = localStorage.getItem('gongbubang_textbook_requests');
         if (storedTextbookReqs) textbookRequests = JSON.parse(storedTextbookReqs);
         else localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(defaultTextbookRequests));
+
+        const storedClassFormulas = localStorage.getItem('gongbubang_class_formulas');
+        if (storedClassFormulas) classFormulas = JSON.parse(storedClassFormulas);
+        else localStorage.setItem('gongbubang_class_formulas', JSON.stringify([]));
+
+        const storedStudentBadges = localStorage.getItem('gongbubang_student_badges');
+        if (storedStudentBadges) studentBadges = JSON.parse(storedStudentBadges);
+        else localStorage.setItem('gongbubang_student_badges', JSON.stringify([]));
     } catch (e) {
         console.error('localStorage is not accessible for state tables.', e);
     }
@@ -2012,6 +2061,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
+
+    const saveClassFormulas = async () => {
+        try { localStorage.setItem('gongbubang_class_formulas', JSON.stringify(classFormulas)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = classFormulas.map(mapClassFormulaToDb);
+                await supabase.from('sb_class_formulas').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving class formulas to Supabase:', e);
+            }
+        }
+    };
+
+    const deleteClassFormula = async (formulaId) => {
+        classFormulas = classFormulas.filter(f => f.id !== formulaId);
+        try { localStorage.setItem('gongbubang_class_formulas', JSON.stringify(classFormulas)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_class_formulas').delete().eq('id', formulaId);
+            } catch(e) {
+                console.error('Error deleting class formula from Supabase:', e);
+            }
+        }
+    };
+
+    const saveStudentBadges = async () => {
+        try { localStorage.setItem('gongbubang_student_badges', JSON.stringify(studentBadges)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = studentBadges.map(mapStudentBadgeToDb);
+                await supabase.from('sb_student_badges').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving student badges to Supabase:', e);
+            }
+        }
+    };
+
     const saveFeedbacks = async () => {
         try { localStorage.setItem('gongbubang_feedbacks', JSON.stringify(feedbacks)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
@@ -2694,6 +2780,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             });
 
+            // Get earned badges for the student
+            const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
+            let badgeListHtml = '';
+            if (earned.length === 0) {
+                badgeListHtml = '<span style="font-size: 0.72rem; color: var(--text-muted);">획득한 배지 없음</span>';
+            } else {
+                earned.forEach(badge => {
+                    badgeListHtml += `
+                        <span style="display: inline-flex; align-items: center; gap: 2px; background: linear-gradient(135deg, #fdf4ff, #fae8ff); border: 1px solid #c084fc; border-radius: 20px; padding: 1px 6px; font-size: 0.68rem; font-weight: 700; color: #c084fc; margin-right: 4px; margin-bottom: 4px;" title="${badge.badgeName}">🏆 ${badge.badgeName}</span>
+                    `;
+                });
+            }
+
             // Calculate homework count and lists for admin
             const studentHomework = homework.filter(h => String(h.studentId) === String(student.id));
             const pendingHwList = studentHomework.filter(h => !h.isCompleted);
@@ -2890,6 +2989,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="student-remarks-list" style="max-height: 150px; overflow-y: auto; padding-right: 4px;">
                         ${feedbacksHtml}
+                    </div>
+                </div>
+                <div class="student-remarks-box" style="margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                    <h4 style="margin: 0 0 6px 0; display: flex; align-items: center; gap: 4px;"><i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>공식 마스터 획득 배지</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 100px; overflow-y: auto;">
+                        ${badgeListHtml}
                     </div>
                 </div>
                 <div class="student-progress-box" style="margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
@@ -5028,6 +5133,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div>
                         <h2 style="font-family: var(--ff-logo); font-size: 1.4rem; color: var(--text-primary); display: inline-block; margin-right: 8px; margin-bottom: 0;">${student.name}</h2>
                         <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">${student.age}세 &middot; ${student.school}</span>
+                        <div id="student-profile-badge-shelf" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;"></div>
                     </div>
                     <span class="student-sibling-tag" style="background: var(--primary-light); color: var(--primary-color); border: 1px solid var(--border-color); font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; font-weight: 700;">자녀 연동 완료</span>
                 </div>
@@ -5404,6 +5510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMyClassAiHistory();
         renderStudentChat();
         renderMyClassDailyHabits(loggedInStudentId);
+        renderStudentFormulasAndBadges(student);
         safeCreateIcons();
     };
 
@@ -9224,7 +9331,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('송금 완료 요청이 접수되었습니다. 원장님 확인 후 승인됩니다.');
             });
         }
-        
         if (isAdmin) {
             renderStudents();
             renderConsultList();
@@ -9235,6 +9341,668 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAdminTuition();
             renderAdminResources();
         }
+
+        // ==========================================
+        // AI Formula Learning Features (Admin & Student)
+        // ==========================================
+
+        // --- Admin: AI Formula Search & Recommendation ---
+        const btnRecommend = document.getElementById('btn-ai-formula-recommend');
+        if (btnRecommend) {
+            btnRecommend.addEventListener('click', () => {
+                const nameInput = document.getElementById('formula-name-input');
+                const formulaName = nameInput ? nameInput.value.trim() : '';
+                if (!formulaName) {
+                    alert('공식 이름을 입력해 주세요.');
+                    return;
+                }
+                
+                let latex = '';
+                let piecesStr = '';
+                
+                const lowerName = formulaName.toLowerCase();
+                if (lowerName.includes('근의') && lowerName.includes('공식')) {
+                    latex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                    piecesStr = 'x,=,-b,±,√,b²,-,4ac,/,2a';
+                } else if (lowerName.includes('피타고라스')) {
+                    latex = 'a^2 + b^2 = c^2';
+                    piecesStr = 'a²,+,b²,=,c²';
+                } else if (lowerName.includes('원부피') || lowerName.includes('구의 부피')) {
+                    latex = 'V = \\frac{4}{3}\\pi r^3';
+                    piecesStr = 'V,=,4,/,3,π,r³';
+                } else if (lowerName.includes('원의 넓이') || lowerName.includes('원넓이')) {
+                    latex = 'S = \\pi r^2';
+                    piecesStr = 'S,=,π,r²';
+                } else if (lowerName.includes('삼각형') && lowerName.includes('넓이')) {
+                    latex = 'S = \\frac{1}{2}ah';
+                    piecesStr = 'S,=,1,/,2,a,h';
+                } else if (lowerName.includes('곱셈') && lowerName.includes('공식')) {
+                    latex = '(a+b)^2 = a^2 + 2ab + b^2';
+                    piecesStr = '(,a,+,b,),²,=,a²,+,2,a,b,+,b²';
+                } else {
+                    latex = 'a + b = c';
+                    piecesStr = 'a,+,b,=,c';
+                }
+                
+                const latexInput = document.getElementById('formula-latex-input');
+                const piecesInput = document.getElementById('formula-pieces-input');
+                if (latexInput) latexInput.value = latex;
+                if (piecesInput) piecesInput.value = piecesStr;
+                
+                showToast('AI 공식 추천 완료!');
+            });
+        }
+
+        // --- Admin: Quiz Upload Slots (10 questions) ---
+        const quizzesContainer = document.getElementById('formula-quizzes-container');
+        const quizData = Array.from({ length: 10 }, (_, i) => ({
+            number: i + 1,
+            imageBase64: '',
+            answer: ''
+        }));
+
+        const renderQuizUploadSlots = () => {
+            if (!quizzesContainer) return;
+            quizzesContainer.innerHTML = '';
+            for (let i = 0; i < 10; i++) {
+                const num = i + 1;
+                const slot = document.createElement('div');
+                slot.style.border = '1px solid var(--border-color)';
+                slot.style.borderRadius = '8px';
+                slot.style.padding = '8px';
+                slot.style.background = '#ffffff';
+                slot.style.display = 'flex';
+                slot.style.flexDirection = 'column';
+                slot.style.gap = '6px';
+                
+                slot.innerHTML = `
+                    <div style="font-weight: 700; font-size: 0.78rem; color: var(--text-primary);">Q${num} 문항</div>
+                    <div style="position: relative; width: 100%; height: 60px; border: 1px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fafafa; cursor: pointer;">
+                        <input type="file" id="admin-quiz-file-${num}" accept="image/*" style="position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer;">
+                        <img id="admin-quiz-preview-${num}" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;">
+                        <span id="admin-quiz-placeholder-${num}" style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">사진 업로드</span>
+                    </div>
+                    <input type="text" id="admin-quiz-answer-${num}" placeholder="정답 입력" style="padding: 4px 8px; font-size: 0.78rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; width: 100%;">
+                `;
+                
+                quizzesContainer.appendChild(slot);
+                
+                const fileInput = slot.querySelector(`#admin-quiz-file-${num}`);
+                const previewImg = slot.querySelector(`#admin-quiz-preview-${num}`);
+                const placeholder = slot.querySelector(`#admin-quiz-placeholder-${num}`);
+                const ansInput = slot.querySelector(`#admin-quiz-answer-${num}`);
+                
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const base64 = event.target.result;
+                            quizData[num - 1].imageBase64 = base64;
+                            previewImg.src = base64;
+                            previewImg.style.display = 'block';
+                            placeholder.style.display = 'none';
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+                
+                ansInput.addEventListener('input', (e) => {
+                    quizData[num - 1].answer = e.target.value.trim();
+                });
+            }
+        };
+        renderQuizUploadSlots();
+
+        // --- Admin: Save Formulas and Quizzes ---
+        const formulaEditorForm = document.getElementById('formula-editor-form');
+        if (formulaEditorForm) {
+            formulaEditorForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const studentClassFilter = document.getElementById('student-class-filter');
+                const selectedClassId = studentClassFilter ? studentClassFilter.value : '';
+                if (!selectedClassId) {
+                    alert('공식을 등록할 반을 선택해 주세요.');
+                    return;
+                }
+                
+                const nameInput = document.getElementById('formula-name-input');
+                const latexInput = document.getElementById('formula-latex-input');
+                const piecesInput = document.getElementById('formula-pieces-input');
+                
+                const piecesArr = piecesInput.value.split(',').map(p => p.trim()).filter(Boolean);
+                if (piecesArr.length === 0) {
+                    alert('카드 조각을 입력해 주세요.');
+                    return;
+                }
+                
+                const missingQuiz = quizData.some(q => !q.imageBase64 || !q.answer);
+                if (missingQuiz) {
+                    alert('연습 퀴즈 10문항의 이미지와 정답을 모두 채워 주세요.');
+                    return;
+                }
+                
+                const newFormula = {
+                    id: 'formula_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    classId: selectedClassId,
+                    formulaName: nameInput.value.trim(),
+                    latex: latexInput.value.trim(),
+                    pieces: piecesArr,
+                    quizzes: JSON.parse(JSON.stringify(quizData))
+                };
+                
+                classFormulas.push(newFormula);
+                await saveClassFormulas();
+                
+                nameInput.value = '';
+                latexInput.value = '';
+                piecesInput.value = '';
+                quizData.forEach(q => {
+                    q.imageBase64 = '';
+                    q.answer = '';
+                });
+                renderQuizUploadSlots();
+                renderFormulaList(selectedClassId);
+                
+                showToast('수학 공식 및 10문항 퀴즈가 성공적으로 저장되었습니다!');
+            });
+        }
+
+        // --- Admin: Render Formulas List ---
+        const renderFormulaList = (classId) => {
+            const container = document.getElementById('formula-list-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const filtered = classFormulas.filter(f => String(f.classId) === String(classId));
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 공식이 없습니다.</div>';
+                return;
+            }
+            
+            filtered.forEach(f => {
+                const item = document.createElement('div');
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '10px';
+                item.style.padding = '12px';
+                item.style.background = '#fafafa';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.gap = '10px';
+                
+                const mathDivId = 'math-render-' + f.id;
+                
+                item.innerHTML = `
+                    <div style="flex-grow: 1; text-align: left;">
+                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${f.formulaName}</div>
+                        <div id="${mathDivId}" style="margin-top: 6px; font-size: 1rem; overflow-x: auto; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);"></div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;">조각: ${f.pieces.join(', ')}</div>
+                    </div>
+                    <button type="button" class="btn-formula-delete" data-id="${f.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer; font-weight: 600; white-space: nowrap;">삭제</button>
+                `;
+                
+                container.appendChild(item);
+                
+                const mathDiv = item.querySelector(`#${mathDivId}`);
+                if (mathDiv && typeof katex !== 'undefined') {
+                    try {
+                        katex.render(f.latex, mathDiv, { throwOnError: false, displayMode: true });
+                    } catch(err) {
+                        mathDiv.textContent = f.latex;
+                    }
+                }
+                
+                item.querySelector('.btn-formula-delete').addEventListener('click', async () => {
+                    if (confirm('이 공식을 삭제하시겠습니까? 관련 학습 기록도 삭제될 수 있습니다.')) {
+                        await deleteClassFormula(f.id);
+                        renderFormulaList(classId);
+                        showToast('공식이 삭제되었습니다.');
+                    }
+                });
+            });
+        };
+
+        const classFormulasManagementCard = document.getElementById('class-formulas-management-card');
+        const currentFormulaClassName = document.getElementById('current-formula-class-name');
+        
+        const onClassSelectedForFormulas = (classId) => {
+            if (!classFormulasManagementCard) return;
+            if (!classId) {
+                classFormulasManagementCard.style.display = 'none';
+                return;
+            }
+            
+            const selectedClass = classes.find(c => String(c.id) === String(classId));
+            if (selectedClass) {
+                classFormulasManagementCard.style.display = 'block';
+                if (currentFormulaClassName) currentFormulaClassName.textContent = selectedClass.name;
+                renderFormulaList(classId);
+            } else {
+                classFormulasManagementCard.style.display = 'none';
+            }
+        };
+        
+        const formulaClassFilter = document.getElementById('student-class-filter');
+        if (formulaClassFilter) {
+            formulaClassFilter.addEventListener('change', () => {
+                onClassSelectedForFormulas(formulaClassFilter.value);
+            });
+        }
+
+        // --- Student: Render Formulas & Badges ---
+        window.renderStudentFormulasAndBadges = (student) => {
+            if (!student) return;
+            
+            const profileShelf = document.getElementById('student-profile-badge-shelf');
+            const studentFormulas = classFormulas.filter(f => String(f.classId) === String(student.classId));
+            const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
+            
+            if (profileShelf) {
+                profileShelf.innerHTML = '';
+                if (earned.length === 0) {
+                    profileShelf.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">아직 획득한 배지가 없습니다.</span>';
+                } else {
+                    earned.forEach(badge => {
+                        const badgeEl = document.createElement('span');
+                        badgeEl.style.display = 'inline-flex';
+                        badgeEl.style.alignItems = 'center';
+                        badgeEl.style.gap = '4px';
+                        badgeEl.style.background = 'linear-gradient(135deg, #fdf4ff, #fae8ff)';
+                        badgeEl.style.border = '1px solid #c084fc';
+                        badgeEl.style.borderRadius = '20px';
+                        badgeEl.style.padding = '2px 8px';
+                        badgeEl.style.fontSize = '0.75rem';
+                        badgeEl.style.fontWeight = '700';
+                        badgeEl.style.color = '#c084fc';
+                        badgeEl.innerHTML = `🏆 ${badge.badgeName}`;
+                        profileShelf.appendChild(badgeEl);
+                    });
+                }
+            }
+            
+            const shelfContainer = document.getElementById('myclass-badge-shelf-container');
+            if (shelfContainer) {
+                shelfContainer.innerHTML = '';
+                if (studentFormulas.length === 0) {
+                    shelfContainer.innerHTML = '<div style="grid-column: span 4; color: var(--text-muted); font-size: 0.85rem; padding: 20px;">이 반에 등록된 공식이 없습니다.</div>';
+                } else {
+                    studentFormulas.forEach(formula => {
+                        const isMastered = earned.some(b => String(b.formulaId) === String(formula.id));
+                        const item = document.createElement('div');
+                        item.className = 'badge-item';
+                        
+                        item.innerHTML = `
+                            <div class="badge-icon-wrapper ${isMastered ? 'badge-mastered' : 'badge-locked'}">
+                                ${isMastered ? '🏆' : '🔒'}
+                            </div>
+                            <div style="font-size: 0.78rem; font-weight: 700; color: ${isMastered ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px;" title="${formula.formulaName}">
+                                ${formula.formulaName}
+                            </div>
+                            <div style="font-size: 0.68rem; font-weight: 600; color: ${isMastered ? '#c084fc' : 'var(--text-muted)'};">
+                                ${isMastered ? '마스터' : '잠금'}
+                            </div>
+                        `;
+                        shelfContainer.appendChild(item);
+                    });
+                }
+            }
+            
+            const formulasList = document.getElementById('myclass-formulas-list');
+            if (formulasList) {
+                formulasList.innerHTML = '';
+                if (studentFormulas.length === 0) {
+                    formulasList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 10px 0; text-align: center;">학습할 수 있는 공식이 없습니다.</div>';
+                } else {
+                    studentFormulas.forEach(formula => {
+                        const isMastered = earned.some(b => String(b.formulaId) === String(formula.id));
+                        const item = document.createElement('div');
+                        item.style.border = '1px solid var(--border-color)';
+                        item.style.borderRadius = '12px';
+                        item.style.padding = '14px';
+                        item.style.background = '#ffffff';
+                        item.style.display = 'flex';
+                        item.style.flexDirection = 'column';
+                        item.style.gap = '10px';
+                        
+                        const gamePassed = localStorage.getItem(`game_passed_${student.id}_${formula.id}`) === 'true';
+                        const mathDivId = 'student-math-render-' + formula.id;
+                        
+                        item.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${isMastered ? 'background: #fdf4ff; color: #c084fc; border: 1px solid #fae8ff;' : 'background: #f1f5f9; color: #64748b;'}">
+                                        ${isMastered ? '🏆 마스터' : '🔒 학습 중'}
+                                    </span>
+                                    <h4 style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin: 0;">${formula.formulaName}</h4>
+                                </div>
+                            </div>
+                            <div id="${mathDivId}" style="font-size: 1.1rem; text-align: center; padding: 10px; background: #fafafa; border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto;"></div>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
+                                <button type="button" class="btn-learn-formula" data-id="${formula.id}" style="padding: 8px 14px; font-size: 0.78rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: ${isMastered ? '#ffffff' : '#fdfafd'}; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="gamepad-2" style="width: 14px; height: 14px;"></i> 공식 카드 맞추기
+                                </button>
+                                <button type="button" class="btn-challenge-quiz" data-id="${formula.id}" ${(!gamePassed && !isMastered) ? 'disabled' : ''} style="padding: 8px 14px; font-size: 0.78rem; border-radius: 6px; border: 1px solid ${(!gamePassed && !isMastered) ? '#cbd5e1' : 'var(--mascot-pink-bg)'}; background: ${(!gamePassed && !isMastered) ? '#f1f5f9' : 'var(--mascot-pink-bg)'}; color: ${(!gamePassed && !isMastered) ? '#94a3b8' : '#ffffff'}; cursor: ${(!gamePassed && !isMastered) ? 'not-allowed' : 'pointer'}; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="award" style="width: 14px; height: 14px;"></i> 연습문제 10문항 도전
+                                </button>
+                            </div>
+                        `;
+                        
+                        formulasList.appendChild(item);
+                        
+                        const mathDiv = item.querySelector(`#${mathDivId}`);
+                        if (mathDiv && typeof katex !== 'undefined') {
+                            try {
+                                katex.render(formula.latex, mathDiv, { throwOnError: false, displayMode: true });
+                            } catch(err) {
+                                mathDiv.textContent = formula.latex;
+                            }
+                        }
+                        
+                        item.querySelector('.btn-learn-formula').addEventListener('click', () => {
+                            openFormulaGameModal(formula, student);
+                        });
+                        item.querySelector('.btn-challenge-quiz').addEventListener('click', () => {
+                            if (gamePassed || isMastered) {
+                                openPracticeQuizModal(formula, student);
+                            }
+                        });
+                    });
+                }
+            }
+            safeCreateIcons();
+        };
+
+        // --- Student: Formula Learning Card Game Modal ---
+        let selectedPieces = [];
+        let randomizedPieces = [];
+        
+        const openFormulaGameModal = (formula, student) => {
+            const gameModal = document.getElementById('formula-learning-game-modal');
+            const targetContainer = document.getElementById('game-target-formula-container');
+            const guessArea = document.getElementById('game-guess-area');
+            const piecesArea = document.getElementById('game-pieces-area');
+            
+            if (!gameModal) return;
+            selectedPieces = [];
+            
+            if (targetContainer) {
+                targetContainer.innerHTML = '';
+                if (typeof katex !== 'undefined') {
+                    try {
+                        katex.render(formula.latex, targetContainer, { throwOnError: false, displayMode: true });
+                    } catch(e) {
+                        targetContainer.textContent = formula.latex;
+                    }
+                } else {
+                    targetContainer.textContent = formula.latex;
+                }
+            }
+            
+            randomizedPieces = [...formula.pieces].sort(() => Math.random() - 0.5);
+            
+            const renderPieces = () => {
+                if (piecesArea) {
+                    piecesArea.innerHTML = '';
+                    randomizedPieces.forEach((piece, idx) => {
+                        const pieceBtn = document.createElement('button');
+                        pieceBtn.type = 'button';
+                        pieceBtn.className = 'formula-card-piece';
+                        pieceBtn.textContent = piece;
+                        pieceBtn.addEventListener('click', () => {
+                            selectedPieces.push(piece);
+                            randomizedPieces.splice(idx, 1);
+                            renderPieces();
+                            renderGuess();
+                        });
+                        piecesArea.appendChild(pieceBtn);
+                    });
+                }
+            };
+            
+            const renderGuess = () => {
+                if (guessArea) {
+                    guessArea.innerHTML = '';
+                    selectedPieces.forEach((piece, idx) => {
+                        const pieceBtn = document.createElement('button');
+                        pieceBtn.type = 'button';
+                        pieceBtn.className = 'formula-card-piece';
+                        pieceBtn.style.borderColor = 'var(--mascot-pink-bg)';
+                        pieceBtn.textContent = piece;
+                        pieceBtn.addEventListener('click', () => {
+                            randomizedPieces.push(piece);
+                            selectedPieces.splice(idx, 1);
+                            renderPieces();
+                            renderGuess();
+                        });
+                        guessArea.appendChild(pieceBtn);
+                    });
+                }
+            };
+            
+            const btnReset = document.getElementById('btn-game-reset');
+            if (btnReset) {
+                const newReset = btnReset.cloneNode(true);
+                btnReset.parentNode.replaceChild(newReset, btnReset);
+                newReset.addEventListener('click', () => {
+                    selectedPieces = [];
+                    randomizedPieces = [...formula.pieces].sort(() => Math.random() - 0.5);
+                    renderPieces();
+                    renderGuess();
+                });
+            }
+            
+            const btnSubmit = document.getElementById('btn-game-submit');
+            if (btnSubmit) {
+                const newSubmit = btnSubmit.cloneNode(true);
+                btnSubmit.parentNode.replaceChild(newSubmit, btnSubmit);
+                newSubmit.addEventListener('click', () => {
+                    if (selectedPieces.length !== formula.pieces.length) {
+                        showToast('모든 카드 조각을 사용해서 조립해 주세요!');
+                        return;
+                    }
+                    
+                    const matches = selectedPieces.every((p, i) => String(p) === String(formula.pieces[i]));
+                    if (matches) {
+                        showToast('정답입니다! 연습문제 10문항 도전 버튼이 활성화되었습니다.');
+                        localStorage.setItem(`game_passed_${student.id}_${formula.id}`, 'true');
+                        gameModal.classList.remove('open');
+                        window.renderStudentFormulasAndBadges(student);
+                    } else {
+                        showToast('순서가 잘못되었습니다. 수식을 다시 확인해 보세요!');
+                    }
+                });
+            }
+            
+            renderPieces();
+            renderGuess();
+            gameModal.classList.add('open');
+        };
+        
+        const btnFormulaGameClose = document.getElementById('btn-formula-game-close');
+        const gameModalOverlay = document.getElementById('formula-learning-game-modal');
+        if (btnFormulaGameClose && gameModalOverlay) {
+            btnFormulaGameClose.addEventListener('click', () => gameModalOverlay.classList.remove('open'));
+            gameModalOverlay.addEventListener('click', (e) => {
+                if (e.target === gameModalOverlay) gameModalOverlay.classList.remove('open');
+            });
+        }
+
+        // --- Student: Practice Quiz Modal ---
+        let currentQuizIndex = 0;
+        let quizAnswers = Array(10).fill('');
+        
+        const openPracticeQuizModal = (formula, student) => {
+            const quizModal = document.getElementById('practice-quiz-modal');
+            const progressText = document.getElementById('quiz-progress-text');
+            const progressBar = document.getElementById('quiz-progress-bar');
+            const qImage = document.getElementById('quiz-question-image');
+            const qTag = document.getElementById('quiz-question-number-tag');
+            const ansInput = document.getElementById('quiz-answer-input');
+            const btnPrev = document.getElementById('btn-quiz-prev');
+            const btnNext = document.getElementById('btn-quiz-next');
+            
+            if (!quizModal) return;
+            
+            currentQuizIndex = 0;
+            quizAnswers = Array(10).fill('');
+            if (ansInput) ansInput.value = '';
+            
+            const renderCurrentQuestion = () => {
+                const qNum = currentQuizIndex + 1;
+                const quiz = formula.quizzes[currentQuizIndex];
+                
+                if (progressText) progressText.textContent = `문제 ${qNum} / 10`;
+                if (progressBar) progressBar.style.width = `${qNum * 10}%`;
+                
+                if (qImage && quiz && quiz.imageBase64) {
+                    qImage.src = quiz.imageBase64;
+                    qImage.style.display = 'block';
+                } else if (qImage) {
+                    qImage.style.display = 'none';
+                }
+                
+                if (qTag) qTag.textContent = `[ Q${qNum} ] 다음 문항의 정답을 입력하세요.`;
+                if (ansInput) ansInput.value = quizAnswers[currentQuizIndex];
+                
+                if (btnPrev) {
+                    btnPrev.style.display = currentQuizIndex > 0 ? 'inline-block' : 'none';
+                }
+                
+                if (btnNext) {
+                    btnNext.textContent = currentQuizIndex === 9 ? '도전 완료' : '다음 문제';
+                }
+            };
+            
+            if (ansInput) {
+                const newAnsInput = ansInput.cloneNode(true);
+                ansInput.parentNode.replaceChild(newAnsInput, ansInput);
+                newAnsInput.addEventListener('input', (e) => {
+                    quizAnswers[currentQuizIndex] = e.target.value.trim();
+                });
+            }
+            
+            if (btnPrev) {
+                const newPrev = btnPrev.cloneNode(true);
+                btnPrev.parentNode.replaceChild(newPrev, btnPrev);
+                newPrev.addEventListener('click', () => {
+                    if (currentQuizIndex > 0) {
+                        currentQuizIndex--;
+                        renderCurrentQuestion();
+                    }
+                });
+            }
+            
+            if (btnNext) {
+                const newNext = btnNext.cloneNode(true);
+                btnNext.parentNode.replaceChild(newNext, btnNext);
+                newNext.addEventListener('click', async () => {
+                    const ansVal = document.getElementById('quiz-answer-input').value.trim();
+                    quizAnswers[currentQuizIndex] = ansVal;
+                    
+                    if (!quizAnswers[currentQuizIndex]) {
+                        alert('정답을 입력해 주세요.');
+                        return;
+                    }
+                    
+                    if (currentQuizIndex < 9) {
+                        currentQuizIndex++;
+                        renderCurrentQuestion();
+                    } else {
+                        let correctCount = 0;
+                        formula.quizzes.forEach((quiz, idx) => {
+                            if (String(quiz.answer).trim().toLowerCase() === String(quizAnswers[idx]).trim().toLowerCase()) {
+                                correctCount++;
+                            }
+                        });
+                        
+                        if (correctCount === 10) {
+                            const newBadge = {
+                                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                                studentId: student.id,
+                                formulaId: formula.id,
+                                badgeName: formula.formulaName,
+                                status: 'Mastered'
+                            };
+                            
+                            const alreadyEarned = studentBadges.some(b => String(b.studentId) === String(student.id) && String(b.formulaId) === String(formula.id));
+                            if (!alreadyEarned) {
+                                studentBadges.push(newBadge);
+                                await saveStudentBadges();
+                            }
+                            
+                            showToast(`🎉 축하합니다! '${formula.formulaName}' 공식 마스터 배지를 획득하셨습니다!`);
+                            playConfettiAnimation();
+                            
+                            quizModal.classList.remove('open');
+                            window.renderStudentFormulasAndBadges(student);
+                        } else {
+                            alert(`아쉽게도 ${correctCount}/10문항을 맞혔습니다. 10문항을 모두 맞혀야 배지를 획득할 수 있습니다. 다시 도전해 보세요!`);
+                        }
+                    }
+                });
+            }
+            
+            renderCurrentQuestion();
+            quizModal.classList.add('open');
+        };
+        
+        const playConfettiAnimation = () => {
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.zIndex = '9999';
+            overlay.style.overflow = 'hidden';
+            document.body.appendChild(overlay);
+            
+            for (let i = 0; i < 80; i++) {
+                const div = document.createElement('div');
+                div.style.position = 'absolute';
+                div.style.width = '12px';
+                div.style.height = '12px';
+                div.style.borderRadius = '50%';
+                div.style.background = ['#8e44ad', '#7c3aed', '#c084fc', '#fdf4ff', '#e879f9', '#f472b6', '#3b82f6'][Math.floor(Math.random() * 7)];
+                div.style.left = `${Math.random() * 100}vw`;
+                div.style.top = `-20px`;
+                div.style.opacity = `${Math.random()}`;
+                
+                const animDuration = 2 + Math.random() * 3;
+                const spinDuration = 1 + Math.random() * 2;
+                div.style.animation = `fall ${animDuration}s linear forwards, spin ${spinDuration}s linear infinite`;
+                
+                overlay.appendChild(div);
+            }
+            
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes fall {
+                    to { transform: translateY(110vh); }
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+                document.head.removeChild(style);
+            }, 6000);
+        };
+        
+        const btnPracticeQuizClose = document.getElementById('btn-practice-quiz-close');
+        const quizModalOverlay = document.getElementById('practice-quiz-modal');
+        if (btnPracticeQuizClose && quizModalOverlay) {
+            btnPracticeQuizClose.addEventListener('click', () => quizModalOverlay.classList.remove('open'));
+            quizModalOverlay.addEventListener('click', (e) => {
+                if (e.target === quizModalOverlay) quizModalOverlay.classList.remove('open');
+            });
+        }
+
 
         // Trigger initial Supabase sync now that all variables are declared
         initializeDataFromSupabase();

@@ -19,6 +19,67 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Daum Postcode API -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+    <style>
+        .formula-card-piece {
+            background: #ffffff;
+            border: 1.5px solid var(--mascot-purple-bg, #8e44ad);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+            color: var(--text-primary, #1e293b);
+            display: inline-block;
+        }
+        .formula-card-piece:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: #faf5ff;
+            border-color: var(--primary-color, #7c3aed);
+        }
+        .formula-card-piece:active {
+            transform: translateY(0);
+        }
+        .badge-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+        .badge-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+        .badge-locked {
+            background: #f1f5f9;
+            color: #94a3b8;
+            border: 2px dashed #cbd5e1;
+        }
+        .badge-mastered {
+            background: linear-gradient(135deg, #fdf4ff, #fae8ff);
+            color: #c084fc;
+            border: 2.5px solid #c084fc;
+            animation: popBadge 0.5s ease-out;
+        }
+        @keyframes popBadge {
+            0% { transform: scale(0.6); }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
 </head>
 <body>
     <!-- Top Navigation Header -->
@@ -506,6 +567,65 @@
                         </div>
                     </div>
 
+                    <!-- Class Formulas & Quizzes Management Card -->
+                    <div class="class-management-card" id="class-formulas-management-card" style="margin-top: 30px; scroll-margin-top: 90px; display: none;">
+                        <div class="class-management-header">
+                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="award" style="color: var(--mascot-pink-bg); width: 22px; height: 22px;"></i> 반별 공식 및 퀴즈 관리 (<span id="current-formula-class-name">선택된 반</span>)
+                            </h3>
+                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">반별로 학생들이 학습할 필수 수학 공식과 마스터 도전을 위한 10문항 퀴즈를 관리합니다.</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; margin-top: 20px;">
+                            <!-- Left column: Add/Edit Formula Form -->
+                            <div class="class-form-container" style="margin: 0;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--mascot-purple-bg); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 새 공식 등록
+                                </h4>
+                                <form id="formula-editor-form" style="display: grid; gap: 14px;">
+                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label for="formula-name-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">공식 이름</label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <input type="text" id="formula-name-input" required placeholder="예: 근의 공식" style="flex-grow: 1; padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; background: #ffffff;">
+                                            <button type="button" id="btn-ai-formula-recommend" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 0 16px; height: auto; background: var(--primary-color); white-space: nowrap; margin-bottom: 0;">AI 추천</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label for="formula-latex-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">공식 LaTeX 코드</label>
+                                        <input type="text" id="formula-latex-input" required placeholder="예: x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                    </div>
+                                    <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label for="formula-pieces-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">카드 조각 구성 (쉼표로 구분)</label>
+                                        <input type="text" id="formula-pieces-input" required placeholder="예: x,=,-b,±,√,b²,-,4ac,/,2a" style="padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff;">
+                                    </div>
+
+                                    <!-- Quiz Image Uploads (10 Questions) -->
+                                    <div style="margin-top: 10px;">
+                                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">연습 퀴즈 10문항 등록 (카메라/앨범 이미지 및 텍스트 정답)</label>
+                                        <div id="formula-quizzes-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px;">
+                                            <!-- Render 10 question forms dynamically in main.js -->
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                                        <button type="submit" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 10px 20px; height: auto; background: var(--mascot-purple-bg); white-space: nowrap; margin-bottom: 0;">공식 및 퀴즈 저장</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Right column: Registered Formulas List -->
+                            <div class="class-list-column" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="list" style="width: 18px; height: 18px; color: var(--text-secondary);"></i> 등록된 공식 목록
+                                </h4>
+                                <div id="formula-list-container" style="max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
+                                    <!-- Rendered dynamically -->
+                                    <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 공식이 없습니다.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Consultation Inquiry Management Section (Admin Only) -->
                     <div class="class-management-card" id="ai-query-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
                         <div class="class-management-header">
@@ -880,6 +1000,27 @@
                                 <p style="font-size: 0.85rem; color: var(--text-secondary);">과제를 완료한 후 체크박스를 선택하면 원장 선생님에게 실시간 공유됩니다.</p>
                                 <div id="myclass-homework-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
                                     <!-- Will be rendered dynamically -->
+                            </div>
+
+                            <!-- My Badge Shelf Widget -->
+                            <div class="widget" id="myclass-badge-shelf-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="award" style="color: var(--mascot-pink-bg);"></i>나의 배지 진열대
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">공식을 완벽하게 마스터하여 획득한 영광스러운 배지들입니다.</p>
+                                <div id="myclass-badge-shelf-container" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 10px; text-align: center;">
+                                    <!-- Badges will be rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Formula Master Challenge Widget -->
+                            <div class="widget" id="myclass-formula-challenge-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="zap" style="color: var(--mascot-purple-bg);"></i>공식 마스터 도전
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">우리 반 필수 공식을 학습하고, 10문항 연습문제를 모두 맞혀 배지를 획득해 보세요!</p>
+                                <div id="myclass-formulas-list" style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+                                    <!-- List of formulas will be rendered dynamically -->
                                 </div>
                             </div>
                         </div>
@@ -1990,6 +2131,85 @@
                 <div id="modal-textbook-list-container" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
                     <!-- Textbook items will be listed dynamically -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Formula Learning Game -->
+    <div class="modal-overlay" id="formula-learning-game-modal">
+        <div class="modal-box" style="max-width: 600px; padding: 24px;">
+            <button type="button" class="modal-close-btn" id="btn-formula-game-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="gamepad-2" style="color: var(--mascot-purple-bg);"></i> 공식 카드 맞추기 게임
+            </h3>
+            <p class="modal-desc">아래의 공식 수식 카드를 순서대로 정렬해 보세요. 완성하면 다음 단계 퀴즈가 열립니다!</p>
+            
+            <!-- Target Formula Render -->
+            <div style="background: rgba(142, 68, 173, 0.05); border: 1.5px solid rgba(142, 68, 173, 0.15); border-radius: 16px; padding: 20px; text-align: center; margin-top: 16px; min-height: 80px; display: flex; align-items: center; justify-content: center; position: relative;">
+                <div id="game-target-formula-container" style="font-size: 1.3rem;"></div>
+            </div>
+
+            <!-- Guess Area -->
+            <div style="margin-top: 20px;">
+                <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">내가 조립한 수식:</h4>
+                <div id="game-guess-area" style="min-height: 60px; border: 2px dashed var(--border-color); border-radius: 12px; padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fafafa; justify-content: center;">
+                    <!-- Dragged/clicked cards go here -->
+                </div>
+            </div>
+
+            <!-- Hand/Pieces Area -->
+            <div style="margin-top: 20px;">
+                <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">선택 가능한 카드 조각 (클릭하여 이동):</h4>
+                <div id="game-pieces-area" style="min-height: 60px; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #ffffff; justify-content: center;">
+                    <!-- Randomized cards go here -->
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button type="button" id="btn-game-reset" style="padding: 10px 18px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; font-weight: 600;">다시 하기</button>
+                <button type="button" id="btn-game-submit" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 10px 20px; height: auto; background: var(--mascot-purple-bg); white-space: nowrap; margin-bottom: 0; font-weight: 700;">순서 확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Practice Quiz (10 Questions) -->
+    <div class="modal-overlay" id="practice-quiz-modal">
+        <div class="modal-box" style="max-width: 500px; padding: 24px;">
+            <button type="button" class="modal-close-btn" id="btn-practice-quiz-close"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="award" style="color: var(--mascot-pink-bg);"></i> 연습문제 10문항 마스터 도전
+            </h3>
+            <p class="modal-desc">10문항의 연습문제에 모두 정답을 맞히면 공식 마스터 배지를 획득합니다!</p>
+
+            <!-- Quiz Progress bar -->
+            <div style="margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px;">
+                    <span>진행 상황</span>
+                    <span id="quiz-progress-text">문제 1 / 10</span>
+                </div>
+                <div style="background: #e2e8f0; border-radius: 10px; height: 8px; width: 100%; overflow: hidden;">
+                    <div id="quiz-progress-bar" style="background: var(--mascot-pink-bg); height: 100%; width: 10%; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+
+            <!-- Question container -->
+            <div id="quiz-question-container" style="margin-top: 20px; text-align: center; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; background: #ffffff; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px;">
+                <div id="quiz-image-wrapper" style="width: 100%; max-height: 200px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; background: #fafafa;">
+                    <img id="quiz-question-image" src="" style="max-width: 100%; max-height: 200px; object-fit: contain;">
+                </div>
+                <div id="quiz-question-number-tag" style="font-weight: 800; font-size: 1rem; color: var(--text-primary);">[ Q1 ] 다음 식의 해를 구하시오.</div>
+            </div>
+
+            <!-- Answer input -->
+            <div style="margin-top: 16px;">
+                <label for="quiz-answer-input" style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 6px;">정답 입력</label>
+                <input type="text" id="quiz-answer-input" placeholder="정답을 입력하세요" style="padding: 12px 14px; font-size: 0.95rem; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; outline: none; background: #ffffff; font-weight: 700; text-align: center;">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button type="button" id="btn-quiz-prev" style="padding: 10px 18px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; font-weight: 600; display: none;">이전 문제</button>
+                <span style="flex-grow: 1;"></span>
+                <button type="button" id="btn-quiz-next" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 10px 20px; height: auto; background: var(--mascot-pink-bg); white-space: nowrap; margin-bottom: 0; font-weight: 700;">다음 문제</button>
             </div>
         </div>
     </div>
