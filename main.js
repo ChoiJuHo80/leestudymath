@@ -391,35 +391,45 @@ document.addEventListener('DOMContentLoaded', () => {
         id: dbItem.id,
         classId: dbItem.class_id,
         formulaName: dbItem.formula_name,
-        latex: dbItem.latex,
-        pieces: dbItem.pieces ? (typeof dbItem.pieces === 'string' ? JSON.parse(dbItem.pieces) : dbItem.pieces) : [],
-        quizzes: dbItem.quizzes ? (typeof dbItem.quizzes === 'string' ? JSON.parse(dbItem.quizzes) : dbItem.quizzes) : []
+        latex: dbItem.formula_latex,
+        pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? JSON.parse(dbItem.card_pieces) : dbItem.card_pieces) : [],
+        quizzes: dbItem.questions ? (typeof dbItem.questions === 'string' ? JSON.parse(dbItem.questions) : dbItem.questions) : []
     });
 
-    const mapClassFormulaToDb = (jsItem) => ({
-        id: jsItem.id,
-        class_id: jsItem.classId,
-        formula_name: jsItem.formulaName,
-        latex: jsItem.latex,
-        pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
-        quizzes: Array.isArray(jsItem.quizzes) ? JSON.stringify(jsItem.quizzes) : jsItem.quizzes
-    });
+    const mapClassFormulaToDb = (jsItem) => {
+        if (typeof jsItem.id === 'string') {
+            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
+        }
+        return {
+            id: jsItem.id,
+            class_id: jsItem.classId,
+            formula_name: jsItem.formulaName,
+            formula_latex: jsItem.latex,
+            card_pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
+            questions: Array.isArray(jsItem.quizzes) ? JSON.stringify(jsItem.quizzes) : jsItem.quizzes
+        };
+    };
 
     const mapStudentBadgeFromDb = (dbItem) => ({
         id: dbItem.id,
         studentId: dbItem.student_id,
         formulaId: dbItem.formula_id,
-        badgeName: dbItem.badge_name,
-        status: dbItem.status
+        badgeName: dbItem.formula_name,
+        status: 'Mastered'
     });
 
-    const mapStudentBadgeToDb = (jsItem) => ({
-        id: jsItem.id,
-        student_id: jsItem.studentId,
-        formula_id: jsItem.formulaId,
-        badge_name: jsItem.badgeName,
-        status: jsItem.status
-    });
+    const mapStudentBadgeToDb = (jsItem) => {
+        if (typeof jsItem.id === 'string') {
+            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
+        }
+        return {
+            id: jsItem.id,
+            student_id: jsItem.studentId,
+            formula_id: jsItem.formulaId,
+            formula_name: jsItem.badgeName,
+            achieved_at: new Date().toISOString()
+        };
+    };
 
     const mapMockUserFromDb = (u) => ({
         id: u.id,
@@ -2075,7 +2085,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const deleteClassFormula = async (formulaId) => {
-        classFormulas = classFormulas.filter(f => f.id !== formulaId);
+        classFormulas = classFormulas.filter(f => String(f.id) !== String(formulaId));
         try { localStorage.setItem('gongbubang_class_formulas', JSON.stringify(classFormulas)); } catch(e){}
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
             try {
@@ -9686,7 +9696,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const newFormula = {
-                    id: 'formula_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    id: Number(Date.now().toString() + Math.floor(10 + Math.random() * 90).toString()),
                     classId: selectedClassId,
                     formulaName: nameInput.value.trim(),
                     latex: latexInput.value.trim(),
@@ -10125,7 +10135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         if (correctCount === 10) {
                             const newBadge = {
-                                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                                id: Number(Date.now().toString() + Math.floor(10 + Math.random() * 90).toString()),
                                 studentId: student.id,
                                 formulaId: formula.id,
                                 badgeName: formula.formulaName,
