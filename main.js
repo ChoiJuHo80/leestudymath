@@ -10178,7 +10178,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            randomizedPieces = [...formula.pieces].sort(() => Math.random() - 0.5);
+            const shufflePieces = (pieces) => {
+                if (!pieces || pieces.length <= 1) return [...(pieces || [])];
+                let shuffled;
+                let attempts = 0;
+                do {
+                    shuffled = [...pieces];
+                    for (let i = shuffled.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                    }
+                    attempts++;
+                } while (attempts < 10 && shuffled.every((val, index) => val === pieces[index]));
+                return shuffled;
+            };
+
+            randomizedPieces = shufflePieces(formula.pieces);
             
             const renderPieces = () => {
                 if (piecesArea) {
@@ -10225,7 +10240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnReset.parentNode.replaceChild(newReset, btnReset);
                 newReset.addEventListener('click', () => {
                     selectedPieces = [];
-                    randomizedPieces = [...formula.pieces].sort(() => Math.random() - 0.5);
+                    randomizedPieces = shufflePieces(formula.pieces);
                     renderPieces();
                     renderGuess();
                 });
@@ -10243,13 +10258,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const matches = selectedPieces.every((p, i) => String(p) === String(formula.pieces[i]));
                     if (matches) {
-                        showToast('정답입니다! 연습문제 10문항 도전 버튼이 활성화되었습니다.');
+                        showToast('공식 카드를 성공적으로 맞췄습니다! 이어서 연습문제 10문항에 도전합니다!');
                         localStorage.setItem(`game_passed_${student.id}_${formula.id}`, 'true');
                         if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
                         const targetWrapper = document.getElementById('game-target-formula-wrapper');
                         if (targetWrapper) targetWrapper.style.display = 'none';
                         gameModal.classList.remove('open');
                         window.renderStudentFormulasAndBadges(student);
+                        
+                        // Automatically open practice quiz modal
+                        openPracticeQuizModal(formula, student);
                     } else {
                         showToast('순서가 잘못되었습니다. 수식을 다시 확인해 보세요!');
                     }
