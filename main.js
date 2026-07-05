@@ -10308,7 +10308,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const progressBar = document.getElementById('quiz-progress-bar');
             const qImage = document.getElementById('quiz-question-image');
             const qTag = document.getElementById('quiz-question-number-tag');
-            const ansInput = document.getElementById('quiz-answer-input');
             const btnPrev = document.getElementById('btn-quiz-prev');
             const btnNext = document.getElementById('btn-quiz-next');
             
@@ -10316,7 +10315,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             currentQuizIndex = 0;
             quizAnswers = Array(10).fill('');
-            if (ansInput) ansInput.value = '';
+            
+            const initialInput = document.getElementById('quiz-answer-input');
+            if (initialInput) initialInput.value = '';
             
             const renderCurrentQuestion = () => {
                 const qNum = currentQuizIndex + 1;
@@ -10333,7 +10334,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (qTag) qTag.textContent = `[ Q${qNum} ] 다음 문항의 정답을 입력하세요.`;
-                if (ansInput) ansInput.value = quizAnswers[currentQuizIndex];
+                
+                // Get fresh reference from the DOM since it gets cloned
+                const activeInput = document.getElementById('quiz-answer-input');
+                if (activeInput) activeInput.value = quizAnswers[currentQuizIndex] || '';
                 
                 if (btnPrev) {
                     btnPrev.style.display = currentQuizIndex > 0 ? 'inline-block' : 'none';
@@ -10344,11 +10348,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             
-            if (ansInput) {
-                const newAnsInput = ansInput.cloneNode(true);
-                ansInput.parentNode.replaceChild(newAnsInput, ansInput);
+            const rawAnsInput = document.getElementById('quiz-answer-input');
+            if (rawAnsInput) {
+                const newAnsInput = rawAnsInput.cloneNode(true);
+                rawAnsInput.parentNode.replaceChild(newAnsInput, rawAnsInput);
                 newAnsInput.addEventListener('input', (e) => {
-                    quizAnswers[currentQuizIndex] = e.target.value.trim();
+                    quizAnswers[currentQuizIndex] = e.target.value;
                 });
             }
             
