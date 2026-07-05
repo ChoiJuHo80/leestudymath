@@ -601,7 +601,10 @@
 
                                     <!-- Quiz Image Uploads (10 Questions) -->
                                     <div style="margin-top: 10px;">
-                                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">연습 퀴즈 10문항 등록 (카메라/앨범 이미지 및 텍스트 정답)</label>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0;">연습 퀴즈 10문항 등록 (카메라/앨범 이미지 및 텍스트 정답)</label>
+                                            <button type="button" id="btn-ai-quiz-recommend" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 4px 10px; height: auto; font-size: 0.8rem; background: var(--primary-color); white-space: nowrap; margin-bottom: 0;">AI 문제 추천 생성</button>
+                                        </div>
                                         <div id="formula-quizzes-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px;">
                                             <!-- Render 10 question forms dynamically in main.js -->
                                         </div>

@@ -9431,6 +9431,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const previewImg = slot.querySelector(`#admin-quiz-preview-${num}`);
                 const placeholder = slot.querySelector(`#admin-quiz-placeholder-${num}`);
                 const ansInput = slot.querySelector(`#admin-quiz-answer-${num}`);
+
+                // Pre-populate data if exists
+                if (quizData[i].imageBase64) {
+                    previewImg.src = quizData[i].imageBase64;
+                    previewImg.style.display = 'block';
+                    placeholder.style.display = 'none';
+                } else {
+                    previewImg.src = '';
+                    previewImg.style.display = 'none';
+                    placeholder.style.display = 'block';
+                }
+                ansInput.value = quizData[i].answer || '';
                 
                 fileInput.addEventListener('change', (e) => {
                     const file = e.target.files[0];
@@ -9453,6 +9465,181 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         renderQuizUploadSlots();
+
+        // --- Admin: AI Quiz Recommendation & Canvas Generation ---
+        const btnQuizRecommend = document.getElementById('btn-ai-quiz-recommend');
+        if (btnQuizRecommend) {
+            btnQuizRecommend.addEventListener('click', () => {
+                const nameInput = document.getElementById('formula-name-input');
+                const formulaName = nameInput ? nameInput.value.trim() : '';
+                if (!formulaName) {
+                    alert('공식 이름을 입력해 주세요.');
+                    return;
+                }
+
+                let questions = [];
+                const lowerName = formulaName.toLowerCase();
+                if (lowerName.includes('근의') && lowerName.includes('공식')) {
+                    questions = [
+                        { q: 'x² - 5x + 6 = 0의 해를 구하시오.', a: '2,3' },
+                        { q: 'x² - 3x + 2 = 0의 해를 구하시오.', a: '1,2' },
+                        { q: 'x² - 7x + 12 = 0의 해를 구하시오.', a: '3,4' },
+                        { q: 'x² - 6x + 8 = 0의 해를 구하시오.', a: '2,4' },
+                        { q: 'x² - 8x + 15 = 0의 해를 구하시오.', a: '3,5' },
+                        { q: 'x² - 9x + 20 = 0의 해를 구하시오.', a: '4,5' },
+                        { q: 'x² - 4x + 3 = 0의 해를 구하시오.', a: '1,3' },
+                        { q: 'x² - 10x + 24 = 0의 해를 구하시오.', a: '4,6' },
+                        { q: 'x² - 2x - 3 = 0의 해를 구하시오.', a: '-1,3' },
+                        { q: 'x² + 5x + 6 = 0의 해를 구하시오.', a: '-3,-2' }
+                    ];
+                } else if (lowerName.includes('피타고라스')) {
+                    questions = [
+                        { q: '직각삼각형의 두 직각변이 3, 4일 때 빗변의 길이를 구하시오.', a: '5' },
+                        { q: '직각삼각형의 두 직각변이 6, 8일 때 빗변의 길이를 구하시오.', a: '10' },
+                        { q: '직각삼각형의 두 직각변이 5, 12일 때 빗변의 길이를 구하시오.', a: '13' },
+                        { q: '직각삼각형의 두 직각변이 8, 15일 때 빗변의 길이를 구하시오.', a: '17' },
+                        { q: '직각삼각형의 빗변이 5, 한 변이 3일 때 다른 한 변의 길이를 구하시오.', a: '4' },
+                        { q: '직각삼각형의 빗변이 10, 한 변이 6일 때 다른 한 변의 길이를 구하시오.', a: '8' },
+                        { q: '직각삼각형의 빗변이 13, 한 변이 5일 때 다른 한 변의 길이를 구하시오.', a: '12' },
+                        { q: '직각삼각형의 두 직각변이 9, 12일 때 빗변의 길이를 구하시오.', a: '15' },
+                        { q: '직각삼각형의 두 직각변이 12, 16일 때 빗변의 길이를 구하시오.', a: '20' },
+                        { q: '직각삼각형의 빗변이 25, 한 변이 7일 때 다른 한 변의 길이를 구하시오.', a: '24' }
+                    ];
+                } else if (lowerName.includes('원의 넓이') || lowerName.includes('원넓이')) {
+                    questions = [
+                        { q: '반지름의 길이가 3인 원의 넓이를 구하시오. (원주율은 π)', a: '9π' },
+                        { q: '반지름의 길이가 5인 원의 넓이를 구하시오. (원주율은 π)', a: '25π' },
+                        { q: '반지름의 길이가 2인 원의 넓이를 구하시오. (원주율은 π)', a: '4π' },
+                        { q: '반지름의 길이가 10인 원의 넓이를 구하시오. (원주율은 π)', a: '100π' },
+                        { q: '반지름의 길이가 4인 원의 넓이를 구하시오. (원주율은 π)', a: '16π' },
+                        { q: '반지름의 길이가 6인 원의 넓이를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '반지름의 길이가 7인 원의 넓이를 구하시오. (원주율은 π)', a: '49π' },
+                        { q: '반지름의 길이가 8인 원의 넓이를 구하시오. (원주율은 π)', a: '64π' },
+                        { q: '지름의 길이가 6인 원의 넓이를 구하시오. (원주율은 π)', a: '9π' },
+                        { q: '지름의 길이가 10인 원의 넓이를 구하시오. (원주율은 π)', a: '25π' }
+                    ];
+                } else if (lowerName.includes('구의 부피') || lowerName.includes('원부피')) {
+                    questions = [
+                        { q: '반지름의 길이가 3인 구의 부피를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '반지름의 길이가 6인 구의 부피를 구하시오. (원주율은 π)', a: '288π' },
+                        { q: '반지름의 길이가 1인 구의 부피를 구하시오. (원주율은 π)', a: '4/3π' },
+                        { q: '반지름의 길이가 2인 구의 부피를 구하시오. (원주율은 π)', a: '32/3π' },
+                        { q: '반지름의 길이가 4인 구의 부피를 구하시오. (원주율은 π)', a: '256/3π' },
+                        { q: '반지름의 길이가 5인 구의 부피를 구하시오. (원주율은 π)', a: '500/3π' },
+                        { q: '반지름의 길이가 9인 구의 부피를 구하시오. (원주율은 π)', a: '972π' },
+                        { q: '지름의 길이가 6인 구의 부피를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '지름의 길이가 12인 구의 부피를 구하시오. (원주율은 π)', a: '288π' },
+                        { q: '반지름의 길이가 3인 반구의 부피를 구하시오. (원주율은 π)', a: '18π' }
+                    ];
+                } else if (lowerName.includes('삼각형') && lowerName.includes('넓이')) {
+                    questions = [
+                        { q: '밑변의 길이가 6이고 높이가 4인 삼각형의 넓이를 구하시오.', a: '12' },
+                        { q: '밑변의 길이가 5이고 높이가 8인 삼각형의 넓이를 구하시오.', a: '20' },
+                        { q: '밑변의 길이가 10이고 높이가 7인 삼각형의 넓이를 구하시오.', a: '35' },
+                        { q: '밑변의 길이가 8이고 높이가 5인 삼각형의 넓이를 구하시오.', a: '20' },
+                        { q: '밑변의 길이가 12이고 높이가 9인 삼각형의 넓이를 구하시오.', a: '54' },
+                        { q: '밑변의 길이가 4이고 높이가 3인 삼각형의 넓이를 구하시오.', a: '6' },
+                        { q: '밑변의 길이가 7이고 높이가 6인 삼각형의 넓이를 구하시오.', a: '21' },
+                        { q: '밑변의 길이가 9이고 높이가 8인 삼각형의 넓이를 구하시오.', a: '36' },
+                        { q: '밑변의 길이가 15이고 높이가 10인 삼각형의 넓이를 구하시오.', a: '75' },
+                        { q: '밑변의 길이가 11이고 높이가 12인 삼각형의 넓이를 구하시오.', a: '66' }
+                    ];
+                } else if (lowerName.includes('곱셈') && lowerName.includes('공식')) {
+                    questions = [
+                        { q: '(x + 2)² 을 전개한 식에서 x의 계수를 구하시오.', a: '4' },
+                        { q: '(x + 3)² 을 전개한 식에서 상수항을 구하시오.', a: '9' },
+                        { q: '(x - 4)² 을 전개한 식에서 x의 계수를 구하시오.', a: '-8' },
+                        { q: '(x - 5)² 을 전개한 식에서 상수항을 구하시오.', a: '25' },
+                        { q: '(2x + 1)² 을 전개한 식에서 x²의 계수를 구하시오.', a: '4' },
+                        { q: '(3x + 2)² 을 전개한 식에서 x의 계수를 구하시오.', a: '12' },
+                        { q: '(x - y)² = x² + Axy + y² 일 때, 상수 A의 값을 구하시오.', a: '-2' },
+                        { q: '(a + b)² - (a - b)² 을 간단히 하시오.', a: '4ab' },
+                        { q: '(x + y)² = 25 이고 xy = 6 일 때, x² + y²의 값을 구하시오.', a: '13' },
+                        { q: 'x + y = 6 이고 x² + y² = 20 일 때, xy의 값을 구하시오.', a: '8' }
+                    ];
+                } else {
+                    questions = [
+                        { q: 'x + 3 = 7의 해를 구하시오.', a: '4' },
+                        { q: '2x - 5 = 9의 해를 구하시오.', a: '7' },
+                        { q: '3x + 4 = 19의 해를 구하시오.', a: '5' },
+                        { q: '4x - 3 = 13의 해를 구하시오.', a: '4' },
+                        { q: '5x + 2 = 22의 해를 구하시오.', a: '4' },
+                        { q: 'x / 2 + 3 = 7의 해를 구하시오.', a: '8' },
+                        { q: '3(x - 2) = 12의 해를 구하시오.', a: '6' },
+                        { q: '2(2x + 1) = 18의 해를 구하시오.', a: '4' },
+                        { q: '5 - x = 2의 해를 구하시오.', a: '3' },
+                        { q: '7x - 4 = 3x + 8의 해를 구하시오.', a: '3' }
+                    ];
+                }
+
+                // Temporary Canvas generator
+                const generateQuizImage = (num, text, title) => {
+                    const canvas = document.createElement('canvas');
+                    const scale = 2;
+                    const baseWidth = 400;
+                    const baseHeight = 150;
+                    
+                    canvas.width = baseWidth * scale;
+                    canvas.height = baseHeight * scale;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    
+                    // Background
+                    ctx.fillStyle = '#fafafa';
+                    ctx.fillRect(0, 0, baseWidth, baseHeight);
+                    
+                    // Border
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#e2e8f0';
+                    ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
+                    
+                    // Category Tag
+                    ctx.fillStyle = '#7c3aed';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.fillText(`${title} 연습문제`, 16, 26);
+                    
+                    // Question Number
+                    ctx.fillStyle = '#1e293b';
+                    ctx.font = 'bold 16px sans-serif';
+                    ctx.fillText(`Q${num}.`, 16, 54);
+                    
+                    // Question Body
+                    ctx.font = '500 13px sans-serif';
+                    ctx.fillStyle = '#334155';
+                    
+                    let line = '';
+                    let y = 80;
+                    const x = 16;
+                    const maxWidth = baseWidth - 32;
+                    const lineHeight = 22;
+                    
+                    for (let n = 0; n < text.length; n++) {
+                        let testLine = line + text[n];
+                        let metrics = ctx.measureText(testLine);
+                        if (metrics.width > maxWidth) {
+                            ctx.fillText(line, x, y);
+                            line = text[n];
+                            y += lineHeight;
+                        } else {
+                            line = testLine;
+                        }
+                    }
+                    ctx.fillText(line, x, y);
+                    
+                    return canvas.toDataURL('image/png');
+                };
+
+                for (let i = 0; i < 10; i++) {
+                    const base64 = generateQuizImage(i + 1, questions[i].q, formulaName);
+                    quizData[i].imageBase64 = base64;
+                    quizData[i].answer = questions[i].a;
+                }
+
+                renderQuizUploadSlots();
+                showToast('AI 연습 퀴즈 10문항 추천 생성 완료!');
+            });
+        }
 
         // --- Admin: Save Formulas and Quizzes ---
         const formulaEditorForm = document.getElementById('formula-editor-form');
