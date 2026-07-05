@@ -571,15 +571,29 @@
                     </div>
 
                     <!-- Class Formulas & Quizzes Management Card -->
-                    <div class="class-management-card" id="class-formulas-management-card" style="margin-top: 30px; scroll-margin-top: 90px; display: none;">
-                        <div class="class-management-header">
-                            <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="award" style="color: var(--mascot-pink-bg); width: 22px; height: 22px;"></i> 반별 공식 및 퀴즈 관리 (<span id="current-formula-class-name">선택된 반</span>)
-                            </h3>
-                            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">반별로 학생들이 학습할 필수 수학 공식과 마스터 도전을 위한 10문항 퀴즈를 관리합니다.</p>
+                    <div class="class-management-card" id="class-formulas-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
+                        <div class="class-management-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                            <div>
+                                <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    <i data-lucide="award" style="color: var(--mascot-pink-bg); width: 22px; height: 22px;"></i> 반별 공식 및 퀴즈 관리
+                                </h3>
+                                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">반별로 학생들이 학습할 필수 수학 공식과 마스터 도전을 위한 10문항 퀴즈를 관리합니다.</p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label for="formula-class-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">관리 반 선택:</label>
+                                <select id="formula-class-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; outline: none; background: #ffffff;">
+                                    <!-- filled dynamically -->
+                                </select>
+                            </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; margin-top: 20px;">
+                        <!-- Placeholder for unselected class state -->
+                        <div id="formula-management-placeholder" style="text-align: center; padding: 40px; color: var(--text-secondary); font-weight: 700; border: 1px dashed var(--border-color); border-radius: 12px; margin-top: 20px; font-size: 0.9rem;">
+                            <i data-lucide="info" style="width: 28px; height: 28px; display: block; margin: 0 auto 10px auto; color: var(--text-muted);"></i>
+                            상단의 '관리 반 선택' 목록에서 공식을 등록/관리할 반을 먼저 선택해 주세요.
+                        </div>
+
+                        <div id="formula-management-content" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 24px; margin-top: 20px;">
                             <!-- Left column: Add/Edit Formula Form -->
                             <div class="class-form-container" style="margin: 0;">
                                 <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--mascot-purple-bg); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">

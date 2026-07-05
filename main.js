@@ -6830,6 +6830,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 filter.appendChild(opt);
             });
 
+            // Populate the formula-class-select dropdown
+            const formulaSelect = document.getElementById('formula-class-select');
+            if (formulaSelect) {
+                const prevVal = formulaSelect.value;
+                formulaSelect.innerHTML = '<option value="">반 선택</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    if (String(c.id) === String(prevVal)) {
+                        opt.selected = true;
+                    }
+                    formulaSelect.appendChild(opt);
+                });
+            }
+
             // Populate the beautiful class filter tab pills
             populateClassTabs();
         };
@@ -9646,8 +9662,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (formulaEditorForm) {
             formulaEditorForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const studentClassFilter = document.getElementById('student-class-filter');
-                const selectedClassId = studentClassFilter ? studentClassFilter.value : '';
+                const formulaClassSelect = document.getElementById('formula-class-select');
+                const selectedClassId = formulaClassSelect ? formulaClassSelect.value : '';
                 if (!selectedClassId) {
                     alert('공식을 등록할 반을 선택해 주세요.');
                     return;
@@ -9751,29 +9767,33 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const classFormulasManagementCard = document.getElementById('class-formulas-management-card');
-        const currentFormulaClassName = document.getElementById('current-formula-class-name');
+        const formulaManagementPlaceholder = document.getElementById('formula-management-placeholder');
+        const formulaManagementContent = document.getElementById('formula-management-content');
         
         const onClassSelectedForFormulas = (classId) => {
-            if (!classFormulasManagementCard) return;
+            if (!formulaManagementPlaceholder || !formulaManagementContent) return;
+            
             if (!classId) {
-                classFormulasManagementCard.style.display = 'none';
+                formulaManagementPlaceholder.style.display = 'block';
+                formulaManagementContent.style.display = 'none';
                 return;
             }
             
             const selectedClass = classes.find(c => String(c.id) === String(classId));
             if (selectedClass) {
-                classFormulasManagementCard.style.display = 'block';
-                if (currentFormulaClassName) currentFormulaClassName.textContent = selectedClass.name;
+                formulaManagementPlaceholder.style.display = 'none';
+                formulaManagementContent.style.display = 'grid';
                 renderFormulaList(classId);
             } else {
-                classFormulasManagementCard.style.display = 'none';
+                formulaManagementPlaceholder.style.display = 'block';
+                formulaManagementContent.style.display = 'none';
             }
         };
         
-        const formulaClassFilter = document.getElementById('student-class-filter');
-        if (formulaClassFilter) {
-            formulaClassFilter.addEventListener('change', () => {
-                onClassSelectedForFormulas(formulaClassFilter.value);
+        const formulaClassSelect = document.getElementById('formula-class-select');
+        if (formulaClassSelect) {
+            formulaClassSelect.addEventListener('change', () => {
+                onClassSelectedForFormulas(formulaClassSelect.value);
             });
         }
 
