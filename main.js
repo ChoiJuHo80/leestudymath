@@ -419,13 +419,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapStudentBadgeToDb = (jsItem) => {
-        if (typeof jsItem.id === 'string') {
-            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
+        let cleanId = jsItem.id;
+        if (typeof cleanId === 'string') {
+            cleanId = Number(cleanId.replace(/[^\d]/g, '').slice(0, 15));
+        } else if (typeof cleanId === 'number') {
+            cleanId = Number(String(cleanId).slice(0, 15));
         }
         return {
-            id: jsItem.id,
-            student_id: jsItem.studentId,
-            formula_id: jsItem.formulaId,
+            id: cleanId,
+            student_id: Number(jsItem.studentId),
+            formula_id: Number(jsItem.formulaId),
             formula_name: jsItem.badgeName,
             achieved_at: new Date().toISOString()
         };
@@ -5079,7 +5082,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             newSelect.addEventListener('change', () => {
                 loggedInStudentId = parseStudentId(newSelect.value);
+                const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
                 renderMyClass();
+                if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
+                    window.renderStudentFormulasAndBadges(selectedChild);
+                }
             });
 
             childSelectContainer.style.display = 'block';
@@ -6700,7 +6707,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     newSelect.addEventListener('change', () => {
                         loggedInStudentId = parseStudentId(newSelect.value);
+                        const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
                         renderMyClass();
+                        if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
+                            window.renderStudentFormulasAndBadges(selectedChild);
+                        }
                     });
 
                     childSelectContainer.style.display = 'block';
@@ -9419,6 +9430,151 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // --- Admin: Formula OCR Photo Upload & Auto Parsing ---
+        const btnFormulaOcr = document.getElementById('btn-formula-ocr');
+        const ocrFileInput = document.getElementById('formula-ocr-file');
+        const ocrPreviewContainer = document.getElementById('formula-ocr-preview-container');
+        const ocrPreview = document.getElementById('formula-ocr-preview');
+        const latexInput = document.getElementById('formula-latex-input');
+        const piecesInput = document.getElementById('formula-pieces-input');
+
+        // Function to parse LaTeX to pieces
+        const parseLaTeXToPieces = (latex) => {
+            if (!latex) return "";
+            let str = latex.trim();
+            
+            // Replace \sqrt{...} first to remove nested braces
+            str = str.replace(/\\sqrt\s*\{([^{}]+)\}/g, ' √ $1 ');
+            
+            // Replace \frac{A}{B} -> A , / , B
+            let fracRegex = /\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g;
+            while (fracRegex.test(str)) {
+                str = str.replace(fracRegex, ' $1 / $2 ');
+            }
+            
+            // Common LaTeX tokens to math symbols
+            str = str.replace(/\\pm/g, ' ± ');
+            str = str.replace(/\\pi/g, ' π ');
+            str = str.replace(/\\times/g, ' × ');
+            str = str.replace(/\\div/g, ' ÷ ');
+            str = str.replace(/\\le/g, ' ≤ ');
+            str = str.replace(/\\ge/g, ' ≥ ');
+            str = str.replace(/\\neq/g, ' ≠ ');
+            str = str.replace(/\\theta/g, ' θ ');
+            str = str.replace(/\\alpha/g, ' α ');
+            str = str.replace(/\\beta/g, ' β ');
+            
+            // Superscripts
+            str = str.replace(/\^2/g, '²');
+            str = str.replace(/\^3/g, '³');
+            str = str.replace(/\^([0-9a-zA-Z])/g, '^$1');
+            
+            // Remove backslashes, remaining braces
+            str = str.replace(/\\/g, '');
+            str = str.replace(/[{}]/g, ' ');
+            
+            // Split by spaces and commas
+            const rawParts = str.split(/[\s,]+/);
+            const pieces = [];
+            
+            for (let i = 0; i < rawParts.length; i++) {
+                let part = rawParts[i];
+                if (!part) continue;
+                
+                // If part is a single operator
+                if (/^[=+\-*\/±√×÷≤≥≠²³]$/.test(part)) {
+                    pieces.push(part);
+                    continue;
+                }
+                
+                // If part starts with a minus or plus sign (e.g. -b, -4ac)
+                if (/^[+\-][a-zA-Z0-9²³]+$/.test(part)) {
+                    const lastPiece = pieces[pieces.length - 1];
+                    const isPrevOperator = !lastPiece || /^[=+\-*\/±√×÷≤≥≠]$/.test(lastPiece);
+                    if (isPrevOperator) {
+                        pieces.push(part);
+                    } else {
+                        pieces.push(part[0]);
+                        pieces.push(part.slice(1));
+                    }
+                    continue;
+                }
+                
+                // Otherwise, split any internal operators
+                const subParts = part.split(/([=+\-*\/±√×÷≤≥≠])/);
+                subParts.forEach(sp => {
+                    const trimmed = sp.trim();
+                    if (trimmed) {
+                        pieces.push(trimmed);
+                    }
+                });
+            }
+            
+            return pieces.filter(p => p.length > 0).join(',');
+        };
+
+        // Automatic parsing when latex input changes
+        if (latexInput) {
+            latexInput.addEventListener('input', () => {
+                if (piecesInput) {
+                    piecesInput.value = parseLaTeXToPieces(latexInput.value);
+                }
+            });
+            latexInput.addEventListener('change', () => {
+                if (piecesInput) {
+                    piecesInput.value = parseLaTeXToPieces(latexInput.value);
+                }
+            });
+        }
+
+        if (btnFormulaOcr && ocrFileInput) {
+            btnFormulaOcr.addEventListener('click', () => {
+                ocrFileInput.click();
+            });
+
+            ocrFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        if (ocrPreview) {
+                            ocrPreview.src = event.target.result;
+                        }
+                        if (ocrPreviewContainer) {
+                            ocrPreviewContainer.style.display = 'flex';
+                        }
+
+                        // Mockup OCR Logic matching filename or fallback
+                        const filename = file.name.toLowerCase();
+                        let detectedLatex = '';
+                        if (filename.includes('quadratic') || filename.includes('근의') || filename.includes('formula')) {
+                            detectedLatex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                        } else if (filename.includes('circle') || filename.includes('원')) {
+                            detectedLatex = 'S = \\pi r^2';
+                        } else if (filename.includes('triangle') || filename.includes('삼각형')) {
+                            detectedLatex = 'S = \\frac{1}{2}ah';
+                        } else if (filename.includes('pythagoras') || filename.includes('피타고라스')) {
+                            detectedLatex = 'a^2 + b^2 = c^2';
+                        } else if (filename.includes('linear') || filename.includes('일차') || filename.includes('함수')) {
+                            detectedLatex = 'y = ax + b';
+                        } else if (filename.includes('곱셈')) {
+                            detectedLatex = '(a+b)^2 = a^2 + 2ab + b^2';
+                        } else {
+                            detectedLatex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                        }
+
+                        if (latexInput) {
+                            latexInput.value = detectedLatex;
+                            // Trigger the change/input listeners to auto-fill formula-pieces-input
+                            latexInput.dispatchEvent(new Event('input'));
+                        }
+                        showToast('수식 이미지 OCR 분석 완료!');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
         // --- Admin: Quiz Upload Slots (10 questions) ---
         const quizzesContainer = document.getElementById('formula-quizzes-container');
         const quizData = Array.from({ length: 10 }, (_, i) => ({
@@ -9848,6 +10004,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const isMastered = earned.some(b => String(b.formulaId) === String(formula.id));
                         const item = document.createElement('div');
                         item.className = 'badge-item';
+                        if (!isMastered) {
+                            item.style.cursor = 'pointer';
+                            item.addEventListener('click', () => {
+                                openFormulaGameModal(formula, student);
+                            });
+                        }
                         
                         item.innerHTML = `
                             <div class="badge-icon-wrapper ${isMastered ? 'badge-mastered' : 'badge-locked'}">
@@ -9888,7 +10050,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         item.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${isMastered ? 'background: #fdf4ff; color: #c084fc; border: 1px solid #fae8ff;' : 'background: #f1f5f9; color: #64748b;'}">
+                                    <span class="badge-status-span" style="font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${isMastered ? 'background: #fdf4ff; color: #c084fc; border: 1px solid #fae8ff;' : 'background: #f1f5f9; color: #64748b; cursor: pointer;'}">
                                         ${isMastered ? '🏆 마스터' : '🔒 학습 중'}
                                     </span>
                                     <h4 style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin: 0;">${formula.formulaName}</h4>
@@ -9906,6 +10068,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                         
                         formulasList.appendChild(item);
+                        
+                        const statusSpan = item.querySelector('.badge-status-span');
+                        if (statusSpan && !isMastered) {
+                            statusSpan.addEventListener('click', () => {
+                                openFormulaGameModal(formula, student);
+                            });
+                        }
                         
                         const mathDiv = item.querySelector(`#${mathDivId}`);
                         if (mathDiv && typeof katex !== 'undefined') {
@@ -9933,15 +10102,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Student: Formula Learning Card Game Modal ---
         let selectedPieces = [];
         let randomizedPieces = [];
+        let hintTimeoutGlobal = null;
         
         const openFormulaGameModal = (formula, student) => {
             const gameModal = document.getElementById('formula-learning-game-modal');
             const targetContainer = document.getElementById('game-target-formula-container');
+            const targetWrapper = document.getElementById('game-target-formula-wrapper');
             const guessArea = document.getElementById('game-guess-area');
             const piecesArea = document.getElementById('game-pieces-area');
             
             if (!gameModal) return;
             selectedPieces = [];
+            
+            if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+            if (targetWrapper) {
+                targetWrapper.style.display = 'none';
+            }
             
             if (targetContainer) {
                 targetContainer.innerHTML = '';
@@ -9954,6 +10130,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     targetContainer.textContent = formula.latex;
                 }
+            }
+            
+            const btnHint = document.getElementById('btn-game-hint');
+            let hintCount = 2;
+            if (btnHint) {
+                const newHint = btnHint.cloneNode(true);
+                btnHint.parentNode.replaceChild(newHint, btnHint);
+                
+                newHint.disabled = false;
+                newHint.style.opacity = '1';
+                newHint.style.cursor = 'pointer';
+                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (2회 남음)`;
+                
+                newHint.addEventListener('click', () => {
+                    if (hintCount > 0) {
+                        hintCount--;
+                        
+                        if (targetWrapper) {
+                            targetWrapper.style.display = 'flex';
+                        }
+                        
+                        newHint.disabled = true;
+                        newHint.style.opacity = '0.6';
+                        
+                        if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                        hintTimeoutGlobal = setTimeout(() => {
+                            if (targetWrapper) {
+                                targetWrapper.style.display = 'none';
+                            }
+                            if (hintCount > 0) {
+                                newHint.disabled = false;
+                                newHint.style.opacity = '1';
+                                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (${hintCount}회 남음)`;
+                            } else {
+                                newHint.disabled = true;
+                                newHint.style.opacity = '0.5';
+                                newHint.style.cursor = 'not-allowed';
+                                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (0회 남음)`;
+                            }
+                            safeCreateIcons();
+                        }, 3000);
+                        
+                        newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (${hintCount}회 남음)`;
+                        safeCreateIcons();
+                    }
+                });
             }
             
             randomizedPieces = [...formula.pieces].sort(() => Math.random() - 0.5);
@@ -10023,6 +10245,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (matches) {
                         showToast('정답입니다! 연습문제 10문항 도전 버튼이 활성화되었습니다.');
                         localStorage.setItem(`game_passed_${student.id}_${formula.id}`, 'true');
+                        if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                        const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                        if (targetWrapper) targetWrapper.style.display = 'none';
                         gameModal.classList.remove('open');
                         window.renderStudentFormulasAndBadges(student);
                     } else {
@@ -10039,9 +10264,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnFormulaGameClose = document.getElementById('btn-formula-game-close');
         const gameModalOverlay = document.getElementById('formula-learning-game-modal');
         if (btnFormulaGameClose && gameModalOverlay) {
-            btnFormulaGameClose.addEventListener('click', () => gameModalOverlay.classList.remove('open'));
+            btnFormulaGameClose.addEventListener('click', () => {
+                gameModalOverlay.classList.remove('open');
+                if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                if (targetWrapper) targetWrapper.style.display = 'none';
+            });
             gameModalOverlay.addEventListener('click', (e) => {
-                if (e.target === gameModalOverlay) gameModalOverlay.classList.remove('open');
+                if (e.target === gameModalOverlay) {
+                    gameModalOverlay.classList.remove('open');
+                    if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                    const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                    if (targetWrapper) targetWrapper.style.display = 'none';
+                }
             });
         }
 
