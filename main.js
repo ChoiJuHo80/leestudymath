@@ -593,6 +593,180 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
+    const getRecommendedQuestionsForFormula = (formulaName) => {
+        const lowerName = String(formulaName || '').toLowerCase();
+        let questions = [];
+        if (lowerName.includes('근의') && lowerName.includes('공식')) {
+            questions = [
+                { q: 'x² - 5x + 6 = 0의 해를 구하시오.', a: '2,3' },
+                { q: 'x² - 3x + 2 = 0의 해를 구하시오.', a: '1,2' },
+                { q: 'x² - 7x + 12 = 0의 해를 구하시오.', a: '3,4' },
+                { q: 'x² - 6x + 8 = 0의 해를 구하시오.', a: '2,4' },
+                { q: 'x² - 8x + 15 = 0의 해를 구하시오.', a: '3,5' },
+                { q: 'x² - 9x + 20 = 0의 해를 구하시오.', a: '4,5' },
+                { q: 'x² - 4x + 3 = 0의 해를 구하시오.', a: '1,3' },
+                { q: 'x² - 10x + 24 = 0의 해를 구하시오.', a: '4,6' },
+                { q: 'x² - 2x - 3 = 0의 해를 구하시오.', a: '-1,3' },
+                { q: 'x² + 5x + 6 = 0의 해를 구하시오.', a: '-3,-2' }
+            ];
+        } else if (lowerName.includes('최대공약수') || lowerName.includes('gcd')) {
+            questions = [
+                { q: '12와 18의 최대공약수를 구하시오.', a: '6' },
+                { q: '24와 36의 최대공약수를 구하시오.', a: '12' },
+                { q: '15와 25의 최대공약수를 구하시오.', a: '5' },
+                { q: '48과 60의 최대공약수를 구하시오.', a: '12' },
+                { q: '8과 12의 최대공약수를 구하시오.', a: '4' },
+                { q: '20과 30의 최대공약수를 구하시오.', a: '10' },
+                { q: '16과 24의 최대공약수를 구하시오.', a: '8' },
+                { q: '14와 21의 최대공약수를 구하시오.', a: '7' },
+                { q: '18과 27의 최대공약수를 구하시오.', a: '9' },
+                { q: '30과 45의 최대공약수를 구하시오.', a: '15' }
+            ];
+        } else {
+            questions = [
+                { q: 'x + 3 = 7의 해를 구하시오.', a: '4' },
+                { q: '2x - 5 = 9의 해를 구하시오.', a: '7' },
+                { q: '3x + 4 = 19의 해를 구하시오.', a: '5' },
+                { q: '4x - 3 = 13의 해를 구하시오.', a: '4' },
+                { q: '5x + 2 = 22의 해를 구하시오.', a: '4' },
+                { q: 'x / 2 + 3 = 7의 해를 구하시오.', a: '8' },
+                { q: '3(x - 2) = 12의 해를 구하시오.', a: '6' },
+                { q: '2(2x + 1) = 18의 해를 구하시오.', a: '4' },
+                { q: '5 - x = 2의 해를 구하시오.', a: '3' },
+                { q: '7x - 4 = 3x + 8의 해를 구하시오.', a: '3' }
+            ];
+        }
+        return questions;
+    };
+
+    const generateFormulaQuizImage = (num, text, title) => {
+        const canvas = document.createElement('canvas');
+        const scale = 2;
+        const baseWidth = 400;
+        const baseHeight = 150;
+        
+        canvas.width = baseWidth * scale;
+        canvas.height = baseHeight * scale;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, baseWidth, baseHeight);
+        
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
+        
+        ctx.fillStyle = '#7c3aed';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`${title} 연습문제`, 16, 26);
+        
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`Q${num}.`, 16, 54);
+        
+        ctx.font = '500 13px sans-serif';
+        ctx.fillStyle = '#334155';
+        
+        let line = '';
+        let y = 80;
+        const x = 16;
+        const maxWidth = baseWidth - 32;
+        const lineHeight = 22;
+        
+        for (let n = 0; n < text.length; n++) {
+            let testLine = line + text[n];
+            let metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth) {
+                ctx.fillText(line, x, y);
+                line = text[n];
+                y += lineHeight;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, x, y);
+        
+        return canvas.toDataURL('image/png');
+    };
+
+    const defaultClassFormulas = [
+        {
+            id: 101,
+            classId: 1,
+            formulaName: '근의 공식',
+            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
+            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
+            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        },
+        {
+            id: 102,
+            classId: 1,
+            formulaName: '최대공약수',
+            latex: '\\text{GCD}(a, b)',
+            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
+            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        },
+        {
+            id: 201,
+            classId: 2,
+            formulaName: '근의 공식',
+            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
+            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
+            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        },
+        {
+            id: 202,
+            classId: 2,
+            formulaName: '최대공약수',
+            latex: '\\text{GCD}(a, b)',
+            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
+            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        },
+        {
+            id: 301,
+            classId: 3,
+            formulaName: '근의 공식',
+            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
+            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
+            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        },
+        {
+            id: 302,
+            classId: 3,
+            formulaName: '최대공약수',
+            latex: '\\text{GCD}(a, b)',
+            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
+            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
+                id: idx + 1,
+                answer: q.a,
+                imageBase64: ''
+            }))
+        }
+    ];
+
+
     const initializeDataFromSupabase = async () => {
         if (typeof supabase === 'undefined' || !supabase || !supabase.auth || isMock) {
             console.log('[Database Debug] Supabase client is not available or isMock is true. Using local storage fallback.');
@@ -649,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
                 syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
                 syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests'),
-                syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, [], 'gongbubang_class_formulas'),
+                syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, defaultClassFormulas, 'gongbubang_class_formulas'),
                 syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges')
             ]);
 
@@ -10432,7 +10606,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (progressText) progressText.textContent = `문제 ${qNum} / 10`;
                 if (progressBar) progressBar.style.width = `${qNum * 10}%`;
                 
-                if (qImage && quiz && quiz.imageBase64) {
+                if (qImage && quiz) {
+                    if (!quiz.imageBase64) {
+                        const recommended = getRecommendedQuestionsForFormula(formula.formulaName);
+                        const qText = recommended[currentQuizIndex]?.q || '문제를 해결하시오.';
+                        quiz.imageBase64 = generateFormulaQuizImage(qNum, qText, formula.formulaName);
+                    }
                     qImage.src = quiz.imageBase64;
                     qImage.style.display = 'block';
                 } else if (qImage) {
