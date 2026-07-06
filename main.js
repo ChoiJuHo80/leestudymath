@@ -2334,7 +2334,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             tr.innerHTML = `
-                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px; line-height: 1.2;">${formattedTimeRange}</td>
+                <td class="time-slot" style="font-weight: 700; line-height: 1.2;">${formattedTimeRange}</td>
                 <td>${monText}</td>
                 <td>${tueText}</td>
                 <td>${wedText}</td>

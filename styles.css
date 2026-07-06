@@ -2436,6 +2436,15 @@ a {
         font-size: 0.7rem !important;
         margin-bottom: 2px !important;
     }
+    
+    /* Compact weekly schedule table for mobile screens */
+    .schedule-table th, .schedule-table td {
+        padding: 8px 4px !important;
+        font-size: 0.72rem !important;
+    }
+    .schedule-table th {
+        font-size: 0.75rem !important;
+    }
 }
 
 /* Student/Parent View Layout Adjustments to remove empty sidebar column space */
