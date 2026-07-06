@@ -3151,7 +3151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 schedBadge.style.border = '1px dashed #cbd5e1';
                 schedBadge.style.fontWeight = '600';
                 schedBadge.style.fontSize = '0.62rem';
-                schedBadge.textContent = `수업 ${startTime}~`;
+                schedBadge.textContent = `${startTime}~`;
                 schedBadge.title = `정규 수업시간: ${scheduleTime}`;
                 eventContainer.appendChild(schedBadge);
             }
@@ -3184,10 +3184,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 badge.className = `calendar-badge ${typeClass}`;
                 
-                const timeInfo = '';
-                const memoInfo = log.memo ? ` (${log.memo})` : '';
-                badge.textContent = `${typeText}${timeInfo}${memoInfo}`;
-                badge.title = `${typeText}${timeInfo}${memoInfo}`;
+                // Only show main attendance text (e.g. '출석', '결석', '보강') without memo suffixes like '(자동출석)'
+                badge.textContent = typeText;
+                badge.title = typeText + (log.memo ? ` (${log.memo})` : '');
                 eventContainer.appendChild(badge);
             });
 
@@ -5189,12 +5188,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     `}
                 </div>
-                <div style="border-top: 1px dashed var(--border-color); padding-top: 12px;">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">예약된 주간 시간표</div>
-                    <div style="display: flex; gap: 6px;">
-                        ${scheduleHtml}
-                    </div>
-                </div>
             `;
 
             // Initialize myclass calendar date if null
@@ -5676,6 +5669,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (navLinkStudents) navLinkStudents.style.display = 'none';
                     if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
                 }
+
+                // Hide public curriculum, schedule, and resources sections
+                const scheduleSection = document.getElementById('schedule');
+                if (scheduleSection) scheduleSection.style.display = 'none';
+                const curriculumSection = document.getElementById('curriculum');
+                if (curriculumSection) curriculumSection.style.display = 'none';
+                const resourcesSection = document.getElementById('resources');
+                if (resourcesSection) resourcesSection.style.display = 'none';
 
                 studentLoginModal.classList.remove('open');
                 updateLoginButton();
@@ -6737,6 +6738,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (studentSection) studentSection.style.display = 'none';
                 if (navLinkStudents) navLinkStudents.style.display = 'none';
                 if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+
+                // Hide public curriculum, schedule, and resources sections
+                const scheduleSection = document.getElementById('schedule');
+                if (scheduleSection) scheduleSection.style.display = 'none';
+                const curriculumSection = document.getElementById('curriculum');
+                if (curriculumSection) curriculumSection.style.display = 'none';
+                const resourcesSection = document.getElementById('resources');
+                if (resourcesSection) resourcesSection.style.display = 'none';
 
                 renderMyClass();
             }
