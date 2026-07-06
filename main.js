@@ -3143,6 +3143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentSchedule = student ? getStudentSchedule(student) : { mon: '', tue: '', wed: '', thu: '', fri: '' };
             const scheduleTime = (dayOfWeek >= 1 && dayOfWeek <= 5) ? studentSchedule[dayKey] : '';
             if (scheduleTime) {
+                const startTime = scheduleTime.split(/[~\-]/)[0].trim();
                 const schedBadge = document.createElement('div');
                 schedBadge.className = 'calendar-badge regular-class';
                 schedBadge.style.background = '#f8fafc';
@@ -3150,7 +3151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 schedBadge.style.border = '1px dashed #cbd5e1';
                 schedBadge.style.fontWeight = '600';
                 schedBadge.style.fontSize = '0.62rem';
-                schedBadge.textContent = `⏰ 수업: ${scheduleTime}`;
+                schedBadge.textContent = `수업 ${startTime}~`;
                 schedBadge.title = `정규 수업시간: ${scheduleTime}`;
                 eventContainer.appendChild(schedBadge);
             }
