@@ -2301,15 +2301,31 @@ document.addEventListener('DOMContentLoaded', () => {
             return timeA.localeCompare(timeB);
         });
         
+        const simplifyClassName = (name) => {
+            if (!name) return '-';
+            return name
+                .replace(/초등\s*(\d+)학년/g, '초$1')
+                .replace(/중등\s*(\d+)학년/g, '중$1')
+                .replace(/고등\s*(\d+)학년/g, '고$1')
+                .replace(/초등/g, '초')
+                .replace(/중등/g, '중')
+                .replace(/고등/g, '고')
+                .replace(/학년/g, '')
+                .replace(/반/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
         sortedClasses.forEach(c => {
             const tr = document.createElement('tr');
             
-            // Show class name under the days it is scheduled, otherwise "-"
-            const monText = (c.schedule?.mon && c.schedule.mon !== '-') ? c.name : '-';
-            const tueText = (c.schedule?.tue && c.schedule.tue !== '-') ? c.name : '-';
-            const wedText = (c.schedule?.wed && c.schedule.wed !== '-') ? c.name : '-';
-            const thuText = (c.schedule?.thu && c.schedule.thu !== '-') ? c.name : '-';
-            const friText = (c.schedule?.fri && c.schedule.fri !== '-') ? c.name : '-';
+            const displayName = simplifyClassName(c.name);
+            // Show simplified class name under the days it is scheduled, otherwise "-"
+            const monText = (c.schedule?.mon && c.schedule.mon !== '-') ? displayName : '-';
+            const tueText = (c.schedule?.tue && c.schedule.tue !== '-') ? displayName : '-';
+            const wedText = (c.schedule?.wed && c.schedule.wed !== '-') ? displayName : '-';
+            const thuText = (c.schedule?.thu && c.schedule.thu !== '-') ? displayName : '-';
+            const friText = (c.schedule?.fri && c.schedule.fri !== '-') ? displayName : '-';
             const timeRange = getClassTimeRange(c);
             
             tr.innerHTML = `
