@@ -865,6 +865,45 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[14]) classFormulas = syncResults[14];
             if (syncResults[15]) studentBadges = syncResults[15];
 
+            // Generate default formulas dynamically for actual classes from Supabase to prevent Foreign Key constraint violations
+            if (classes.length > 0) {
+                let updatedFormulas = false;
+                classes.forEach(cls => {
+                    const hasFormula = classFormulas.some(f => String(f.classId) === String(cls.id));
+                    if (!hasFormula) {
+                        const rootIdNum = typeof cls.id === 'number' ? cls.id : Number(String(cls.id).replace(/[^\d]/g, '').slice(0, 12));
+                        classFormulas.push({
+                            id: Number(String(rootIdNum) + '1'),
+                            classId: cls.id,
+                            formulaName: '근의 공식',
+                            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
+                            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
+                            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
+                                id: idx + 1,
+                                answer: q.a,
+                                imageBase64: ''
+                            }))
+                        });
+                        classFormulas.push({
+                            id: Number(String(rootIdNum) + '2'),
+                            classId: cls.id,
+                            formulaName: '최대공약수',
+                            latex: '\\text{GCD}(a, b)',
+                            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
+                            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
+                                id: idx + 1,
+                                answer: q.a,
+                                imageBase64: ''
+                            }))
+                        });
+                        updatedFormulas = true;
+                    }
+                });
+                if (updatedFormulas) {
+                    await saveClassFormulas();
+                }
+            }
+
             // 1. Sync habits
             const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
             if (!habitsErr) {
