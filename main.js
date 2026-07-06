@@ -2327,9 +2327,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const thuText = (c.schedule?.thu && c.schedule.thu !== '-') ? displayName : '-';
             const friText = (c.schedule?.fri && c.schedule.fri !== '-') ? displayName : '-';
             const timeRange = getClassTimeRange(c);
+            let formattedTimeRange = timeRange;
+            if (timeRange && timeRange.includes('~')) {
+                const parts = timeRange.split('~');
+                formattedTimeRange = `${parts[0].trim()}~<br>${parts[1].trim()}`;
+            }
             
             tr.innerHTML = `
-                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px;">${timeRange}</td>
+                <td class="time-slot" style="font-weight: 600; text-align: left; padding-left: 20px; line-height: 1.2;">${formattedTimeRange}</td>
                 <td>${monText}</td>
                 <td>${tueText}</td>
                 <td>${wedText}</td>
