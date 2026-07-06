@@ -10007,7 +10007,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!isMastered) {
                             item.style.cursor = 'pointer';
                             item.addEventListener('click', () => {
-                                openFormulaGameModal(formula, student);
+                                openFormulaPreviewModal(formula, student);
                             });
                         }
                         
@@ -10096,6 +10096,73 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
+            safeCreateIcons();
+        };
+
+        // --- Student: Formula Preview Modal ---
+        const openFormulaPreviewModal = (formula, student) => {
+            const previewModal = document.getElementById('formula-preview-modal');
+            const previewName = document.getElementById('preview-formula-name');
+            const previewMath = document.getElementById('preview-formula-math');
+            const btnCancel = document.getElementById('btn-formula-preview-cancel');
+            const btnConfirm = document.getElementById('btn-formula-preview-confirm');
+            const btnClose = document.getElementById('btn-formula-preview-close');
+
+            if (!previewModal) return;
+
+            if (previewName) {
+                previewName.textContent = formula.formulaName;
+            }
+
+            if (previewMath) {
+                previewMath.innerHTML = '';
+                if (typeof katex !== 'undefined') {
+                    try {
+                        katex.render(formula.latex, previewMath, { throwOnError: false, displayMode: true });
+                    } catch (e) {
+                        previewMath.textContent = formula.latex;
+                    }
+                } else {
+                    previewMath.textContent = formula.latex;
+                }
+            }
+
+            // Clone buttons to clear old listeners
+            if (btnCancel) {
+                const newCancel = btnCancel.cloneNode(true);
+                btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+                newCancel.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                });
+            }
+
+            if (btnConfirm) {
+                const newConfirm = btnConfirm.cloneNode(true);
+                btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+                newConfirm.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                    openFormulaGameModal(formula, student);
+                });
+            }
+
+            if (btnClose) {
+                const newClose = btnClose.cloneNode(true);
+                btnClose.parentNode.replaceChild(newClose, btnClose);
+                newClose.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                });
+            }
+
+            // Click on overlay to close
+            const overlayClick = (e) => {
+                if (e.target === previewModal) {
+                    previewModal.classList.remove('open');
+                    previewModal.removeEventListener('click', overlayClick);
+                }
+            };
+            previewModal.addEventListener('click', overlayClick);
+
+            previewModal.classList.add('open');
             safeCreateIcons();
         };
 
