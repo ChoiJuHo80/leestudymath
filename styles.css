@@ -2420,6 +2420,22 @@ a {
         grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)) !important;
         gap: 6px !important;
     }
+    
+    /* Compact calendar overrides to fit on one screen on mobile */
+    .calendar-cell {
+        min-height: 52px !important;
+        padding: 3px !important;
+        gap: 2px !important;
+    }
+    .calendar-badge {
+        font-size: 0.52rem !important;
+        padding: 1px 2px !important;
+        line-height: 1.1 !important;
+    }
+    .calendar-date-number {
+        font-size: 0.7rem !important;
+        margin-bottom: 2px !important;
+    }
 }
 
 /* Student/Parent View Layout Adjustments to remove empty sidebar column space */
