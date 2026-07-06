@@ -10181,7 +10181,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!student) return;
             
             const profileShelf = document.getElementById('student-profile-badge-shelf');
-            const studentFormulas = classFormulas.filter(f => String(f.classId) === String(student.classId));
+            let studentFormulas = classFormulas.filter(f => String(f.classId) === String(student.classId));
+            
+            // Dynamic fallback if database is empty or not yet loaded
+            if (studentFormulas.length === 0 && typeof defaultClassFormulas !== 'undefined') {
+                studentFormulas = defaultClassFormulas.filter(f => String(f.classId) === String(student.classId));
+            }
+            
             const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
             
             if (profileShelf) {
