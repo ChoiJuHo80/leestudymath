@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: cleanId,
-            student_id: Number(jsItem.studentId),
+            student_id: String(jsItem.studentId),
             formula_id: Number(jsItem.formulaId),
             formula_name: jsItem.badgeName,
             achieved_at: new Date().toISOString()
