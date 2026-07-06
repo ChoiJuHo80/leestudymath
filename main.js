@@ -1073,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const loggedUserName = document.getElementById('logged-user-name');
         
         // Handle student-view class on body to control sidebar and grid template columns dynamically
-        if (isStudent) {
+        if (isStudent || isAdmin) {
             document.body.classList.add('student-view');
         } else {
             document.body.classList.remove('student-view');
