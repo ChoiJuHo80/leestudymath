@@ -897,6 +897,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnParentLoginToggle = document.getElementById('btn-parent-login-toggle');
         const displayContainer = document.getElementById('user-profile-display-container');
         const loggedUserName = document.getElementById('logged-user-name');
+        
+        // Handle student-view class on body to control sidebar and grid template columns dynamically
+        if (isStudent) {
+            document.body.classList.add('student-view');
+        } else {
+            document.body.classList.remove('student-view');
+        }
+        
         if (!btnLoginToggle) return;
 
         if (isAdmin || isStudent) {

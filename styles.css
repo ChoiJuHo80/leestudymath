@@ -2417,3 +2417,11 @@ a {
     }
 }
 
+/* Student/Parent View Layout Adjustments to remove empty sidebar column space */
+body.student-view .blog-sidebar {
+    display: none !important;
+}
+body.student-view .layout-container {
+    grid-template-columns: 1fr !important;
+}
+
