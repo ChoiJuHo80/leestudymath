@@ -11954,8 +11954,6 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHtml += `
                         </tbody>
                     </table>
-                    
-                    <div style="margin-top: 30px; text-align: right; font-size: 0.8rem; color: #555555;">이공 수학 공부방 (http://www.leestudymath.co.kr)</div>
                 </div>
             `;
             

@@ -2581,18 +2581,16 @@ body.student-view .blog-feed {
    A4 Test Sheet Print & Grading Layout
    ========================================================================== */
 @media print {
-    body * {
-        visibility: hidden !important;
-    }
-    #vocab-printable-test-sheet, #vocab-printable-test-sheet * {
-        visibility: visible !important;
+    /* Completely collapse all elements except the printable sheet to prevent blank pages */
+    body > *:not(#vocab-printable-test-sheet) {
+        display: none !important;
     }
     #vocab-printable-test-sheet {
+        display: block !important;
         position: absolute;
         left: 0;
         top: 0;
         width: 100%;
-        display: block !important;
         background: #ffffff !important;
         color: #000000 !important;
         padding: 0 !important;
@@ -2600,7 +2598,7 @@ body.student-view .blog-feed {
     }
     @page {
         size: A4 landscape;
-        margin: 12mm;
+        margin: 5mm !important;
     }
 }
 
@@ -2608,13 +2606,13 @@ body.student-view .blog-feed {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
-    font-size: 0.85rem;
+    font-size: 1.15rem !important; /* Increased font size for print readability */
 }
 
 .vocab-test-table th, .vocab-test-table td {
     border: 1px solid #000000;
     padding: 8px 10px;
-    height: 38px;
+    height: 48px; /* Increased row height for write-in space */
     vertical-align: middle;
     color: #000000;
 }
