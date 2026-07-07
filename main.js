@@ -420,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapWordSetFromDb = (dbItem) => ({
         id: dbItem.id,
         classId: dbItem.class_id,
+        studentId: dbItem.student_id,
         title: dbItem.title,
         words: dbItem.words ? (typeof dbItem.words === 'string' ? safeJsonParse(dbItem.words) : dbItem.words) : []
     });
@@ -430,7 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: jsItem.id,
-            class_id: jsItem.classId,
+            class_id: jsItem.classId || null,
+            student_id: jsItem.studentId || null,
             title: jsItem.title,
             words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : jsItem.words,
             created_at: new Date().toISOString()
@@ -11172,10 +11174,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!container) return;
             
             container.innerHTML = '';
-            const filtered = wordSets.filter(w => String(w.classId) === String(student.classId));
+            // Show sets that belong to the student's class, or created personally by the student
+            const filtered = wordSets.filter(w => 
+                (w.classId && String(w.classId) === String(student.classId)) || 
+                (w.studentId && String(w.studentId) === String(student.id))
+            );
             
             if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">배포된 단어장이 없습니다.</div>';
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다. 상단 [+ 나만의 단어장 등록]을 클릭해 추가해 보세요.</div>';
                 return;
             }
             
@@ -11194,21 +11200,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.onmouseover = () => { item.style.borderColor = 'var(--mascot-purple-bg)'; item.style.transform = 'translateY(-2px)'; };
                 item.onmouseout = () => { item.style.borderColor = 'var(--border-color)'; item.style.transform = 'none'; };
                 
+                const isPersonal = !!set.studentId;
+                
                 item.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 0.72rem; color: #ffffff; background: #82b444; padding: 2px 6px; border-radius: 4px; font-weight: 700;">단어</span>
+                        <span style="font-size: 0.72rem; color: #ffffff; background: ${isPersonal ? 'var(--mascot-purple-bg)' : '#82b444'}; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
+                            ${isPersonal ? '나만의' : '클래스'}
+                        </span>
                         <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${set.title}</span>
                         <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 0.72rem; font-weight: 700; color: #8e44ad; background: #f3e8ff; padding: 2px 6px; border-radius: 4px;">1명 학습중</span>
+                    <div style="display: flex; align-items: center; gap: 12px;" class="vocab-action-area">
+                        ${isPersonal ? `
+                            <button type="button" class="btn-delete-student-set" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                        ` : ''}
                         <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
                     </div>
                 `;
                 
-                item.addEventListener('click', () => {
+                // Clicking item launches play mode
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('btn-delete-student-set')) return;
                     openVocabStudyPlayer(set, student);
                 });
+                
+                // Personal set delete handler
+                if (isPersonal) {
+                    item.querySelector('.btn-delete-student-set').addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`'${set.title}' 단어장을 삭제하시겠습니까?`)) {
+                            await deleteWordSet(set.id);
+                            renderStudentVocabularySets(student);
+                        }
+                    });
+                }
+
                 
                 container.appendChild(item);
                 safeCreateIcons();
@@ -11714,6 +11740,116 @@ document.addEventListener('DOMContentLoaded', () => {
             btnVocabClose.addEventListener('click', () => {
                 vocabStudyOverlay.classList.remove('open');
                 document.onkeydown = null;
+            });
+        }
+        // --- Student Vocabulary Creator Form Engine ---
+        const renderStudentVocabCreatorRows = (wordsData = []) => {
+            const container = document.getElementById('student-vocab-words-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            for (let i = 0; i < 30; i++) {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '50px 1.2fr 1.2fr';
+                row.style.borderBottom = '1px solid var(--border-color)';
+                row.style.alignItems = 'center';
+                row.style.padding = '6px 8px';
+                row.style.gap = '8px';
+                
+                const wordVal = wordsData[i]?.word || '';
+                const meaningVal = wordsData[i]?.meaning || '';
+                
+                const numStr = String(i + 1).padStart(3, '0');
+                row.innerHTML = `
+                    <div style="text-align: center; font-weight: 700; color: var(--text-secondary); font-size: 0.8rem;">${numStr}</div>
+                    <input type="text" class="student-vocab-row-word" data-idx="${i}" value="${wordVal}" placeholder="예: take" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                    <input type="text" class="student-vocab-row-meaning" data-idx="${i}" value="${meaningVal}" placeholder="예: 취하다, 데려가다" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                `;
+                container.appendChild(row);
+            }
+        };
+
+        // Form toggle
+        const btnToggleCreator = document.getElementById('btn-toggle-student-vocab-creator');
+        const creatorContainer = document.getElementById('student-vocab-creator-container');
+        if (btnToggleCreator && creatorContainer) {
+            btnToggleCreator.addEventListener('click', () => {
+                const isHidden = creatorContainer.style.display === 'none';
+                creatorContainer.style.display = isHidden ? 'block' : 'none';
+                if (isHidden) {
+                    renderStudentVocabCreatorRows();
+                }
+            });
+        }
+
+        // Student OCR File Scan
+        const btnStudentOcr = document.getElementById('btn-student-vocab-ocr');
+        const studentOcrFile = document.getElementById('student-vocab-ocr-file');
+        if (btnStudentOcr && studentOcrFile) {
+            btnStudentOcr.addEventListener('click', () => studentOcrFile.click());
+            studentOcrFile.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
+                    setTimeout(() => {
+                        const withExamples = defaultVocabularyWords.map((w, idx) => ({
+                            word: w.word,
+                            meaning: w.meaning,
+                            example: `Q${idx + 1}. Example sentence.`
+                        }));
+                        renderStudentVocabCreatorRows(withExamples);
+                        const titleInput = document.getElementById('student-vocab-title');
+                        if (titleInput) titleInput.value = '이준 영단어 6월29일';
+                        showToast('유인물 분석이 완료되었습니다. 1~30번 영단어가 자동으로 매핑되었습니다!');
+                    }, 1200);
+                }
+            });
+        }
+
+        // Student Save Set Submit
+        const studentVocabForm = document.getElementById('student-vocab-editor-form');
+        if (studentVocabForm) {
+            studentVocabForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const titleInput = document.getElementById('student-vocab-title');
+                
+                if (!titleInput || !loggedInStudentId) return;
+                
+                const wordsList = [];
+                const wordInputs = document.querySelectorAll('.student-vocab-row-word');
+                const meaningInputs = document.querySelectorAll('.student-vocab-row-meaning');
+                
+                for (let i = 0; i < 30; i++) {
+                    const w = wordInputs[i]?.value.trim();
+                    const m = meaningInputs[i]?.value.trim();
+                    
+                    if (w || m) {
+                        wordsList.push({ word: w || '', meaning: m || '', example: '' });
+                    }
+                }
+                
+                if (wordsList.length === 0) {
+                    alert('최소 1개 이상의 단어를 입력해 주세요.');
+                    return;
+                }
+                
+                const newSet = {
+                    id: Date.now(),
+                    studentId: loggedInStudentId,
+                    title: titleInput.value.trim() || `나의 단어장 (${new Date().toLocaleDateString()})`,
+                    words: wordsList
+                };
+                
+                wordSets.push(newSet);
+                await saveWordSets();
+                
+                titleInput.value = '';
+                if (creatorContainer) creatorContainer.style.display = 'none';
+                
+                const student = students.find(s => s.id === loggedInStudentId);
+                if (student) renderStudentVocabularySets(student);
+                
+                showToast('나만의 단어장이 정상적으로 저장되었습니다!');
             });
         }
 

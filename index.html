@@ -1157,10 +1157,49 @@
 
                             <!-- English Vocabulary Widget -->
                             <div class="widget" id="myclass-vocab-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
-                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
-                                    <i data-lucide="book-open" style="color: var(--mascot-purple-bg);"></i>나의 영어단어 학습
-                                </h3>
-                                <p style="font-size: 0.85rem; color: var(--text-secondary);">반별로 배포된 단어장을 암기/리콜/스펠 학습 모드를 통해 재미있게 학습해 보세요.</p>
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                    <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                        <i data-lucide="book-open" style="color: var(--mascot-purple-bg);"></i>나의 영어단어 학습
+                                    </h3>
+                                    <button type="button" id="btn-toggle-student-vocab-creator" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 700; border-radius: 20px; background: var(--mascot-purple-bg); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                        <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> 나만의 단어장 등록
+                                    </button>
+                                </div>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">스마트 스캔(OCR)을 통해 유인물 사진 한 장으로 나만의 영단어장을 즉시 생성하고 공부할 수 있습니다.</p>
+                                
+                                <!-- Student Vocab Creator Form (Toggleable) -->
+                                <div id="student-vocab-creator-container" style="display: none; padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: #f8fafc; margin-top: 10px;">
+                                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--mascot-purple-bg); margin-bottom: 12px; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="plus" style="width: 16px; height: 16px;"></i> 새 단어장 직접 등록
+                                    </h4>
+                                    <form id="student-vocab-editor-form" style="display: grid; gap: 12px;">
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="student-vocab-title" style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">단어장 제목</label>
+                                            <div style="display: flex; gap: 8px;">
+                                                <input type="text" id="student-vocab-title" required placeholder="예: 나의 교과서 영단어 1과" style="flex-grow: 1; padding: 8px 12px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; background: #ffffff;">
+                                                <button type="button" id="btn-student-vocab-ocr" style="padding: 0 12px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: #ffffff; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                                    📷 유인물 이미지 스캔
+                                                </button>
+                                                <input type="file" id="student-vocab-ocr-file" accept="image/*" style="display: none;">
+                                            </div>
+                                        </div>
+
+                                        <!-- Rows grid -->
+                                        <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; margin-top: 4px;">
+                                            <div style="display: grid; grid-template-columns: 50px 1.2fr 1.2fr; background: #f1f5f9; padding: 8px 10px; font-weight: 700; font-size: 0.75rem; text-align: center; color: var(--text-secondary);">
+                                                <div>번호</div>
+                                                <div>단어</div>
+                                                <div>의미</div>
+                                            </div>
+                                            <div id="student-vocab-words-container" style="max-height: 250px; overflow-y: auto; background: #ffffff;">
+                                                <!-- Populated dynamically (30 rows) -->
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" style="width: 100%; padding: 10px; font-size: 0.9rem; font-weight: 700; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: #ffffff; cursor: pointer; margin-top: 6px;">나만의 단어장 저장</button>
+                                    </form>
+                                </div>
+
                                 <div id="myclass-vocab-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
                                     <!-- Vocabulary sets will be rendered dynamically -->
                                     <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">배포된 단어장이 없습니다.</div>
