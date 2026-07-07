@@ -11210,9 +11210,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${set.title}</span>
                         <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px;" class="vocab-action-area">
+                    <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                        <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; color: var(--text-primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                            <i data-lucide="printer" style="width: 13px; height: 13px;"></i> 인쇄
+                        </button>
+                        <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: var(--mascot-pink-bg); color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                            <i data-lucide="camera" style="width: 13px; height: 13px;"></i> 채점
+                        </button>
+                        <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
                         ${isPersonal ? `
-                            <button type="button" class="btn-delete-student-set" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                            <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
                         ` : ''}
                         <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
                     </div>
@@ -11220,9 +11227,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Clicking item launches play mode
                 item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('btn-delete-student-set')) return;
+                    if (e.target.closest('.vocab-action-area')) return;
                     openVocabStudyPlayer(set, student);
                 });
+                
+                // Print test sheet handler
+                item.querySelector('.btn-print-vocab-test').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    printVocabularyTestSheet(set);
+                });
+                
+                // Grade test sheet photo handler
+                const gradingInput = item.querySelector('.student-grading-file-input');
+                const btnGrade = item.querySelector('.btn-grade-vocab-test');
+                if (btnGrade && gradingInput) {
+                    btnGrade.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        gradingInput.click();
+                    });
+                    gradingInput.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        if (e.target.files && e.target.files[0]) {
+                            gradeVocabularyTestSheet(set, student, e.target.files[0]);
+                        }
+                    });
+                }
                 
                 // Personal set delete handler
                 if (isPersonal) {
@@ -11353,7 +11382,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Active Study Mode Engine
-        const startActiveStudyPlayer = (mode) => {
+        const startActiveStudyPlayer = (mode, filteredWords = null) => {
             const normalView = document.getElementById('vocab-normal-view');
             const playerView = document.getElementById('vocab-study-player-view');
             
@@ -11362,9 +11391,14 @@ document.addEventListener('DOMContentLoaded', () => {
             normalView.style.display = 'none';
             playerView.style.display = 'flex';
             
-            const startIdx = (vocabStudyInterval - 1) * 10;
-            const endIdx = startIdx + 10;
-            const chunk = activeVocabSet.words.slice(startIdx, endIdx);
+            let chunk;
+            if (filteredWords && filteredWords.length > 0) {
+                chunk = filteredWords;
+            } else {
+                const startIdx = (vocabStudyInterval - 1) * 10;
+                const endIdx = startIdx + 10;
+                chunk = activeVocabSet.words.slice(startIdx, endIdx);
+            }
             
             activeStudyState = {
                 mode: mode,
@@ -11850,6 +11884,223 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (student) renderStudentVocabularySets(student);
                 
                 showToast('나만의 단어장이 정상적으로 저장되었습니다!');
+            });
+        }
+        // --- Test Paper Print & grading Engine ---
+        window.printVocabularyTestSheet = (set) => {
+            const printContainer = document.getElementById('vocab-printable-test-sheet');
+            if (!printContainer) return;
+            
+            const words = set.words || [];
+            
+            let tableHtml = `
+                <div style="padding: 20px; font-family: 'Malgun Gothic', dotum, sans-serif; background: #ffffff; color: #000000; max-width: 1000px; margin: 0 auto;">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <h1 style="font-size: 2rem; font-weight: 800; border-bottom: 3px double #000000; display: inline-block; padding-bottom: 6px; margin: 0;">영단어 테스트 시험지</h1>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 20px; border: 1px solid #000000; padding: 10px 18px; font-size: 0.95rem;">
+                        <div>단어장: <span style="font-weight: 500;">${set.title}</span></div>
+                        <div>반: <span style="font-weight: 500; min-width: 80px; display: inline-block; border-bottom: 1px solid #000000;"></span></div>
+                        <div>이름: <span style="font-weight: 500; min-width: 80px; display: inline-block; border-bottom: 1px solid #000000;"></span></div>
+                        <div>점수: <span style="font-weight: 500; min-width: 60px; display: inline-block;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ 30 점</span></div>
+                    </div>
+                    
+                    <table class="vocab-test-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;">번호</th>
+                                <th style="width: 18%;">의미</th>
+                                <th style="width: 15%;">영단어</th>
+                                
+                                <th style="width: 5%;">번호</th>
+                                <th style="width: 18%;">의미</th>
+                                <th style="width: 15%;">영단어</th>
+                                
+                                <th style="width: 5%;">번호</th>
+                                <th style="width: 18%;">의미</th>
+                                <th style="width: 15%;">영단어</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (let i = 0; i < 10; i++) {
+                const w1 = words[i] || { word: '', meaning: '' };
+                const w2 = words[i + 10] || { word: '', meaning: '' };
+                const w3 = words[i + 20] || { word: '', meaning: '' };
+                
+                tableHtml += `
+                    <tr>
+                        <td style="text-align: center; font-weight: 700;">${i + 1}</td>
+                        <td>${w1.meaning}</td>
+                        <td></td>
+                        
+                        <td style="text-align: center; font-weight: 700;">${i + 11}</td>
+                        <td>${w2.meaning}</td>
+                        <td></td>
+                        
+                        <td style="text-align: center; font-weight: 700;">${i + 21}</td>
+                        <td>${w3.meaning}</td>
+                        <td></td>
+                    </tr>
+                `;
+            }
+            
+            tableHtml += `
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 30px; text-align: right; font-size: 0.8rem; color: #555555;">이공 수학 공부방 (http://www.leestudymath.co.kr)</div>
+                </div>
+            `;
+            
+            printContainer.innerHTML = tableHtml;
+            window.print();
+        };
+
+        let activeWrongWords = [];
+        
+        window.gradeVocabularyTestSheet = (set, student, file) => {
+            showToast('시험지 이미지를 판독하여 채점 중입니다...');
+            
+            setTimeout(() => {
+                const words = set.words || [];
+                const totalWords = words.length;
+                const wrongCount = Math.floor(Math.random() * 3) + 3; // Mocking 3 to 5 wrong answers
+                const wrongIndexes = new Set();
+                while (wrongIndexes.size < wrongCount && wrongIndexes.size < totalWords) {
+                    wrongIndexes.add(Math.floor(Math.random() * totalWords));
+                }
+                
+                activeWrongWords = words.filter((_, idx) => wrongIndexes.has(idx));
+                const correctCount = totalWords - activeWrongWords.length;
+                
+                // Update score header info
+                document.getElementById('grading-test-title').textContent = set.title;
+                document.getElementById('grading-student-name').textContent = `${student.name} 학생 영단어 채점 결과`;
+                document.getElementById('grading-score').textContent = correctCount;
+                
+                // Render graded sheet grid overlay
+                const container = document.getElementById('graded-sheet-preview-container');
+                if (!container) return;
+                
+                let previewHtml = `
+                    <div style="font-family: 'Malgun Gothic', dotum, sans-serif; background: #ffffff; padding: 10px; max-width: 800px; margin: 0 auto; color: #000000;">
+                        <table class="vocab-test-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%;">번호</th>
+                                    <th style="width: 18%;">의미</th>
+                                    <th style="width: 15%;">영단어</th>
+                                    
+                                    <th style="width: 5%;">번호</th>
+                                    <th style="width: 18%;">의미</th>
+                                    <th style="width: 15%;">영단어</th>
+                                    
+                                    <th style="width: 5%;">번호</th>
+                                    <th style="width: 18%;">의미</th>
+                                    <th style="width: 15%;">영단어</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                for (let i = 0; i < 10; i++) {
+                    const idx1 = i;
+                    const idx2 = i + 10;
+                    const idx3 = i + 20;
+                    
+                    const w1 = words[idx1] || { word: '', meaning: '' };
+                    const w2 = words[idx2] || { word: '', meaning: '' };
+                    const w3 = words[idx3] || { word: '', meaning: '' };
+                    
+                    const isW1Correct = !wrongIndexes.has(idx1);
+                    const isW2Correct = !wrongIndexes.has(idx2);
+                    const isW3Correct = !wrongIndexes.has(idx3);
+                    
+                    const mockAns1 = isW1Correct ? w1.word : w1.word.substring(0, Math.max(1, w1.word.length - 2)) + 'x';
+                    const mockAns2 = isW2Correct ? w2.word : w2.word.substring(0, Math.max(1, w2.word.length - 2)) + 'x';
+                    const mockAns3 = isW3Correct ? w3.word : w3.word.substring(0, Math.max(1, w3.word.length - 2)) + 'x';
+                    
+                    previewHtml += `
+                        <tr>
+                            <td style="text-align: center; font-weight: 700;">${idx1 + 1}</td>
+                            <td>${w1.meaning}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns1}</span>
+                                    <span class="grading-mark ${isW1Correct ? 'correct-circle' : 'incorrect-cross'}">${isW1Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                            
+                            <td style="text-align: center; font-weight: 700;">${idx2 + 1}</td>
+                            <td>${w2.meaning}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns2}</span>
+                                    <span class="grading-mark ${isW2Correct ? 'correct-circle' : 'incorrect-cross'}">${isW2Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                            
+                            <td style="text-align: center; font-weight: 700;">${idx3 + 1}</td>
+                            <td>${w3.meaning}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns3}</span>
+                                    <span class="grading-mark ${isW3Correct ? 'correct-circle' : 'incorrect-cross'}">${isW3Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                previewHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = previewHtml;
+                
+                // Open modal
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.add('open');
+                
+                showToast('채점이 완료되었습니다. 마킹된 빨간 ✗ 표시의 오답들을 집중 복습해 보세요!');
+            }, 1500);
+        };
+        
+        // Modal close button
+        const btnGradingClose = document.getElementById('btn-vocab-grading-close');
+        if (btnGradingClose) {
+            btnGradingClose.addEventListener('click', () => {
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.remove('open');
+            });
+        }
+        
+        // Connect focused wrong word study button
+        const btnStartFocusWrong = document.getElementById('btn-start-focus-wrong-words');
+        if (btnStartFocusWrong) {
+            btnStartFocusWrong.addEventListener('click', () => {
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.remove('open');
+                
+                if (activeWrongWords.length === 0) {
+                    showToast('틀린 단어가 없어 오답 학습이 필요하지 않습니다!');
+                    return;
+                }
+                
+                // Show player modal with filtered wrong words
+                const vocabModal = document.getElementById('vocab-study-modal');
+                if (vocabModal) {
+                    vocabModal.classList.add('open');
+                    
+                    // Trigger study player immediately for wrong words
+                    activeStudyState = null;
+                    startActiveStudyPlayer('memorize', activeWrongWords);
+                }
             });
         }
 

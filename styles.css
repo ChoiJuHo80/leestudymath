@@ -2577,4 +2577,80 @@ body.student-view .blog-feed {
     color: #b91c1c;
 }
 
+/* ==========================================================================
+   A4 Test Sheet Print & Grading Layout
+   ========================================================================== */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+    #vocab-printable-test-sheet, #vocab-printable-test-sheet * {
+        visibility: visible !important;
+    }
+    #vocab-printable-test-sheet {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        display: block !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    @page {
+        size: A4 landscape;
+        margin: 12mm;
+    }
+}
 
+.vocab-test-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.85rem;
+}
+
+.vocab-test-table th, .vocab-test-table td {
+    border: 1px solid #000000;
+    padding: 8px 10px;
+    height: 38px;
+    vertical-align: middle;
+    color: #000000;
+}
+
+.vocab-test-table th {
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-weight: 700;
+    text-align: center;
+}
+
+.graded-cell-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.grading-mark {
+    font-size: 1.8rem;
+    font-weight: 800;
+    position: absolute;
+    right: 25px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.grading-mark.correct-circle {
+    color: rgba(34, 197, 94, 0.75); /* Green Circle */
+}
+
+.grading-mark.incorrect-cross {
+    color: rgba(239, 68, 68, 0.75); /* Red X */
+}
