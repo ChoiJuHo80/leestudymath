@@ -11622,6 +11622,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const spellInput = playerView.querySelector('#spell-input-text');
                 if (spellInput) {
                     spellInput.focus();
+                    
+                    // Live validation on keystroke
+                    spellInput.addEventListener('input', () => {
+                        const val = spellInput.value.trim().toLowerCase();
+                        const targetWord = w.word.split(' ')[0].toLowerCase();
+                        
+                        if (val === '') {
+                            spellInput.style.borderColor = '#cbd5e1';
+                            spellInput.style.color = '#1e293b';
+                            return;
+                        }
+                        
+                        if (targetWord.startsWith(val) || w.word.toLowerCase().startsWith(val)) {
+                            spellInput.style.borderColor = 'var(--mascot-purple-bg)';
+                            spellInput.style.color = '#1e293b';
+                        } else {
+                            spellInput.style.borderColor = '#ef4444';
+                            spellInput.style.color = '#ef4444';
+                        }
+                    });
+
                     spellInput.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') {
                             const val = spellInput.value.trim().toLowerCase();
@@ -11630,12 +11651,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             if (val === targetWord || val === w.word.toLowerCase()) {
                                 spellInput.style.borderColor = '#22c55e';
+                                spellInput.style.color = '#22c55e';
                                 setTimeout(() => {
                                     activeStudyState.currentIndex++;
                                     renderStudyPlayerStep();
                                 }, 1000);
                             } else {
                                 spellInput.style.borderColor = '#ef4444';
+                                spellInput.style.color = '#ef4444';
                                 playerView.querySelector('.try-again-badge').style.display = 'block';
                                 playerView.querySelector('.correct-spelling-answer').style.display = 'block';
                             }
