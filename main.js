@@ -11909,12 +11909,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h1 style="font-size: 2rem; font-weight: 800; border-bottom: 3px double #000000; display: inline-block; padding-bottom: 6px; margin: 0;">영단어 테스트 시험지</h1>
                     </div>
                     
-                    <div style="display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 20px; border: 1px solid #000000; padding: 10px 18px; font-size: 0.95rem;">
-                        <div>단어장: <span style="font-weight: 500;">${set.title}</span></div>
-                        <div>반: <span style="font-weight: 500; min-width: 80px; display: inline-block; border-bottom: 1px solid #000000;"></span></div>
-                        <div>이름: <span style="font-weight: 500; min-width: 80px; display: inline-block; border-bottom: 1px solid #000000;"></span></div>
-                        <div>점수: <span style="font-weight: 500; min-width: 60px; display: inline-block;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ 30 점</span></div>
-                    </div>
                     
                     <table class="vocab-test-table">
                         <thead>
