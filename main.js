@@ -5354,29 +5354,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parentChildren.length > 1 && childSelectContainer && childSelect) {
             childSelect.innerHTML = '';
             parentChildren.forEach(child => {
-                const opt = document.createElement('option');
-                opt.value = child.id;
-                opt.textContent = `${child.name} (${child.school || '학생'})`;
-                if (child.id === loggedInStudentId) {
-                    opt.selected = true;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'child-toggle-btn';
+                btn.style.padding = '8px 16px';
+                btn.style.borderRadius = '12px';
+                btn.style.fontSize = '0.9rem';
+                btn.style.fontWeight = '700';
+                btn.style.cursor = 'pointer';
+                btn.style.transition = 'all 0.2s';
+                btn.style.display = 'inline-flex';
+                btn.style.alignItems = 'center';
+                btn.style.gap = '6px';
+                
+                const isActive = String(child.id) === String(loggedInStudentId);
+                
+                if (isActive) {
+                    btn.style.background = 'var(--mascot-purple-bg)';
+                    btn.style.color = '#ffffff';
+                    btn.style.border = '1px solid var(--mascot-purple-bg)';
+                    btn.innerHTML = `<i data-lucide="check" style="width: 14px; height: 14px;"></i> ${child.name}`;
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.border = '1px solid var(--border-color)';
+                    btn.innerHTML = `${child.name}`;
                 }
-                childSelect.appendChild(opt);
+                
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loggedInStudentId = child.id;
+                    renderMyClass();
+                    
+                    const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
+                    if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
+                        window.renderStudentFormulasAndBadges(selectedChild);
+                    }
+                });
+                
+                childSelect.appendChild(btn);
             });
             
-            // Re-bind change listener (clone to remove old listeners)
-            const newSelect = childSelect.cloneNode(true);
-            childSelect.parentNode.replaceChild(newSelect, childSelect);
-            
-            newSelect.addEventListener('change', () => {
-                loggedInStudentId = parseStudentId(newSelect.value);
-                const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
-                renderMyClass();
-                if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
-                    window.renderStudentFormulasAndBadges(selectedChild);
-                }
-            });
-
+            // Adjust the parent selector container width and padding to dynamically fit the kids buttons
+            childSelectContainer.style.width = 'max-content';
+            childSelectContainer.style.minWidth = '220px';
+            childSelectContainer.style.padding = '16px 20px';
             childSelectContainer.style.display = 'block';
+            safeCreateIcons();
         } else {
             if (childSelectContainer) childSelectContainer.style.display = 'none';
         }
@@ -7003,38 +7027,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     loggedInStudentId = session.user.id;
                 }
 
-                // Populate Child Selector Dropdown
-                const childSelectContainer = document.getElementById('myclass-child-selector-container');
-                const childSelect = document.getElementById('myclass-child-select');
-
-                if (parentChildren.length > 1 && childSelectContainer && childSelect) {
-                    childSelect.innerHTML = '';
-                    parentChildren.forEach(child => {
-                        const opt = document.createElement('option');
-                        opt.value = child.id;
-                        opt.textContent = `${child.name} (${child.school || '학생'})`;
-                        if (child.id === loggedInStudentId) {
-                            opt.selected = true;
-                        }
-                        childSelect.appendChild(opt);
-                    });
-                    
-                    const newSelect = childSelect.cloneNode(true);
-                    childSelect.parentNode.replaceChild(newSelect, childSelect);
-                    
-                    newSelect.addEventListener('change', () => {
-                        loggedInStudentId = parseStudentId(newSelect.value);
-                        const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
-                        renderMyClass();
-                        if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
-                            window.renderStudentFormulasAndBadges(selectedChild);
-                        }
-                    });
-
-                    childSelectContainer.style.display = 'block';
-                } else {
-                    if (childSelectContainer) childSelectContainer.style.display = 'none';
-                }
+                // Selector is automatically populated during renderMyClass() below
 
                 updateLoginButton();
                 if (myclassSection) myclassSection.style.display = 'block';
