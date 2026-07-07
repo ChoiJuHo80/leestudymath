@@ -5909,39 +5909,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const inputId = studentLoginNameInput.value.trim();
             const inputPassword = studentLoginPhoneInput.value;
 
-            // Search in mock users children accounts
-            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
             let foundParent = null;
             let foundChild = null;
-            
-            mockUsers.forEach(u => {
-                const children = u.user_metadata?.children || [];
-                children.forEach(c => {
-                    if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && String(c.password) === String(inputPassword)) {
-                        foundParent = u;
-                        foundChild = c;
-                    }
-                });
-            });
 
-            // Fallback: Search directly in direct student accounts
+            // 1. Query Supabase directly first if online to check latest remote credentials
             const currentStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
-            if (!foundChild) {
-                const directStudent = currentStudents.find(s => s.username && s.username.toLowerCase() === inputId.toLowerCase() && String(s.password) === String(inputPassword));
-                if (directStudent) {
-                    foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
-                    // Map mock parent
-                    foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
-                        id: 'parent-' + directStudent.id,
-                        status: 'approved',
-                        phone: directStudent.parentPhone || '010-0000-0000',
-                        address: directStudent.address || ''
-                    };
-                }
-            }
-
-            // Supabase Real-time credentials lookup fallback
-            if (!foundChild && typeof supabase !== 'undefined' && supabase && !isMock) {
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
                 try {
                     const { data: dbStudents, error } = await supabase.from('sb_students')
                         .select('*')
@@ -5956,7 +5931,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             phone: directStudent.parentPhone || '010-0000-0000',
                             address: directStudent.address || ''
                         };
-                        // Cache this student record locally
+                        // Sync remote data back to local students list
                         const existingIdx = currentStudents.findIndex(s => s.username === directStudent.username);
                         if (existingIdx >= 0) {
                             currentStudents[existingIdx] = directStudent;
@@ -5965,9 +5940,55 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         localStorage.setItem('gongbubang_students', JSON.stringify(currentStudents));
                         students = currentStudents;
+                        
+                        // Also heal parent children local cache password to match the new password
+                        let parentUpdated = false;
+                        const updatedMockUsers = mockUsers.map(u => {
+                            if (u.phone === directStudent.parentPhone) {
+                                const children = u.user_metadata?.children || [];
+                                const updatedChildren = children.map(c => {
+                                    if (c.name === directStudent.name) {
+                                        parentUpdated = true;
+                                        return { ...c, username: directStudent.username, password: directStudent.password };
+                                    }
+                                    return c;
+                                });
+                                return { ...u, user_metadata: { ...u.user_metadata, children: updatedChildren } };
+                            }
+                            return u;
+                        });
+                        if (parentUpdated) {
+                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(updatedMockUsers));
+                        }
                     }
                 } catch (err) {
-                    console.error('Real-time Supabase auth fallback failed:', err);
+                    console.error('Supabase real-time auth failed, falling back to local cache check:', err);
+                }
+            }
+
+            // 2. Offline fallback using local storage caches
+            if (!foundChild) {
+                mockUsers.forEach(u => {
+                    const children = u.user_metadata?.children || [];
+                    children.forEach(c => {
+                        if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && String(c.password) === String(inputPassword)) {
+                            foundParent = u;
+                            foundChild = c;
+                        }
+                    });
+                });
+            }
+
+            if (!foundChild) {
+                const directStudent = currentStudents.find(s => s.username && s.username.toLowerCase() === inputId.toLowerCase() && String(s.password) === String(inputPassword));
+                if (directStudent) {
+                    foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
+                    foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                        id: 'parent-' + directStudent.id,
+                        status: 'approved',
+                        phone: directStudent.parentPhone || '010-0000-0000',
+                        address: directStudent.address || ''
+                    };
                 }
             }
 
@@ -10350,11 +10371,24 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStudentVocabularySets(student);
             
             const profileShelf = document.getElementById('student-profile-badge-shelf');
-            let studentFormulas = classFormulas.filter(f => String(f.classId) === String(student.classId));
+            
+            let sClassId = student.classId;
+            if (!sClassId || String(sClassId) === '1' || String(sClassId) === 'null' || String(sClassId) === 'undefined') {
+                const class4A = classes.find(c => c.name && (c.name.includes('초등 4학년 A반') || c.name.includes('초4 A반')));
+                if (class4A) sClassId = class4A.id;
+                else sClassId = 1782824078197; // Database default fallback for 초등 4학년 A반
+            }
+            
+            let studentFormulas = classFormulas.filter(f => String(f.classId) === String(sClassId));
             
             // Dynamic fallback if database is empty or not yet loaded
             if (studentFormulas.length === 0 && typeof defaultClassFormulas !== 'undefined') {
-                studentFormulas = defaultClassFormulas.filter(f => String(f.classId) === String(student.classId));
+                studentFormulas = defaultClassFormulas.map(f => {
+                    if (String(f.classId) === '1') {
+                        return { ...f, classId: sClassId };
+                    }
+                    return f;
+                }).filter(f => String(f.classId) === String(sClassId));
             }
             
             const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
