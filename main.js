@@ -11909,17 +11909,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     <table class="vocab-test-table">
                         <thead>
                             <tr>
-                                <th style="width: 5%;">번호</th>
-                                <th style="width: 18%;">의미</th>
-                                <th style="width: 15%;">영단어</th>
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
                                 
-                                <th style="width: 5%;">번호</th>
-                                <th style="width: 18%;">의미</th>
-                                <th style="width: 15%;">영단어</th>
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
                                 
-                                <th style="width: 5%;">번호</th>
-                                <th style="width: 18%;">의미</th>
-                                <th style="width: 15%;">영단어</th>
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -11930,18 +11930,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const w2 = words[i + 10] || { word: '', meaning: '' };
                 const w3 = words[i + 20] || { word: '', meaning: '' };
                 
+                const m1 = w1.meaning.split(',')[0].trim();
+                const m2 = w2.meaning.split(',')[0].trim();
+                const m3 = w3.meaning.split(',')[0].trim();
+                
                 tableHtml += `
                     <tr>
                         <td style="text-align: center; font-weight: 700;">${i + 1}</td>
-                        <td>${w1.meaning}</td>
+                        <td>${m1}</td>
                         <td></td>
                         
                         <td style="text-align: center; font-weight: 700;">${i + 11}</td>
-                        <td>${w2.meaning}</td>
+                        <td>${m2}</td>
                         <td></td>
                         
                         <td style="text-align: center; font-weight: 700;">${i + 21}</td>
-                        <td>${w3.meaning}</td>
+                        <td>${m3}</td>
                         <td></td>
                     </tr>
                 `;
@@ -11990,17 +11994,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <table class="vocab-test-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 5%;">번호</th>
-                                    <th style="width: 18%;">의미</th>
-                                    <th style="width: 15%;">영단어</th>
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
                                     
-                                    <th style="width: 5%;">번호</th>
-                                    <th style="width: 18%;">의미</th>
-                                    <th style="width: 15%;">영단어</th>
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
                                     
-                                    <th style="width: 5%;">번호</th>
-                                    <th style="width: 18%;">의미</th>
-                                    <th style="width: 15%;">영단어</th>
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -12015,6 +12019,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const w2 = words[idx2] || { word: '', meaning: '' };
                     const w3 = words[idx3] || { word: '', meaning: '' };
                     
+                    const m1 = w1.meaning.split(',')[0].trim();
+                    const m2 = w2.meaning.split(',')[0].trim();
+                    const m3 = w3.meaning.split(',')[0].trim();
+                    
                     const isW1Correct = !wrongIndexes.has(idx1);
                     const isW2Correct = !wrongIndexes.has(idx2);
                     const isW3Correct = !wrongIndexes.has(idx3);
@@ -12026,7 +12034,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewHtml += `
                         <tr>
                             <td style="text-align: center; font-weight: 700;">${idx1 + 1}</td>
-                            <td>${w1.meaning}</td>
+                            <td>${m1}</td>
                             <td>
                                 <div class="graded-cell-wrapper">
                                     <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns1}</span>
@@ -12035,7 +12043,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </td>
                             
                             <td style="text-align: center; font-weight: 700;">${idx2 + 1}</td>
-                            <td>${w2.meaning}</td>
+                            <td>${m2}</td>
                             <td>
                                 <div class="graded-cell-wrapper">
                                     <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns2}</span>
@@ -12044,7 +12052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </td>
                             
                             <td style="text-align: center; font-weight: 700;">${idx3 + 1}</td>
-                            <td>${w3.meaning}</td>
+                            <td>${m3}</td>
                             <td>
                                 <div class="graded-cell-wrapper">
                                     <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns3}</span>
