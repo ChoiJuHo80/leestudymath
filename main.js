@@ -471,6 +471,19 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
+    const mapCompletedVocabFromDb = (dbItem) => ({
+        id: dbItem.id,
+        studentId: dbItem.student_id,
+        vocabSetId: safeIntegerId(dbItem.vocab_set_id)
+    });
+
+    const mapCompletedVocabToDb = (jsItem) => ({
+        id: jsItem.id || Number(String(safeIntegerId(jsItem.vocabSetId)) + String(jsItem.studentId).replace(/[^\d]/g, '').slice(0, 5)),
+        student_id: String(jsItem.studentId),
+        vocab_set_id: safeIntegerId(jsItem.vocabSetId),
+        created_at: new Date().toISOString()
+    });
+
     const mapMockUserFromDb = (u) => ({
         id: u.id,
         email: u.email,
@@ -873,7 +886,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests'),
                 syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, defaultClassFormulas, 'gongbubang_class_formulas'),
                 syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges'),
-                syncTable('sb_word_sets', mapWordSetFromDb, mapWordSetToDb, [], 'gongbubang_word_sets')
+                syncTable('sb_word_sets', mapWordSetFromDb, mapWordSetToDb, [], 'gongbubang_word_sets'),
+                syncTable('sb_completed_vocab_sets', mapCompletedVocabFromDb, mapCompletedVocabToDb, [], 'gongbubang_completed_vocab_sets')
             ]);
 
             if (syncResults[0]) notices = syncResults[0];
@@ -914,6 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[14]) classFormulas = syncResults[14];
             if (syncResults[15]) studentBadges = syncResults[15];
             if (syncResults[16]) wordSets = syncResults[16];
+            if (syncResults[17]) completedVocabSets = syncResults[17];
 
             // Generate default formulas dynamically for actual classes from Supabase to prevent Foreign Key constraint violations
             if (classes.length > 0) {
@@ -2170,6 +2185,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let loggedInParentName = '';
     let currentNoticeTag = 'all';
     let currentNoticeQuery = '';
+    let currentVocabFilter = 'studying'; // 'studying' | 'completed'
+    let completedVocabSets = [];
+    try {
+        const stored = localStorage.getItem('gongbubang_completed_vocab_sets');
+        if (stored) completedVocabSets = JSON.parse(stored);
+    } catch(e){}
 
     // Default homework dummy data
     const defaultHomework = [
@@ -11233,20 +11254,77 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Student Vocabulary Dashboard UI ---
+        // --- Student Vocabulary Dashboard UI Filter Listeners ---
+        const initVocabFilters = () => {
+            const btnFilterStudying = document.getElementById('btn-vocab-filter-studying');
+            const btnFilterCompleted = document.getElementById('btn-vocab-filter-completed');
+            
+            if (btnFilterStudying && btnFilterCompleted) {
+                // Remove existing listeners by replacing buttons (or check if already bound)
+                if (!btnFilterStudying.dataset.bound) {
+                    btnFilterStudying.dataset.bound = "true";
+                    btnFilterStudying.addEventListener('click', () => {
+                        currentVocabFilter = 'studying';
+                        btnFilterStudying.classList.add('active');
+                        btnFilterStudying.style.background = 'var(--mascot-purple-bg)';
+                        btnFilterStudying.style.color = '#ffffff';
+                        btnFilterStudying.style.borderColor = 'var(--mascot-purple-bg)';
+                        
+                        btnFilterCompleted.classList.remove('active');
+                        btnFilterCompleted.style.background = '#ffffff';
+                        btnFilterCompleted.style.color = 'var(--text-secondary)';
+                        btnFilterCompleted.style.borderColor = 'var(--border-color)';
+                        
+                        const student = students.find(s => s.id === loggedInStudentId);
+                        if (student) renderStudentVocabularySets(student);
+                    });
+                }
+                
+                if (!btnFilterCompleted.dataset.bound) {
+                    btnFilterCompleted.dataset.bound = "true";
+                    btnFilterCompleted.addEventListener('click', () => {
+                        currentVocabFilter = 'completed';
+                        btnFilterCompleted.classList.add('active');
+                        btnFilterCompleted.style.background = 'var(--mascot-purple-bg)';
+                        btnFilterCompleted.style.color = '#ffffff';
+                        btnFilterCompleted.style.borderColor = 'var(--mascot-purple-bg)';
+                        
+                        btnFilterStudying.classList.remove('active');
+                        btnFilterStudying.style.background = '#ffffff';
+                        btnFilterStudying.style.color = 'var(--text-secondary)';
+                        btnFilterStudying.style.borderColor = 'var(--border-color)';
+                        
+                        const student = students.find(s => s.id === loggedInStudentId);
+                        if (student) renderStudentVocabularySets(student);
+                    });
+                }
+            }
+        };
+
         const renderStudentVocabularySets = (student) => {
             const container = document.getElementById('myclass-vocab-list');
             if (!container) return;
             
+            initVocabFilters();
             container.innerHTML = '';
+            
             // Show sets that belong to the student's class, or created personally by the student
-            const filtered = wordSets.filter(w => 
+            const baseFiltered = wordSets.filter(w => 
                 (w.classId && String(w.classId) === String(student.classId)) || 
                 (w.studentId && String(w.studentId) === String(student.id))
             );
             
+            // Sub-filter: Studying vs Completed
+            const filtered = baseFiltered.filter(w => {
+                const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(w.id) && String(c.studentId) === String(student.id));
+                return currentVocabFilter === 'completed' ? isDone : !isDone;
+            });
+            
             if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다. 상단 [+ 나만의 단어장 등록]을 클릭해 추가해 보세요.</div>';
+                const msg = currentVocabFilter === 'completed' 
+                    ? '학습 완료된 단어장이 없습니다.' 
+                    : '학습 중인 단어장이 없습니다. 상단 [+ 나만의 단어장 등록]을 클릭해 추가해 보세요.';
+                container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">${msg}</div>`;
                 return;
             }
             
@@ -11266,6 +11344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.onmouseout = () => { item.style.borderColor = 'var(--border-color)'; item.style.transform = 'none'; };
                 
                 const isPersonal = !!set.studentId;
+                const isCompleted = completedVocabSets.some(c => String(c.vocabSetId) === String(set.id) && String(c.studentId) === String(student.id));
                 
                 item.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -11276,6 +11355,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                        <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid ${isCompleted ? '#22c55e' : 'var(--border-color)'}; background: ${isCompleted ? '#f0fdf4' : '#ffffff'}; color: ${isCompleted ? '#22c55e' : 'var(--text-secondary)'}; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                            <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
+                        </button>
                         <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; color: var(--text-primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
                             <i data-lucide="printer" style="width: 13px; height: 13px;"></i> 인쇄
                         </button>
@@ -11294,6 +11376,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.addEventListener('click', (e) => {
                     if (e.target.closest('.vocab-action-area')) return;
                     openVocabStudyPlayer(set, student);
+                });
+                
+                // Toggle study completion status
+                item.querySelector('.btn-toggle-vocab-complete').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const studentId = student.id;
+                    const vocabSetId = set.id;
+                    const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(vocabSetId) && String(c.studentId) === String(studentId));
+                    
+                    if (isDone) {
+                        completedVocabSets = completedVocabSets.filter(c => !(String(c.vocabSetId) === String(vocabSetId) && String(c.studentId) === String(studentId)));
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                await supabase.from('sb_completed_vocab_sets')
+                                    .delete()
+                                    .eq('student_id', String(studentId))
+                                    .eq('vocab_set_id', safeIntegerId(vocabSetId));
+                            } catch(err){}
+                        }
+                        showToast('학습 중으로 완료 상태가 해제되었습니다.');
+                    } else {
+                        const newCompleted = {
+                            id: Date.now(),
+                            studentId,
+                            vocabSetId
+                        };
+                        completedVocabSets.push(newCompleted);
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                await supabase.from('sb_completed_vocab_sets').insert(mapCompletedVocabToDb(newCompleted));
+                            } catch(err){}
+                        }
+                        showToast('단어 학습 완료! 참 잘했어요! 🎉');
+                    }
+                    try { localStorage.setItem('gongbubang_completed_vocab_sets', JSON.stringify(completedVocabSets)); } catch(err){}
+                    renderStudentVocabularySets(student);
                 });
                 
                 // Print test sheet handler
