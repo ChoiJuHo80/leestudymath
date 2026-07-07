@@ -261,6 +261,9 @@
                         <a href="#class-formulas-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 반별 공식 관리
                         </a>
+                        <a href="#class-words-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 영어단어 관리
+                        </a>
                         <a href="#ai-query-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역
                         </a>
@@ -659,6 +662,105 @@
                         </div>
                     </div>
 
+                    <!-- English Vocabulary Management Card -->
+                    <div class="class-management-card" id="class-words-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
+                        <div class="class-management-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                            <div>
+                                <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 22px; height: 22px;"></i> 반별 영어단어 관리
+                                </h3>
+                                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">반별 영어 단어장을 생성하고 배포합니다. 유인물 사진(이미지) 업로드 시 자동으로 단어와 뜻이 매핑됩니다.</p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label for="vocab-class-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">관리 반 선택:</label>
+                                <select id="vocab-class-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; outline: none; background: #ffffff;">
+                                    <!-- filled dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Placeholder for unselected class state -->
+                        <div id="vocab-management-placeholder" style="text-align: center; padding: 40px; color: var(--text-secondary); font-weight: 700; border: 1px dashed var(--border-color); border-radius: 12px; margin-top: 20px; font-size: 0.9rem;">
+                            <i data-lucide="info" style="width: 28px; height: 28px; display: block; margin: 0 auto 10px auto; color: var(--text-muted);"></i>
+                            상단의 '관리 반 선택' 목록에서 단어장을 등록/관리할 반을 먼저 선택해 주세요.
+                        </div>
+
+                        <div id="vocab-management-content" style="display: none; margin-top: 20px;">
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 24px;">
+                                <!-- Top section: Add/Edit Vocabulary Set Form -->
+                                <div class="class-form-container" style="margin: 0; width: 100%; max-width: 100%; box-sizing: border-box;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--mascot-purple-bg); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 새 영어 단어장 등록
+                                    </h4>
+                                    
+                                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px solid var(--border-color);">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <i data-lucide="globe" style="width: 16px; height: 16px; color: var(--mascot-purple-bg);"></i>
+                                            <select id="vocab-tts-lang" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.8rem; font-weight: 700; background: #ffffff;">
+                                                <option value="en-US">English (TTS 자동생성)</option>
+                                                <option value="en-GB">English (UK)</option>
+                                            </select>
+                                        </div>
+                                        <div style="font-size: 0.78rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                            <i data-lucide="info" style="width: 14px; height: 14px;"></i> 발음 생략방법
+                                        </div>
+                                        <div style="margin-left: auto; display: flex; gap: 14px; align-items: center; font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">
+                                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 400;">자동입력 설정 | </span>
+                                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                                <input type="checkbox" id="vocab-chk-pos" checked style="cursor: pointer;"> 의미에 품사표시
+                                            </label>
+                                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                                <input type="checkbox" id="vocab-chk-extra" checked style="cursor: pointer;"> 이미지, 예문 자동입력
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <form id="vocab-editor-form" style="display: grid; gap: 14px;">
+                                        <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                            <label for="vocab-title-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">단어장 이름</label>
+                                            <div style="display: flex; gap: 8px;">
+                                                <input type="text" id="vocab-title-input" required placeholder="예: 이준 영단어 6월29일" style="flex-grow: 1; padding: 10px 14px; font-size: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; outline: none; background: #ffffff;">
+                                                
+                                                <button type="button" id="btn-vocab-ocr" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 0 16px; height: auto; background: var(--mascot-purple-bg); white-space: nowrap; margin-bottom: 0; display: flex; align-items: center; gap: 4px;">
+                                                    📷 유인물 이미지 스캔
+                                                </button>
+                                                <input type="file" id="vocab-ocr-file" accept="image/*" style="display: none;">
+                                            </div>
+                                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">* 단어장 유인물 사진을 올리면 1번부터 30번까지 자동으로 채워집니다.</p>
+                                        </div>
+
+                                        <!-- Vocabulary list input grid -->
+                                        <div style="margin-top: 10px; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;">
+                                            <!-- Table Header -->
+                                            <div style="display: grid; grid-template-columns: 60px 1.2fr 1.2fr 1fr; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 0.8rem; text-align: center; color: var(--text-secondary);">
+                                                <div>번호</div>
+                                                <div>단어</div>
+                                                <div>의미</div>
+                                                <div>예문</div>
+                                            </div>
+                                            <!-- Words Inputs Container (30 rows) -->
+                                            <div id="vocab-words-inputs-container" style="max-height: 400px; overflow-y: auto; background: #ffffff;">
+                                                <!-- Javascript will populate 30 rows here dynamically -->
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn-admin-write" style="width: 100%; margin-top: 10px; padding: 12px; font-size: 0.95rem; border-radius: 10px; background: var(--mascot-purple-bg); font-weight: 700;">세트 저장</button>
+                                    </form>
+                                </div>
+
+                                <!-- Bottom section: Registered Vocabulary Sets List -->
+                                <div class="class-list-column" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                        <i data-lucide="list" style="width: 18px; height: 18px; color: var(--text-secondary);"></i> 등록된 영어 단어장 목록
+                                    </h4>
+                                    <div id="vocab-sets-list-container" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
+                                        <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Consultation Inquiry Management Section (Admin Only) -->
                     <div class="class-management-card" id="ai-query-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
                         <div class="class-management-header">
@@ -984,6 +1086,9 @@
                         <a href="#myclass-badge-shelf-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 나의 배지 진열대
                         </a>
+                        <a href="#myclass-vocab-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 영어단어 학습
+                        </a>
                         <a href="#myclass-textbook-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청
                         </a>
@@ -1047,6 +1152,18 @@
                                 <p style="font-size: 0.85rem; color: var(--text-secondary);">공식을 완벽하게 마스터하여 획득한 영광스러운 배지들입니다.</p>
                                 <div id="myclass-badge-shelf-container" class="badge-shelf-grid" style="margin-top: 10px; text-align: center;">
                                     <!-- Badges will be rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- English Vocabulary Widget -->
+                            <div class="widget" id="myclass-vocab-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="book-open" style="color: var(--mascot-purple-bg);"></i>나의 영어단어 학습
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">반별로 배포된 단어장을 암기/리콜/스펠 학습 모드를 통해 재미있게 학습해 보세요.</p>
+                                <div id="myclass-vocab-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                    <!-- Vocabulary sets will be rendered dynamically -->
+                                    <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">배포된 단어장이 없습니다.</div>
                                 </div>
                             </div>
 
@@ -2274,6 +2391,52 @@
                 <button type="button" id="btn-quiz-prev" style="padding: 10px 18px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; font-weight: 600; display: none;">이전 문제</button>
                 <span style="flex-grow: 1;"></span>
                 <button type="button" id="btn-quiz-next" class="btn-admin-write" style="box-shadow: none; border-radius: 8px; padding: 10px 20px; height: auto; background: var(--mascot-pink-bg); white-space: nowrap; margin-bottom: 0; font-weight: 700;">다음 문제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: English Vocabulary Study Player -->
+    <div class="modal-overlay" id="vocab-study-modal">
+        <div class="modal-box" style="max-width: 850px; width: 95%; padding: 24px; background: #f8fafc; border-radius: 24px; max-height: 90vh; overflow-y: auto;">
+            <button type="button" class="modal-close-btn" id="btn-vocab-study-close"><i data-lucide="x"></i></button>
+            
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 24px; height: 24px;"></i>
+                <h3 class="modal-title" id="vocab-study-title" style="margin: 0; font-size: 1.4rem;">영어단어 학습 플레이어</h3>
+            </div>
+            <p class="modal-desc" id="vocab-study-desc" style="margin-bottom: 20px;">구간별 학습 및 암기/리콜/스펠 시스템을 통해 단어를 완벽하게 내 것으로 만듭니다.</p>
+
+            <!-- Learning Board (Normal Mode / Interval Cards View) -->
+            <div id="vocab-normal-view">
+                <!-- Action Controls Bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px 18px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <select id="vocab-interval-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.85rem; outline: none; background: #ffffff; color: var(--mascot-purple-bg);">
+                            <option value="1">1구간 (1 ~ 10번)</option>
+                            <option value="2">2구간 (11 ~ 20번)</option>
+                            <option value="3">3구간 (21 ~ 30번)</option>
+                        </select>
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="vocab-toggle-meanings" style="cursor: pointer;"> 뜻 보기
+                        </label>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button type="button" id="btn-start-memorize" class="vocab-mode-btn" style="padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; border: 1px solid #22c55e; color: #22c55e; background: #f0fdf4; cursor: pointer; transition: all 0.2s;">암기학습</button>
+                        <button type="button" id="btn-start-recall" class="vocab-mode-btn" style="padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; border: 1px solid #3b82f6; color: #3b82f6; background: #eff6ff; cursor: pointer; transition: all 0.2s;">리콜학습</button>
+                        <button type="button" id="btn-start-spell" class="vocab-mode-btn" style="padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; border: 1px solid #a855f7; color: #a855f7; background: #faf5ff; cursor: pointer; transition: all 0.2s;">스펠학습</button>
+                    </div>
+                </div>
+
+                <!-- Word Cards Grid (10 cards) -->
+                <div id="vocab-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px;">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+
+            <!-- Learning Player (Active Study Overlay) -->
+            <div id="vocab-study-player-view" style="display: none; background: #1e293b; border-radius: 24px; padding: 30px; min-height: 480px; position: relative; color: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;">
+                <!-- Filled dynamically by JavaScript depending on current study state -->
             </div>
         </div>
     </div>

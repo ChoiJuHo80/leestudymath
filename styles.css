@@ -2456,3 +2456,125 @@ body.student-view .blog-feed {
     flex: 1 1 100% !important;
 }
 
+/* English Vocabulary Study Styles */
+.vocab-card-item {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    text-align: center;
+    user-select: none;
+}
+.vocab-card-item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    border-color: var(--mascot-purple-bg);
+}
+.vocab-card-favorite {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.vocab-card-favorite.active {
+    color: #fbbf24;
+}
+.vocab-card-speaker {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.vocab-card-speaker:hover {
+    color: var(--mascot-purple-bg);
+}
+
+/* Matching Game Styles */
+.matching-card {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #1e293b;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.matching-card:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+.matching-card.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.matching-card.correct {
+    border-color: #22c55e;
+    background: #f0fdf4;
+    color: #22c55e;
+    pointer-events: none;
+    opacity: 0.5;
+}
+.matching-card.incorrect {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #ef4444;
+}
+
+/* Choice Buttons for Recall */
+.recall-choice-btn {
+    width: 100%;
+    text-align: left;
+    padding: 14px 20px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.recall-choice-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+.recall-choice-btn.correct {
+    background: #f0fdf4;
+    border-color: #22c55e;
+    color: #15803d;
+}
+.recall-choice-btn.incorrect {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #b91c1c;
+}
+
+

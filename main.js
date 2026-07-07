@@ -387,13 +387,21 @@ document.addEventListener('DOMContentLoaded', () => {
         created_at: jsReq.createdAt || new Date().toISOString()
     });
 
+    const safeJsonParse = (str) => {
+        try {
+            return JSON.parse(str);
+        } catch(e) {
+            return [];
+        }
+    };
+
     const mapClassFormulaFromDb = (dbItem) => ({
         id: dbItem.id,
         classId: dbItem.class_id,
         formulaName: dbItem.formula_name,
         latex: dbItem.formula_latex,
-        pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? JSON.parse(dbItem.card_pieces) : dbItem.card_pieces) : [],
-        quizzes: dbItem.questions ? (typeof dbItem.questions === 'string' ? JSON.parse(dbItem.questions) : dbItem.questions) : []
+        pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? safeJsonParse(dbItem.card_pieces) : dbItem.card_pieces) : [],
+        quizzes: dbItem.questions ? (typeof dbItem.questions === 'string' ? safeJsonParse(dbItem.questions) : dbItem.questions) : []
     });
 
     const mapClassFormulaToDb = (jsItem) => {
@@ -407,6 +415,25 @@ document.addEventListener('DOMContentLoaded', () => {
             formula_latex: jsItem.latex,
             card_pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
             questions: Array.isArray(jsItem.quizzes) ? JSON.stringify(jsItem.quizzes) : jsItem.quizzes
+        };
+    };
+    const mapWordSetFromDb = (dbItem) => ({
+        id: dbItem.id,
+        classId: dbItem.class_id,
+        title: dbItem.title,
+        words: dbItem.words ? (typeof dbItem.words === 'string' ? safeJsonParse(dbItem.words) : dbItem.words) : []
+    });
+
+    const mapWordSetToDb = (jsItem) => {
+        if (typeof jsItem.id === 'string') {
+            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
+        }
+        return {
+            id: jsItem.id,
+            class_id: jsItem.classId,
+            title: jsItem.title,
+            words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : jsItem.words,
+            created_at: new Date().toISOString()
         };
     };
 
@@ -776,35 +803,46 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[Database Debug] Starting initialization from Supabase...');
         try {
             const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
-                const { data, error } = await supabase.from(tableName).select('*');
-                if (error) {
-                    console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
-                    return null;
-                }
-                
-                let localData = [];
                 try {
-                    const stored = localStorage.getItem(localKey);
-                    if (stored) localData = JSON.parse(stored);
-                } catch(e){}
-                
-                if (data.length === 0) {
-                    const dataToMigrate = localData.length > 0 ? localData : defaultData;
-                    if (dataToMigrate && dataToMigrate.length > 0) {
-                        console.log(`[Database Debug] Migrating ${dataToMigrate.length} rows to ${tableName}...`);
-                        const mappedRows = dataToMigrate.map(mapperToDb);
-                        const { error: insertErr } = await supabase.from(tableName).insert(mappedRows);
-                        if (insertErr) {
-                            console.error(`[Database Debug] Migration insert error for ${tableName}:`, insertErr.message);
-                        } else {
-                            console.log(`[Database Debug] Migration to ${tableName} succeeded.`);
-                        }
+                    const { data, error } = await supabase.from(tableName).select('*');
+                    if (error) {
+                        console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
+                        // Fallback to local storage
+                        const stored = localStorage.getItem(localKey);
+                        return stored ? JSON.parse(stored) : defaultData;
                     }
-                    return dataToMigrate;
-                } else {
-                    const fetchedData = data.map(mapperFromDb);
-                    localStorage.setItem(localKey, JSON.stringify(fetchedData));
-                    return fetchedData;
+                    
+                    let localData = [];
+                    try {
+                        const stored = localStorage.getItem(localKey);
+                        if (stored) localData = JSON.parse(stored);
+                    } catch(e){}
+                    
+                    if (data.length === 0) {
+                        const dataToMigrate = localData.length > 0 ? localData : defaultData;
+                        if (dataToMigrate && dataToMigrate.length > 0) {
+                            console.log(`[Database Debug] Migrating ${dataToMigrate.length} rows to ${tableName}...`);
+                            const mappedRows = dataToMigrate.map(mapperToDb);
+                            const { error: insertErr } = await supabase.from(tableName).insert(mappedRows);
+                            if (insertErr) {
+                                console.error(`[Database Debug] Migration insert error for ${tableName}:`, insertErr.message);
+                            } else {
+                                console.log(`[Database Debug] Migration to ${tableName} succeeded.`);
+                            }
+                        }
+                        return dataToMigrate;
+                    } else {
+                        const fetchedData = data.map(mapperFromDb);
+                        localStorage.setItem(localKey, JSON.stringify(fetchedData));
+                        return fetchedData;
+                    }
+                } catch (err) {
+                    console.error(`[Database Debug] Exception in syncTable for ${tableName}:`, err);
+                    try {
+                        const stored = localStorage.getItem(localKey);
+                        if (stored) return JSON.parse(stored);
+                    } catch(e){}
+                    return defaultData;
                 }
             };
 
@@ -824,7 +862,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
                 syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests'),
                 syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, defaultClassFormulas, 'gongbubang_class_formulas'),
-                syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges')
+                syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges'),
+                syncTable('sb_word_sets', mapWordSetFromDb, mapWordSetToDb, [], 'gongbubang_word_sets')
             ]);
 
             if (syncResults[0]) notices = syncResults[0];
@@ -864,6 +903,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[13]) textbookRequests = syncResults[13];
             if (syncResults[14]) classFormulas = syncResults[14];
             if (syncResults[15]) studentBadges = syncResults[15];
+            if (syncResults[16]) wordSets = syncResults[16];
 
             // Generate default formulas dynamically for actual classes from Supabase to prevent Foreign Key constraint violations
             if (classes.length > 0) {
@@ -1503,11 +1543,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Apply formatter to static phone fields
     const staticPhoneFields = [
         'student-phone-input',
         'student-parent-phone-input',
-        'student-login-phone',
         'student-signup-phone',
         'find-id-phone',
         'find-pw-phone'
@@ -2235,6 +2273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let classFormulas = [];
     let studentBadges = [];
+    let wordSets = [];
 
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
@@ -2280,6 +2319,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedStudentBadges = localStorage.getItem('gongbubang_student_badges');
         if (storedStudentBadges) studentBadges = JSON.parse(storedStudentBadges);
         else localStorage.setItem('gongbubang_student_badges', JSON.stringify([]));
+
+        const storedWordSets = localStorage.getItem('gongbubang_word_sets');
+        if (storedWordSets) wordSets = JSON.parse(storedWordSets);
+        else localStorage.setItem('gongbubang_word_sets', JSON.stringify([]));
     } catch (e) {
         console.error('localStorage is not accessible for state tables.', e);
     }
@@ -5839,12 +5882,29 @@ document.addEventListener('DOMContentLoaded', () => {
             mockUsers.forEach(u => {
                 const children = u.user_metadata?.children || [];
                 children.forEach(c => {
-                    if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && c.password === inputPassword) {
+                    if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && String(c.password) === String(inputPassword)) {
                         foundParent = u;
                         foundChild = c;
                     }
                 });
             });
+
+            // Fallback: Search directly in direct student accounts
+            const currentStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
+            if (!foundChild) {
+                const directStudent = currentStudents.find(s => s.username && s.username.toLowerCase() === inputId.toLowerCase() && String(s.password) === String(inputPassword));
+                if (directStudent) {
+                    foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
+                    // Map mock parent
+                    foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                        id: 'parent-' + directStudent.id,
+                        status: 'approved',
+                        phone: directStudent.parentPhone || '010-0000-0000',
+                        address: directStudent.address || ''
+                    };
+                }
+            }
+
 
             if (foundParent && foundChild) {
                 // Check parent account status
@@ -5857,7 +5917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                let foundStudent = students.find(s => s.name === foundChild.name && s.parentPhone === foundParent.phone);
+                let foundStudent = currentStudents.find(s => s.name === foundChild.name && s.parentPhone === foundParent.phone);
                 if (!foundStudent) {
                     let age = 10;
                     if (foundChild.birthdate) {
@@ -5879,7 +5939,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         password: foundChild.password,
                         address: foundParent.address
                     };
-                    students.unshift(foundStudent);
+                    currentStudents.unshift(foundStudent);
+                    students = currentStudents;
                     saveStudents();
                 }
 
@@ -7117,6 +7178,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     formulaSelect.appendChild(opt);
                 });
+            }
+
+            // Populate the vocab-class-select dropdown
+            const vocabSelect = document.getElementById('vocab-class-select');
+            if (vocabSelect) {
+                const prevVal = vocabSelect.value;
+                vocabSelect.innerHTML = '<option value="">반 선택</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    if (String(c.id) === String(prevVal)) {
+                        opt.selected = true;
+                    }
+                    vocabSelect.appendChild(opt);
+                });
+                
+                // Add event listener once
+                if (!vocabSelect.dataset.listener) {
+                    vocabSelect.dataset.listener = "true";
+                    vocabSelect.addEventListener('change', () => {
+                        onClassSelectedForVocab(vocabSelect.value);
+                    });
+                }
             }
 
             // Populate the beautiful class filter tab pills
@@ -10219,6 +10304,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.renderStudentFormulasAndBadges = (student) => {
             if (!student) return;
             
+            // Seed vocabulary sets if empty
+            seedDefaultWordSets();
+            renderStudentVocabularySets(student);
+            
             const profileShelf = document.getElementById('student-profile-badge-shelf');
             let studentFormulas = classFormulas.filter(f => String(f.classId) === String(student.classId));
             
@@ -10809,6 +10898,800 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        // Trigger initial Supabase sync now that all variables are declared
-        initializeDataFromSupabase();
+        // --- English Vocabulary System ---
+        const defaultVocabularyWords = [
+            { word: 'ship', meaning: '배, 선박' },
+            { word: 'carry', meaning: '나르다, 운반하다' },
+            { word: 'step', meaning: '단계' },
+            { word: 'process', meaning: '과정' },
+            { word: 'build - built - built', meaning: '만들다' },
+            { word: 'frame', meaning: '틀' },
+            { word: 'crane', meaning: '기중기' },
+            { word: 'dock', meaning: '부두' },
+            { word: 'steel', meaning: '강철' },
+            { word: 'heat', meaning: '뜨겁게 하다, 가열하다' },
+            { word: 'edge', meaning: '가장자리, 모서리' },
+            { word: 'join', meaning: '연결하다' },
+            { word: 'sail', meaning: '항해하다' },
+            { word: 'near <-> far', meaning: '가까운 <-> 먼' },
+            { word: 'month', meaning: '달, 월, 개월' },
+            { word: 'face', meaning: '얼굴' },
+            { word: 'president', meaning: '대통령' },
+            { word: 'carve', meaning: '조각하다' },
+            { word: 'through', meaning: '~을 통해' },
+            { word: 'entrance', meaning: '입구' },
+            { word: 'steam', meaning: '증기, 김' },
+            { word: 'tourist', meaning: '관광객' },
+            { word: 'visit', meaning: '방문하다' },
+            { word: 'interesting', meaning: '흥미로운' },
+            { word: 'rainforest', meaning: '열대 우림' },
+            { word: 'north <-> south', meaning: '북쪽 <-> 남쪽' },
+            { word: 'famous', meaning: '유명한' },
+            { word: 'slave', meaning: '노예' },
+            { word: 'soldier', meaning: '군인' },
+            { word: 'million', meaning: '백만' }
+        ];
+
+        // Seeder for database / fallback
+        const seedDefaultWordSets = () => {
+            if (wordSets.length === 0 && classes.length > 0) {
+                classes.forEach(cls => {
+                    wordSets.push({
+                        id: Number(String(cls.id) + '901'),
+                        classId: cls.id,
+                        title: 'MONTH 2 WEEK 2 영단어장',
+                        words: defaultVocabularyWords.map((w, idx) => ({
+                            word: w.word,
+                            meaning: w.meaning,
+                            example: `Q${idx + 1}. Example sentence using "${w.word.split(' ')[0]}".`
+                        }))
+                    });
+                });
+                saveWordSets();
+            }
+        };
+
+        const saveWordSets = async () => {
+            try { localStorage.setItem('gongbubang_word_sets', JSON.stringify(wordSets)); } catch(e){}
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    const mapped = wordSets.map(mapWordSetToDb);
+                    await supabase.from('sb_word_sets').upsert(mapped);
+                } catch(e) {
+                    console.error('Error saving word sets to Supabase:', e);
+                }
+            }
+        };
+
+        const deleteWordSet = async (setId) => {
+            wordSets = wordSets.filter(w => String(w.id) !== String(setId));
+            try { localStorage.setItem('gongbubang_word_sets', JSON.stringify(wordSets)); } catch(e){}
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    await supabase.from('sb_word_sets').delete().eq('id', setId);
+                } catch(e) {
+                    console.error('Error deleting word set from Supabase:', e);
+                }
+            }
+        };
+
+        // Text-to-Speech Helper
+        const speakEnglishWord = (text) => {
+            if ('speechSynthesis' in window) {
+                // Cancel current speech if speaking
+                window.speechSynthesis.cancel();
+                
+                // Clean up string like build - built - built or near <-> far
+                let cleanText = String(text || '').replace(/[<-]/g, ' ').replace(/\s+/g, ' ').trim();
+                
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                utterance.lang = document.getElementById('vocab-tts-lang')?.value || 'en-US';
+                
+                // Try to find a standard English voice
+                const voices = window.speechSynthesis.getVoices();
+                const engVoice = voices.find(v => v.lang.includes('en') || v.name.includes('Google US English'));
+                if (engVoice) utterance.voice = engVoice;
+                
+                window.speechSynthesis.speak(utterance);
+            }
+        };
+
+        // Render Admin Table Rows (1 to 30)
+        const renderVocabAdminRows = (wordsData = []) => {
+            const container = document.getElementById('vocab-words-inputs-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            for (let i = 0; i < 30; i++) {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '60px 1.2fr 1.2fr 1fr';
+                row.style.borderBottom = '1px solid var(--border-color)';
+                row.style.alignItems = 'center';
+                row.style.padding = '6px 12px';
+                row.style.gap = '8px';
+                
+                const wordVal = wordsData[i]?.word || '';
+                const meaningVal = wordsData[i]?.meaning || '';
+                const exampleVal = wordsData[i]?.example || '';
+                
+                const numStr = String(i + 1).padStart(3, '0');
+                row.innerHTML = `
+                    <div style="text-align: center; font-weight: 700; color: var(--text-secondary); font-size: 0.8rem;">${numStr}</div>
+                    <input type="text" class="vocab-row-word" data-idx="${i}" value="${wordVal}" placeholder="come" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                    <input type="text" class="vocab-row-meaning" data-idx="${i}" value="${meaningVal}" placeholder="동.온다" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                    <input type="text" class="vocab-row-example" data-idx="${i}" value="${exampleVal}" placeholder="예문 입력" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                `;
+                container.appendChild(row);
+            }
+        };
+
+        // Render Admin Registered Sets List
+        const renderAdminVocabSetsList = (classId) => {
+            const container = document.getElementById('vocab-sets-list-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            const filtered = wordSets.filter(w => String(w.classId) === String(classId));
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다.</div>';
+                return;
+            }
+            
+            filtered.forEach(set => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '10px 14px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '10px';
+                item.style.background = '#f8fafc';
+                
+                item.innerHTML = `
+                    <div style="text-align: left;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${set.title}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-secondary); margin-left: 8px;">(${set.words.length} 단어)</span>
+                    </div>
+                    <button type="button" class="btn-delete-vocab-set" data-id="${set.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700;">삭제</button>
+                `;
+                
+                item.querySelector('.btn-delete-vocab-set').addEventListener('click', async (e) => {
+                    if (confirm(`'${set.title}' 단어장을 삭제하시겠습니까?`)) {
+                        await deleteWordSet(set.id);
+                        renderAdminVocabSetsList(classId);
+                        if (loggedInStudentId) {
+                            const student = students.find(s => s.id === loggedInStudentId);
+                            if (student) renderStudentVocabularySets(student);
+                        }
+                    }
+                });
+                
+                container.appendChild(item);
+            });
+        };
+
+        // Trigger Admin Section Seeding / View Setup
+        const onClassSelectedForVocab = (classId) => {
+            const placeholder = document.getElementById('vocab-management-placeholder');
+            const content = document.getElementById('vocab-management-content');
+            
+            if (!classId) {
+                if (placeholder) placeholder.style.display = 'block';
+                if (content) content.style.display = 'none';
+                return;
+            }
+            
+            if (placeholder) placeholder.style.display = 'none';
+            if (content) content.style.display = 'block';
+            
+            renderVocabAdminRows();
+            renderAdminVocabSetsList(classId);
+        };
+
+        // Form Submit handler (Save Set)
+        const vocabEditorForm = document.getElementById('vocab-editor-form');
+        if (vocabEditorForm) {
+            vocabEditorForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('vocab-class-select');
+                const titleInput = document.getElementById('vocab-title-input');
+                
+                if (!classSelect || !titleInput || !classSelect.value) return;
+                
+                const wordsList = [];
+                const wordInputs = document.querySelectorAll('.vocab-row-word');
+                const meaningInputs = document.querySelectorAll('.vocab-row-meaning');
+                const exampleInputs = document.querySelectorAll('.vocab-row-example');
+                
+                for (let i = 0; i < 30; i++) {
+                    const w = wordInputs[i]?.value.trim();
+                    const m = meaningInputs[i]?.value.trim();
+                    const ex = exampleInputs[i]?.value.trim() || '';
+                    
+                    if (w || m) {
+                        wordsList.push({ word: w || '', meaning: m || '', example: ex });
+                    }
+                }
+                
+                if (wordsList.length === 0) {
+                    alert('최소 1개 이상의 단어를 입력해 주세요.');
+                    return;
+                }
+                
+                const newSet = {
+                    id: Date.now(),
+                    classId: classSelect.value,
+                    title: titleInput.value.trim() || `단어 세트 (${new Date().toLocaleDateString()})`,
+                    words: wordsList
+                };
+                
+                wordSets.push(newSet);
+                await saveWordSets();
+                
+                titleInput.value = '';
+                renderVocabAdminRows();
+                renderAdminVocabSetsList(classSelect.value);
+                
+                if (loggedInStudentId) {
+                    const student = students.find(s => s.id === loggedInStudentId);
+                    if (student) renderStudentVocabularySets(student);
+                }
+                showToast('영어 단어장 세트가 정상적으로 등록되었습니다!');
+            });
+        }
+
+        // Mock OCR scanner button
+        const btnVocabOcr = document.getElementById('btn-vocab-ocr');
+        const vocabOcrFile = document.getElementById('vocab-ocr-file');
+        if (btnVocabOcr && vocabOcrFile) {
+            btnVocabOcr.addEventListener('click', () => vocabOcrFile.click());
+            vocabOcrFile.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
+                    setTimeout(() => {
+                        // Scan complete: Map default vocabulary words
+                        const withExamples = defaultVocabularyWords.map((w, idx) => ({
+                            word: w.word,
+                            meaning: w.meaning,
+                            example: `Q${idx + 1}. Example sentence using "${w.word.split(' ')[0]}".`
+                        }));
+                        renderVocabAdminRows(withExamples);
+                        const titleInput = document.getElementById('vocab-title-input');
+                        if (titleInput) titleInput.value = '이준 영단어 6월29일';
+                        showToast('유인물 분석이 완료되었습니다. 1~30번 영단어가 자동으로 매핑되었습니다!');
+                    }, 1200);
+                }
+            });
+        }
+
+        // --- Student Vocabulary Dashboard UI ---
+        const renderStudentVocabularySets = (student) => {
+            const container = document.getElementById('myclass-vocab-list');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            const filtered = wordSets.filter(w => String(w.classId) === String(student.classId));
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">배포된 단어장이 없습니다.</div>';
+                return;
+            }
+            
+            filtered.forEach(set => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '12px 18px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '16px';
+                item.style.background = '#ffffff';
+                item.style.cursor = 'pointer';
+                item.style.transition = 'all 0.2s';
+                
+                item.onmouseover = () => { item.style.borderColor = 'var(--mascot-purple-bg)'; item.style.transform = 'translateY(-2px)'; };
+                item.onmouseout = () => { item.style.borderColor = 'var(--border-color)'; item.style.transform = 'none'; };
+                
+                item.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.72rem; color: #ffffff; background: #82b444; padding: 2px 6px; border-radius: 4px; font-weight: 700;">단어</span>
+                        <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${set.title}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #8e44ad; background: #f3e8ff; padding: 2px 6px; border-radius: 4px;">1명 학습중</span>
+                        <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
+                    </div>
+                `;
+                
+                item.addEventListener('click', () => {
+                    openVocabStudyPlayer(set, student);
+                });
+                
+                container.appendChild(item);
+                safeCreateIcons();
+            });
+        };
+
+        // --- Vocabulary Study Modal Overlay Controller ---
+        let activeVocabSet = null;
+        let activeStudent = null;
+        let vocabStudyInterval = 1; // 1, 2, 3 representing chunks
+        let activeFavoritedWords = new Set(); // Saved favorites locally
+        let activeStudyState = null; // { mode: 'memorize'|'recall'|'spell'|'match', currentIndex, list, score, timer, ... }
+
+        const openVocabStudyPlayer = (vocabSet, student) => {
+            activeVocabSet = vocabSet;
+            activeStudent = student;
+            vocabStudyInterval = 1;
+            activeStudyState = null;
+            
+            const modal = document.getElementById('vocab-study-modal');
+            const title = document.getElementById('vocab-study-title');
+            const normalView = document.getElementById('vocab-normal-view');
+            const playerView = document.getElementById('vocab-study-player-view');
+            const toggleMeanings = document.getElementById('vocab-toggle-meanings');
+            const intervalSelect = document.getElementById('vocab-interval-select');
+            
+            if (!modal) return;
+            
+            if (title) title.textContent = vocabSet.title;
+            if (normalView) normalView.style.display = 'block';
+            if (playerView) playerView.style.display = 'none';
+            if (toggleMeanings) toggleMeanings.checked = false;
+            if (intervalSelect) intervalSelect.value = "1";
+            
+            // Render Cards Grid
+            renderVocabCardsGrid();
+            
+            modal.classList.add('open');
+        };
+
+        // Renders Cards Grid for Interval View
+        const renderVocabCardsGrid = () => {
+            const grid = document.getElementById('vocab-cards-grid');
+            if (!grid || !activeVocabSet) return;
+            
+            grid.innerHTML = '';
+            
+            // Get words for current interval
+            const startIdx = (vocabStudyInterval - 1) * 10;
+            const endIdx = startIdx + 10;
+            const wordsChunk = activeVocabSet.words.slice(startIdx, endIdx);
+            const toggleMeanings = document.getElementById('vocab-toggle-meanings')?.checked;
+            
+            wordsChunk.forEach((w, idx) => {
+                const globalIdx = startIdx + idx;
+                const card = document.createElement('div');
+                card.className = 'vocab-card-item';
+                
+                const isStarred = activeFavoritedWords.has(`${activeVocabSet.id}_${globalIdx}`);
+                
+                card.innerHTML = `
+                    <span class="vocab-card-favorite ${isStarred ? 'active' : ''}"><i data-lucide="star"></i></span>
+                    <span class="vocab-card-speaker"><i data-lucide="volume-2"></i></span>
+                    <div class="vocab-card-text" style="font-weight: 700; font-size: 1.25rem; color: #1e293b; transition: color 0.2s;">
+                        ${toggleMeanings ? w.meaning : w.word}
+                    </div>
+                `;
+                
+                // Favorite Toggle
+                card.querySelector('.vocab-card-favorite').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = `${activeVocabSet.id}_${globalIdx}`;
+                    if (activeFavoritedWords.has(key)) {
+                        activeFavoritedWords.delete(key);
+                        e.currentTarget.classList.remove('active');
+                    } else {
+                        activeFavoritedWords.add(key);
+                        e.currentTarget.classList.add('active');
+                    }
+                });
+                
+                // Speaker Trigger
+                card.querySelector('.vocab-card-speaker').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    speakEnglishWord(w.word);
+                });
+                
+                // Click card to flip/toggle meaning locally
+                let showingMeaning = toggleMeanings;
+                card.addEventListener('click', () => {
+                    showingMeaning = !showingMeaning;
+                    card.querySelector('.vocab-card-text').innerHTML = showingMeaning ? `<span style="color:#22c55e;">${w.meaning}</span>` : w.word;
+                    speakEnglishWord(w.word);
+                });
+                
+                grid.appendChild(card);
+            });
+            
+            safeCreateIcons();
+        };
+
+        // Event hooks for normal controller view
+        const intervalSelect = document.getElementById('vocab-interval-select');
+        if (intervalSelect) {
+            intervalSelect.addEventListener('change', (e) => {
+                vocabStudyInterval = Number(e.target.value);
+                renderVocabCardsGrid();
+            });
+        }
+        
+        const toggleMeaningsChkbx = document.getElementById('vocab-toggle-meanings');
+        if (toggleMeaningsChkbx) {
+            toggleMeaningsChkbx.addEventListener('change', () => {
+                renderVocabCardsGrid();
+            });
+        }
+
+        // Active Study Mode Engine
+        const startActiveStudyPlayer = (mode) => {
+            const normalView = document.getElementById('vocab-normal-view');
+            const playerView = document.getElementById('vocab-study-player-view');
+            
+            if (!normalView || !playerView || !activeVocabSet) return;
+            
+            normalView.style.display = 'none';
+            playerView.style.display = 'flex';
+            
+            const startIdx = (vocabStudyInterval - 1) * 10;
+            const endIdx = startIdx + 10;
+            const chunk = activeVocabSet.words.slice(startIdx, endIdx);
+            
+            activeStudyState = {
+                mode: mode,
+                chunk: chunk,
+                shuffledChunk: [...chunk].sort(() => Math.random() - 0.5),
+                currentIndex: 0,
+                isShuffled: false,
+                isMastery: false,
+                showMeaning: false,
+                incorrectCount: 0,
+                score: 0,
+                timerSeconds: 0,
+                matchingSelections: []
+            };
+            
+            renderStudyPlayerStep();
+        };
+
+        const renderStudyPlayerStep = () => {
+            const playerView = document.getElementById('vocab-study-player-view');
+            if (!playerView || !activeStudyState) return;
+            
+            playerView.innerHTML = '';
+            
+            // Clean global keys
+            document.onkeydown = null;
+            
+            const currentList = activeStudyState.isShuffled ? activeStudyState.shuffledChunk : activeStudyState.chunk;
+            const isLast = activeStudyState.currentIndex >= currentList.length;
+            
+            if (isLast) {
+                // Learning Completed View
+                playerView.innerHTML = `
+                    <div style="text-align: center; color: #ffffff;">
+                        <h2 style="font-size: 2.2rem; margin-bottom: 12px;">🎉 학습 완료!</h2>
+                        <p style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 24px;">${vocabStudyInterval}구간 단어 학습을 완료하셨습니다!</p>
+                        <button type="button" class="btn-exit-player" style="padding: 12px 28px; border-radius: 12px; background: var(--mascot-purple-bg); color: #ffffff; border: none; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">나가기</button>
+                    </div>
+                `;
+                playerView.querySelector('.btn-exit-player').addEventListener('click', () => {
+                    const normalView = document.getElementById('vocab-normal-view');
+                    normalView.style.display = 'block';
+                    playerView.style.display = 'none';
+                    renderVocabCardsGrid();
+                });
+                return;
+            }
+
+            const w = currentList[activeStudyState.currentIndex];
+            const qNum = activeStudyState.currentIndex + 1;
+            
+            if (activeStudyState.mode === 'memorize') {
+                // Memorization Mode Learning Layout
+                playerView.innerHTML = `
+                    <!-- Top Info -->
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px;">
+                        <span style="font-weight: 700; color: #22c55e; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <i data-lucide="star" style="cursor: pointer;"></i>
+                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"></i>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">학습중...</span>
+                    </div>
+                    
+                    <!-- Flashcard Outer Body -->
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 40px 20px; min-height: 240px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #1e293b; margin: 20px 0; position: relative; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);">
+                        <h2 style="font-size: 2.2rem; font-weight: 700; margin: 0;">${w.word}</h2>
+                        
+                        ${!activeStudyState.showMeaning ? `
+                            <!-- Covered Cover Box -->
+                            <div class="btn-reveal-cover" style="position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: #82b444; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #ffffff; cursor: pointer; user-select: none;">
+                                <div style="font-weight: 700; font-size: 0.95rem;">커버를 클릭하여 의미를 확인하세요</div>
+                                <div style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">Press SPACE</div>
+                            </div>
+                        ` : `
+                            <!-- Revealed Meaning -->
+                            <div style="border-top: 1px solid #e2e8f0; width: 100%; margin-top: 24px; padding-top: 16px;">
+                                <h3 style="font-size: 1.6rem; color: #82b444; font-weight: 700; margin: 0;">${w.meaning}</h3>
+                            </div>
+                        `}
+                    </div>
+                    
+                    <!-- Bottom control bar -->
+                    <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        ${activeStudyState.showMeaning ? `
+                            <div style="display: flex; gap: 12px; width: 100%; max-width: 400px;">
+                                <button type="button" class="btn-know-word" style="flex: 1; padding: 12px; border-radius: 12px; background: #82b444; border: none; color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer;">✓ 이제 알아요</button>
+                                <button type="button" class="btn-unknown-word" style="flex: 1; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                            </div>
+                            <div style="display: flex; gap: 30px; font-size: 0.72rem; color: #94a3b8;">
+                                <span>SHIFT SPACE</span>
+                                <span>SPACE</span>
+                            </div>
+                        ` : `
+                            <span style="font-size: 0.78rem; color: #94a3b8; cursor: pointer;" class="btn-reveal-cover">다음 이동 ➔</span>
+                        `}
+                        
+                        <div style="margin-top: 16px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                            <span class="btn-goto-recall" style="cursor: pointer;"><i data-lucide="chevron-left" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 리콜학습</span>
+                            <span class="btn-goto-spell" style="cursor: pointer;"><i data-lucide="chevron-left" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 스펠학습</span>
+                            <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;"><i data-lucide="x" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 나가기</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Sound Trigger
+                speakEnglishWord(w.word);
+                
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                // Actions Handlers
+                const revealTriggers = playerView.querySelectorAll('.btn-reveal-cover');
+                revealTriggers.forEach(btn => btn.addEventListener('click', () => {
+                    activeStudyState.showMeaning = true;
+                    renderStudyPlayerStep();
+                }));
+                
+                const knowBtn = playerView.querySelector('.btn-know-word');
+                if (knowBtn) {
+                    knowBtn.addEventListener('click', () => {
+                        activeStudyState.currentIndex++;
+                        activeStudyState.showMeaning = false;
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        // Move word to back of queue
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        activeStudyState.showMeaning = false;
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+                // Keyboard Bindings
+                document.onkeydown = (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        if (!activeStudyState.showMeaning) {
+                            activeStudyState.showMeaning = true;
+                            renderStudyPlayerStep();
+                        } else {
+                            if (e.shiftKey) {
+                                // Shift+Space: Know it
+                                activeStudyState.currentIndex++;
+                                activeStudyState.showMeaning = false;
+                                renderStudyPlayerStep();
+                            } else {
+                                // Space: Unknown, move to back
+                                currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                                activeStudyState.showMeaning = false;
+                                renderStudyPlayerStep();
+                            }
+                        }
+                    }
+                };
+                
+            } else if (activeStudyState.mode === 'recall') {
+                // Recall Multiple Choice layout
+                // Build choices
+                const allMeanings = activeVocabSet.words.map(x => x.meaning);
+                const incorrects = allMeanings.filter(m => m !== w.meaning).sort(() => Math.random() - 0.5).slice(0, 3);
+                const choices = [w.meaning, ...incorrects].sort(() => Math.random() - 0.5);
+                
+                playerView.innerHTML = `
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
+                        <span style="font-weight: 700; color: #3b82f6; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"></i>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">리콜 학습</span>
+                    </div>
+                    
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 30px 20px; text-align: center; color: #1e293b; margin: 10px 0; position: relative;">
+                        <!-- Try Again Badge -->
+                        <div class="try-again-badge" style="display: none; position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; padding: 4px 12px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; transform: rotate(15deg);">Try Again!</div>
+                        
+                        <h2 style="font-size: 2.2rem; font-weight: 700; margin-bottom: 20px;">${w.word}</h2>
+                        
+                        <div style="display: grid; gap: 10px; width: 100%;">
+                            ${choices.map((c, cIdx) => `
+                                <button type="button" class="recall-choice-btn" data-meaning="${c}">
+                                    <span>${cIdx + 1}. &nbsp;${c}</span>
+                                    <span class="choice-tag" style="display:none; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;">정답</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn-unknown-word" style="width: 100%; max-width: 400px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                    
+                    <div style="margin-top: 10px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                        <span class="btn-goto-memorize" style="cursor: pointer;">암기학습</span>
+                        <span class="btn-goto-spell" style="cursor: pointer;">스펠학습</span>
+                        <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;">나가기</span>
+                    </div>
+                `;
+                
+                speakEnglishWord(w.word);
+                
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                // Choice handlers
+                const choiceBtns = playerView.querySelectorAll('.recall-choice-btn');
+                let answered = false;
+                
+                choiceBtns.forEach(btn => btn.addEventListener('click', (e) => {
+                    if (answered) return;
+                    answered = true;
+                    
+                    const chosen = btn.getAttribute('data-meaning');
+                    if (chosen === w.meaning) {
+                        // Correct!
+                        btn.classList.add('correct');
+                        setTimeout(() => {
+                            activeStudyState.currentIndex++;
+                            renderStudyPlayerStep();
+                        }, 1200);
+                    } else {
+                        // Incorrect
+                        btn.classList.add('incorrect');
+                        playerView.querySelector('.try-again-badge').style.display = 'block';
+                        
+                        // Highlight correct button
+                        choiceBtns.forEach(b => {
+                            if (b.getAttribute('data-meaning') === w.meaning) {
+                                b.classList.add('correct');
+                                const tag = b.querySelector('.choice-tag');
+                                if (tag) {
+                                    tag.style.display = 'inline-block';
+                                    tag.style.background = '#22c55e';
+                                    tag.style.color = '#ffffff';
+                                }
+                            }
+                        });
+                    }
+                }));
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+            } else if (activeStudyState.mode === 'spell') {
+                // Spell input learning layout
+                playerView.innerHTML = `
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
+                        <span style="font-weight: 700; color: #a855f7; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #a855f7;"></i>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">스펠 학습</span>
+                    </div>
+                    
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 35px 20px; text-align: center; color: #1e293b; margin: 10px 0; position: relative;">
+                        <!-- Try Again Badge -->
+                        <div class="try-again-badge" style="display: none; position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; padding: 4px 12px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; transform: rotate(15deg);">Try Again!</div>
+                        
+                        <h2 style="font-size: 2.2rem; font-weight: 700; color:#8e44ad; margin-bottom: 20px;">${w.meaning}</h2>
+                        
+                        <input type="text" id="spell-input-text" placeholder="단어 스펠링을 입력해 주세요" autofocus style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 2px solid #cbd5e1; outline: none; font-size: 1.1rem; font-weight: 700; text-align: center; color: #1e293b; margin-bottom: 12px;">
+                        <div class="correct-spelling-answer" style="display: none; font-weight: 700; color: #22c55e; font-size: 0.95rem;">정답: &nbsp;${w.word}</div>
+                    </div>
+                    
+                    <button type="button" class="btn-unknown-word" style="width: 100%; max-width: 400px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                    
+                    <div style="margin-top: 10px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                        <span class="btn-goto-memorize" style="cursor: pointer;">암기학습</span>
+                        <span class="btn-goto-recall" style="cursor: pointer;">리콜학습</span>
+                        <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;">나가기</span>
+                    </div>
+                `;
+                
+                const spellInput = playerView.querySelector('#spell-input-text');
+                if (spellInput) {
+                    spellInput.focus();
+                    spellInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            const val = spellInput.value.trim().toLowerCase();
+                            // Clean targets for matching spelling like build - built - built
+                            const targetWord = w.word.split(' ')[0].toLowerCase();
+                            
+                            if (val === targetWord || val === w.word.toLowerCase()) {
+                                spellInput.style.borderColor = '#22c55e';
+                                setTimeout(() => {
+                                    activeStudyState.currentIndex++;
+                                    renderStudyPlayerStep();
+                                }, 1000);
+                            } else {
+                                spellInput.style.borderColor = '#ef4444';
+                                playerView.querySelector('.try-again-badge').style.display = 'block';
+                                playerView.querySelector('.correct-spelling-answer').style.display = 'block';
+                            }
+                        }
+                    });
+                }
+                
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        renderStudyPlayerStep();
+                    });
+                }
+            }
+            
+            // Add Global Action Listeners inside step
+            const exitBtn = playerView.querySelector('.btn-exit-active-player');
+            if (exitBtn) {
+                exitBtn.addEventListener('click', () => {
+                    const normalView = document.getElementById('vocab-normal-view');
+                    normalView.style.display = 'block';
+                    playerView.style.display = 'none';
+                    document.onkeydown = null;
+                });
+            }
+            
+            const toMemo = playerView.querySelector('.btn-goto-memorize');
+            if (toMemo) toMemo.addEventListener('click', () => startActiveStudyPlayer('memorize'));
+            const toRecall = playerView.querySelector('.btn-goto-recall');
+            if (toRecall) toRecall.addEventListener('click', () => startActiveStudyPlayer('recall'));
+            const toSpell = playerView.querySelector('.btn-goto-spell');
+            if (toSpell) toSpell.addEventListener('click', () => startActiveStudyPlayer('spell'));
+            
+            safeCreateIcons();
+        };
+
+        // Connect mode buttons to start screens
+        const btnMemo = document.getElementById('btn-start-memorize');
+        if (btnMemo) btnMemo.addEventListener('click', () => startActiveStudyPlayer('memorize'));
+        const btnRec = document.getElementById('btn-start-recall');
+        if (btnRec) btnRec.addEventListener('click', () => startActiveStudyPlayer('recall'));
+        const btnSp = document.getElementById('btn-start-spell');
+        if (btnSp) btnSp.addEventListener('click', () => startActiveStudyPlayer('spell'));
+
+        // Close Study Modal Close trigger
+        const btnVocabClose = document.getElementById('btn-vocab-study-close');
+        const vocabStudyOverlay = document.getElementById('vocab-study-modal');
+        if (btnVocabClose && vocabStudyOverlay) {
+            btnVocabClose.addEventListener('click', () => {
+                vocabStudyOverlay.classList.remove('open');
+                document.onkeydown = null;
+            });
+        }
+
 });
