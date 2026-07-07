@@ -2,17 +2,24 @@ import { supabase, isMock } from './supabase.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Helper to safely re-render Lucide icons
+    let iconTimeout = null;
     const safeCreateIcons = () => {
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        } else {
-            console.warn('Lucide is not loaded yet.');
-        }
-        
-        // Update Quick Menu highlights if in admin mode and highlights updater is defined
-        if (typeof updateAdminQuickMenuHighlights === 'function' && isAdmin) {
-            updateAdminQuickMenuHighlights();
-        }
+        if (iconTimeout) clearTimeout(iconTimeout);
+        iconTimeout = setTimeout(() => {
+            if (typeof lucide !== 'undefined') {
+                try {
+                    lucide.createIcons();
+                } catch(e) {
+                    console.error('Error rendering Lucide icons:', e);
+                }
+            } else {
+                console.warn('Lucide is not loaded yet.');
+            }
+            
+            if (typeof updateAdminQuickMenuHighlights === 'function' && isAdmin) {
+                updateAdminQuickMenuHighlights();
+            }
+        }, 50);
     };
 
     // ==========================================================================
@@ -163,7 +170,14 @@ document.addEventListener('DOMContentLoaded', () => {
         titleSize: dbNotice.title_size,
         titleColor: dbNotice.title_color,
         pinned: dbNotice.pinned,
-        highlight: dbNotice.highlight
+        highlight: dbNotice.highlight,
+        recruitEnabled: dbNotice.recruit_enabled || false,
+        recruitType: dbNotice.recruit_type || '',
+        recruitCapacity: dbNotice.recruit_capacity || 10,
+        recruitStart: dbNotice.recruit_start || '',
+        recruitEnd: dbNotice.recruit_end || '',
+        recruitFee: dbNotice.recruit_fee || 0,
+        recruitClosed: dbNotice.recruit_closed || false
     });
 
     const mapNoticeToDb = (jsNotice) => ({
@@ -176,7 +190,14 @@ document.addEventListener('DOMContentLoaded', () => {
         title_size: jsNotice.titleSize || 'normal',
         title_color: jsNotice.titleColor || 'default',
         pinned: jsNotice.pinned || false,
-        highlight: jsNotice.highlight || false
+        highlight: jsNotice.highlight || false,
+        recruit_enabled: jsNotice.recruitEnabled || false,
+        recruit_type: jsNotice.recruitType || '',
+        recruit_capacity: jsNotice.recruitCapacity || 10,
+        recruit_start: jsNotice.recruitStart || '',
+        recruit_end: jsNotice.recruitEnd || '',
+        recruit_fee: jsNotice.recruitFee || 0,
+        recruit_closed: jsNotice.recruitClosed || false
     });
 
     const mapHomeworkFromDb = (dbHw) => ({
@@ -2354,6 +2375,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const storedWordSets = localStorage.getItem('gongbubang_word_sets');
         if (storedWordSets) wordSets = JSON.parse(storedWordSets);
         else localStorage.setItem('gongbubang_word_sets', JSON.stringify([]));
+
+        const storedCampSignups = localStorage.getItem('gongbubang_camp_signups');
+        if (storedCampSignups) campSignups = JSON.parse(storedCampSignups);
+        else localStorage.setItem('gongbubang_camp_signups', JSON.stringify([]));
     } catch (e) {
         console.error('localStorage is not accessible for state tables.', e);
     }
@@ -2366,6 +2391,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 await supabase.from('sb_homework').upsert(mapped);
             } catch(e) {
                 console.error('Error saving homework to Supabase:', e);
+            }
+        }
+    };
+
+    const saveCampSignups = async () => {
+        try {
+            localStorage.setItem('gongbubang_camp_signups', JSON.stringify(campSignups));
+        } catch(e) {}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const rows = campSignups.map(s => ({
+                    id: String(s.id),
+                    notice_id: s.noticeId,
+                    student_id: String(s.studentId),
+                    student_name: s.studentName,
+                    parent_phone: s.parentPhone,
+                    fee: s.fee,
+                    payment_status: s.paymentStatus || '미결제',
+                    created_at: s.createdAt
+                }));
+                await supabase.from('sb_camp_signups').upsert(rows);
+            } catch(e) {
+                console.error('Error saving camp signups to Supabase:', e);
             }
         }
     };
@@ -2788,11 +2836,94 @@ document.addEventListener('DOMContentLoaded', () => {
             const styleString = titleStyles.length > 0 ? `style="${titleStyles.join('; ')}"` : '';
             const pinIconHtml = notice.pinned ? `<i data-lucide="pin" style="width: 14px; height: 14px; color: var(--mascot-red-bg); vertical-align: middle; margin-right: 4px; transform: rotate(45deg);"></i>` : '';
 
+            let recruitWidget = '';
+            if (notice.recruitEnabled) {
+                const signupsForThis = campSignups.filter(s => String(s.noticeId) === String(notice.id));
+                const currentCount = signupsForThis.length;
+                const isClosed = notice.recruitClosed || currentCount >= (notice.recruitCapacity || 10);
+                
+                let actionArea = '';
+                if (userRole === 'parent') {
+                    let parentChildrenList = [];
+                    if (loggedInStudentId) {
+                        const activeStd = students.find(s => s.id === loggedInStudentId);
+                        if (activeStd) {
+                            const pId = String(loggedInStudentId).split('-')[0];
+                            parentChildrenList = students.filter(s => 
+                                (s.parentPhone && activeStd.parentPhone && s.parentPhone === activeStd.parentPhone) ||
+                                String(s.id).startsWith(pId)
+                            );
+                        }
+                    }
+                    
+                    if (parentChildrenList.length > 0) {
+                        const eligibleChildren = parentChildrenList.filter(child => 
+                            !signupsForThis.some(signup => String(signup.studentId) === String(child.id))
+                        );
+                        
+                        if (isClosed) {
+                            actionArea = `<div style="color: #ef4444; font-weight: 800; text-align: center; margin-top: 10px;">🔴 모집 정원이 초과되었거나 마감되었습니다.</div>`;
+                        } else if (eligibleChildren.length === 0) {
+                            actionArea = `<div style="color: var(--mascot-purple-bg); font-weight: 800; text-align: center; margin-top: 10px;">✅ 모든 자녀가 신청을 완료했습니다.</div>`;
+                        } else {
+                            const selectOptions = eligibleChildren.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                            actionArea = `
+                                <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center; justify-content: center; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">자녀 선택:</span>
+                                    <select class="recruit-child-select" style="padding: 4px 8px; font-size: 0.82rem; border-radius: 6px; border: 1px solid var(--border-color); outline: none;">
+                                        ${selectOptions}
+                                    </select>
+                                    <button class="btn-recruit-apply" data-notice-id="${notice.id}" style="background: var(--mascot-purple-bg); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                        신청하기
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                } else if (userRole === 'student') {
+                    const alreadySignedUp = signupsForThis.some(signup => String(signup.studentId) === String(loggedInStudentId));
+                    if (alreadySignedUp) {
+                        actionArea = `<div style="color: var(--mascot-purple-bg); font-weight: 800; text-align: center; margin-top: 10px;">✅ 특강/캠프 신청이 완료되었습니다.</div>`;
+                    } else if (isClosed) {
+                        actionArea = `<div style="color: #ef4444; font-weight: 800; text-align: center; margin-top: 10px;">🔴 모집이 마감되었습니다.</div>`;
+                    } else {
+                        actionArea = `<div style="color: var(--text-secondary); text-align: center; margin-top: 10px; font-size: 0.82rem;">💡 학부모 계정으로 로그인하시면 이 특강에 신청하실 수 있습니다.</div>`;
+                    }
+                } else {
+                    const signupNames = signupsForThis.map(s => `${s.studentName}(${s.paymentStatus || '미결제'})`).join(', ') || '없음';
+                    actionArea = `
+                        <div style="margin-top: 10px; font-size: 0.82rem; color: var(--text-secondary); background: #f8fafc; padding: 8px 12px; border-radius: 8px;">
+                            <strong>신청 학생 명단:</strong> ${signupNames}
+                        </div>
+                    `;
+                }
+
+                recruitWidget = `
+                    <div class="recruit-box" style="margin-top: 14px; background: #f1f5f9; border-left: 4px solid var(--mascot-purple-bg); border-radius: 8px; padding: 12px 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 0.9rem; font-weight: 800; color: var(--mascot-purple-bg); display: flex; align-items: center; gap: 4px;">
+                                📢 ${notice.recruitType || '특강'} 모집
+                            </span>
+                            <span class="badge" style="background: ${isClosed ? '#ef4444' : '#22c55e'}; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700;">
+                                ${isClosed ? '모집 마감' : '모집 중'}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 0.82rem; color: var(--text-primary);">
+                            <div><strong>모집 정원:</strong> ${notice.recruitCapacity || 10}명 (현재 ${currentCount}명 신청)</div>
+                            <div><strong>특강 기간:</strong> ${notice.recruitStart || '-'} ~ ${notice.recruitEnd || '-'}</div>
+                            <div><strong>특강비:</strong> ${Number(notice.recruitFee || 0).toLocaleString()}원</div>
+                        </div>
+                        ${actionArea}
+                    </div>
+                `;
+            }
+
             article.innerHTML = `
                 <div class="notice-tag ${tagClass}">${notice.tag}</div>
                 <div class="notice-body">
                     <h3 class="notice-title"><a href="#" onclick="return false;" ${styleString}>${pinIconHtml}${notice.title}</a></h3>
                     <p class="notice-summary" style="white-space: pre-line;">${notice.content}</p>
+                    ${recruitWidget}
                     <div class="notice-meta">
                         <span class="notice-date"><i data-lucide="clock"></i> ${notice.date}</span>
                         <span class="notice-author">작성자: ${notice.author}</span>
@@ -2805,6 +2936,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
         safeCreateIcons();
         attachCardListeners();
+
+        // Bind recruit application buttons
+        document.querySelectorAll('.btn-recruit-apply').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const noticeId = parseInt(btn.getAttribute('data-notice-id'));
+                const notice = notices.find(n => n.id === noticeId);
+                if (!notice) return;
+                
+                const selectEl = btn.parentElement.querySelector('.recruit-child-select');
+                if (!selectEl) return;
+                
+                const selectedStudentId = selectEl.value;
+                const targetStudent = students.find(s => String(s.id) === String(selectedStudentId));
+                if (!targetStudent) return;
+                
+                if (confirm(`"${targetStudent.name}" 자녀를 "${notice.title}" 특강에 신청하시겠습니까?\n신청 시 특강비가 청구 요청 항목에 추가됩니다.`)) {
+                    const newSignup = {
+                        id: Date.now(),
+                        noticeId,
+                        studentId: targetStudent.id,
+                        studentName: targetStudent.name,
+                        parentPhone: targetStudent.parentPhone || '',
+                        fee: notice.recruitFee || 0,
+                        paymentStatus: '미결제',
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    campSignups.push(newSignup);
+                    await saveCampSignups();
+                    
+                    const billingReq = {
+                        id: Date.now() + 1,
+                        studentId: targetStudent.id,
+                        studentName: targetStudent.name,
+                        bookName: `[특강] ${notice.title}`,
+                        requestDate: new Date().toISOString().split('T')[0],
+                        amount: notice.recruitFee || 0,
+                        isPaid: false,
+                        paidDate: ''
+                    };
+                    textbookRequests.unshift(billingReq);
+                    try {
+                        localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(textbookRequests));
+                    } catch(err) {}
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        try {
+                            await supabase.from('sb_textbook_requests').upsert({
+                                id: billingReq.id,
+                                student_id: billingReq.studentId,
+                                student_name: billingReq.studentName,
+                                book_name: billingReq.bookName,
+                                request_date: billingReq.requestDate,
+                                amount: billingReq.amount,
+                                is_paid: billingReq.isPaid,
+                                paid_date: billingReq.paidDate
+                            });
+                        } catch(err) {}
+                    }
+                    
+                    showToast(`"${targetStudent.name}" 자녀의 특강 신청이 완료되었습니다.`);
+                    renderNotices();
+                    if (typeof renderBilling === 'function') renderBilling();
+                }
+            });
+        });
     };
 
     // Card edit/delete listeners
@@ -2825,6 +3021,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (noticeSizeSelect) noticeSizeSelect.value = noticeToEdit.titleSize || 'normal';
                     if (noticeColorSelect) noticeColorSelect.value = noticeToEdit.titleColor || 'default';
                     if (noticePinCheckbox) noticePinCheckbox.checked = noticeToEdit.pinned || false;
+                    
+                    const recruitChk = document.getElementById('notice-recruit-checkbox');
+                    const recruitPanel = document.getElementById('recruit-settings-panel');
+                    if (recruitChk) recruitChk.checked = noticeToEdit.recruitEnabled || false;
+                    if (recruitPanel) recruitPanel.style.display = noticeToEdit.recruitEnabled ? 'block' : 'none';
+                    if (document.getElementById('notice-recruit-type')) document.getElementById('notice-recruit-type').value = noticeToEdit.recruitType || '정규특강';
+                    if (document.getElementById('notice-recruit-capacity')) document.getElementById('notice-recruit-capacity').value = noticeToEdit.recruitCapacity || 10;
+                    if (document.getElementById('notice-recruit-start')) document.getElementById('notice-recruit-start').value = noticeToEdit.recruitStart || '';
+                    if (document.getElementById('notice-recruit-end')) document.getElementById('notice-recruit-end').value = noticeToEdit.recruitEnd || '';
+                    if (document.getElementById('notice-recruit-fee')) document.getElementById('notice-recruit-fee').value = noticeToEdit.recruitFee || 0;
+                    if (document.getElementById('notice-recruit-closed')) document.getElementById('notice-recruit-closed').checked = noticeToEdit.recruitClosed || false;
+
                     noticeTitleInput.value = noticeToEdit.title;
                     noticeContentInput.value = noticeToEdit.content;
                     formModalTitle.textContent = '공지사항 수정';
@@ -3499,20 +3707,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 eventContainer.appendChild(badge);
             });
 
-            // 🌟 Add purple feedback badge if there is feedback on this date
+            // Add purple feedback, pink homework, and green progress indicators if registered on this date
             const dateFeedbacks = feedbacks.filter(f => f.studentId === studentId && f.date === dateStr);
+            const dateHomeworks = homework.filter(h => String(h.studentId) === String(studentId) && h.dueDate === dateStr);
+            const dateProgress = progressList.filter(p => String(p.studentId) === String(studentId) && p.date === dateStr);
+
+            const iconRow = document.createElement('div');
+            iconRow.style.display = 'flex';
+            iconRow.style.gap = '4px';
+            iconRow.style.justifyContent = 'center';
+            iconRow.style.marginTop = '4px';
+
             if (dateFeedbacks.length > 0) {
-                const fbBadge = document.createElement('div');
-                fbBadge.className = 'calendar-badge feedback-badge';
-                fbBadge.style.background = '#f3e8ff'; // Light purple bg
-                fbBadge.style.color = '#7e22ce'; // Purple text
-                fbBadge.style.border = '1px solid #c084fc'; // Purple border
-                fbBadge.style.fontWeight = '700';
-                fbBadge.style.fontSize = '0.62rem';
-                fbBadge.style.marginTop = '2px';
-                fbBadge.textContent = '📝 피드백';
-                fbBadge.title = dateFeedbacks.map(f => f.content).join('\n');
-                eventContainer.appendChild(fbBadge);
+                const marker = document.createElement('span');
+                marker.style.display = 'inline-flex';
+                marker.style.alignItems = 'center';
+                marker.style.justifyContent = 'center';
+                marker.style.width = '16px';
+                marker.style.height = '16px';
+                marker.style.borderRadius = '50%';
+                marker.style.background = '#f3e8ff';
+                marker.style.border = '1px solid #c084fc';
+                marker.style.color = '#7e22ce';
+                marker.style.fontSize = '0.58rem';
+                marker.innerHTML = '💬';
+                marker.title = `피드백: ${dateFeedbacks.map(f => f.content).join(', ')}`;
+                iconRow.appendChild(marker);
+            }
+
+            if (dateHomeworks.length > 0) {
+                const marker = document.createElement('span');
+                marker.style.display = 'inline-flex';
+                marker.style.alignItems = 'center';
+                marker.style.justifyContent = 'center';
+                marker.style.width = '16px';
+                marker.style.height = '16px';
+                marker.style.borderRadius = '50%';
+                marker.style.background = '#fce7f3';
+                marker.style.border = '1px solid #fbcfe8';
+                marker.style.color = '#db2777';
+                marker.style.fontSize = '0.58rem';
+                marker.innerHTML = '✔';
+                marker.title = `과제 기한일: ${dateHomeworks.map(h => h.title).join(', ')}`;
+                iconRow.appendChild(marker);
+            }
+
+            if (dateProgress.length > 0) {
+                const marker = document.createElement('span');
+                marker.style.display = 'inline-flex';
+                marker.style.alignItems = 'center';
+                marker.style.justifyContent = 'center';
+                marker.style.width = '16px';
+                marker.style.height = '16px';
+                marker.style.borderRadius = '50%';
+                marker.style.background = '#dcfce7';
+                marker.style.border = '1px solid #bbf7d0';
+                marker.style.color = '#15803d';
+                marker.style.fontSize = '0.58rem';
+                marker.innerHTML = '📖';
+                marker.title = `진도: ${dateProgress.map(p => p.content).join(', ')}`;
+                iconRow.appendChild(marker);
+            }
+
+            if (iconRow.children.length > 0) {
+                eventContainer.appendChild(iconRow);
             }
 
             cell.appendChild(eventContainer);
@@ -3655,6 +3913,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (student && studentFormModal) {
                     editStudentIdInput.value = student.id;
                     studentNameInput.value = student.name;
+                    const birthInput = document.getElementById('student-birthdate-input');
+                    if (birthInput) birthInput.value = student.birthdate || '';
                     studentAgeInput.value = student.age;
                     studentSchoolInput.value = student.school;
                     studentPhoneInput.value = student.phone || '';
@@ -4004,6 +4264,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btnStudentWrite.addEventListener('click', () => {
             editStudentIdInput.value = '';
             studentEditorForm.reset();
+            const birthInput = document.getElementById('student-birthdate-input');
+            if (birthInput) birthInput.value = '';
             if (studentClassDurationInput) {
                 studentClassDurationInput.value = 90;
             }
@@ -4049,6 +4311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const editId = editStudentIdInput.value;
             const name = studentNameInput.value.trim();
+            const birthdate = document.getElementById('student-birthdate-input') ? document.getElementById('student-birthdate-input').value : '';
             const age = parseInt(studentAgeInput.value);
             const school = studentSchoolInput.value.trim();
             const phone = studentPhoneInput.value.trim();
@@ -4087,6 +4350,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const updated = {
                             ...student,
                             name,
+                            birthdate,
                             age,
                             school,
                             phone,
@@ -4147,6 +4411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newStudent = {
                     id: String(Date.now()),
                     name,
+                    birthdate,
                     age,
                     school,
                     phone,
@@ -4410,6 +4675,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (noticeSizeSelect) noticeSizeSelect.value = 'normal';
             if (noticeColorSelect) noticeColorSelect.value = 'default';
             if (noticePinCheckbox) noticePinCheckbox.checked = false;
+            
+            const recruitChk = document.getElementById('notice-recruit-checkbox');
+            const recruitPanel = document.getElementById('recruit-settings-panel');
+            if (recruitChk) recruitChk.checked = false;
+            if (recruitPanel) recruitPanel.style.display = 'none';
+
             formModalTitle.textContent = '새 공지사항 등록';
             noticeFormModal.classList.add('open');
         });
@@ -4436,6 +4707,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const title = noticeTitleInput.value.trim();
             const content = noticeContentInput.value.trim();
 
+            const recruitEnabled = document.getElementById('notice-recruit-checkbox') ? document.getElementById('notice-recruit-checkbox').checked : false;
+            const recruitType = document.getElementById('notice-recruit-type') ? document.getElementById('notice-recruit-type').value : '';
+            const recruitCapacity = document.getElementById('notice-recruit-capacity') ? parseInt(document.getElementById('notice-recruit-capacity').value, 10) || 10 : 10;
+            const recruitStart = document.getElementById('notice-recruit-start') ? document.getElementById('notice-recruit-start').value : '';
+            const recruitEnd = document.getElementById('notice-recruit-end') ? document.getElementById('notice-recruit-end').value : '';
+            const recruitFee = document.getElementById('notice-recruit-fee') ? parseInt(document.getElementById('notice-recruit-fee').value, 10) || 0 : 0;
+            const recruitClosed = document.getElementById('notice-recruit-closed') ? document.getElementById('notice-recruit-closed').checked : false;
+
             if (editId) {
                 // Update
                 const id = parseInt(editId);
@@ -4449,7 +4728,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             titleSize,
                             titleColor,
                             pinned,
-                            highlight: pinned
+                            highlight: pinned,
+                            recruitEnabled,
+                            recruitType,
+                            recruitCapacity,
+                            recruitStart,
+                            recruitEnd,
+                            recruitFee,
+                            recruitClosed
                         };
                     }
                     return notice;
@@ -4468,7 +4754,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     pinned,
                     date: getFormattedDate(),
                     author: '이공 원장',
-                    highlight: pinned
+                    highlight: pinned,
+                    recruitEnabled,
+                    recruitType,
+                    recruitCapacity,
+                    recruitStart,
+                    recruitEnd,
+                    recruitFee,
+                    recruitClosed
                 };
                 notices.unshift(newNotice); // Put to top
                 saveNotices();
@@ -5148,7 +5441,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Count completions in this selected month
                     let completed = 0;
-                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    const prefix = `${yearStr}-${monthStr}`;
                     Object.keys(records).forEach(d => {
                         if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
                             completed++;
@@ -5185,7 +5478,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 habits.forEach(h => {
                     const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
                     let completed = 0;
-                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    const prefix = `${yearStr}-${monthStr}`;
                     Object.keys(records).forEach(d => {
                         if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
                             completed++;
@@ -5295,9 +5588,19 @@ document.addEventListener('DOMContentLoaded', () => {
         safeCreateIcons();
     };
 
-    // Update Parent Quick Menu Badges
+    // Update Parent & Student Quick Menu Badges
     const updateParentQuickMenuBadges = () => {
         const parentQuickMenu = document.getElementById('parent-quick-menu');
+        const studentQuickMenu = document.getElementById('student-quick-menu');
+        
+        if (studentQuickMenu) {
+            if (userRole === 'student' && loggedInStudentId) {
+                studentQuickMenu.style.display = 'flex';
+            } else {
+                studentQuickMenu.style.display = 'none';
+            }
+        }
+
         if (!parentQuickMenu) return;
 
         if (userRole !== 'parent' || !loggedInStudentId) {
@@ -5664,29 +5967,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Render Class Textbooks
-        const studentClass = classes.find(c => String(c.id) === String(student.classId));
         const textbookListEl = document.getElementById('myclass-textbook-list');
-        if (textbookListEl) {
+        const textbookWidget = document.getElementById('myclass-textbook-widget');
+        const isParent = (typeof userRole !== 'undefined' && userRole === 'parent');
+
+        if (textbookWidget) {
+            textbookWidget.style.display = isParent ? 'flex' : 'none';
+        }
+
+        if (isParent && textbookListEl) {
             textbookListEl.innerHTML = '';
-            if (!studentClass || !studentClass.textbooks || studentClass.textbooks.length === 0) {
-                textbookListEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 20px 0;">이 반에 등록된 교재가 없습니다.</div>';
-            } else {
-                studentClass.textbooks.forEach(tb => {
-                    // Find if there is an existing request for this textbook by this student
-                    const req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tb.name);
-                    
-                    const item = document.createElement('div');
-                    item.style.display = 'flex';
-                    item.style.justifyContent = 'space-between';
-                    item.style.alignItems = 'center';
-                    item.style.padding = '12px';
-                    item.style.border = '1px solid var(--border-color)';
-                    item.style.borderRadius = '12px';
-                    item.style.background = '#ffffff';
-                    
+            let totalHtml = '';
+
+            parentChildren.forEach(child => {
+                const childClass = classes.find(c => String(c.id) === String(child.classId));
+                let childHtml = `
+                    <div style="font-weight: 800; font-size: 0.95rem; color: var(--mascot-purple-bg); margin-top: 14px; margin-bottom: 8px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="user" style="width: 16px; height: 16px;"></i> ${child.name} (${childClass ? childClass.name : '반 없음'})의 교재
+                    </div>
+                `;
+                
+                if (!childClass || !childClass.textbooks || childClass.textbooks.length === 0) {
+                    childHtml += '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 6px 12px;">이 반에 등록된 교재가 없습니다.</div>';
+                    totalHtml += childHtml;
+                    return;
+                }
+
+                let unpaidHtml = '';
+                let paidHtml = '';
+
+                childClass.textbooks.forEach(tb => {
+                    const req = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tb.name);
+                    const isPaid = req && req.paymentStatus === '결제완료';
+
                     let actionHtml = '';
                     if (!req) {
-                        actionHtml = `<button type="button" class="btn-request-purchase" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-tb-name="${tb.name}" data-tb-price="${tb.price}">구매 요청</button>`;
+                        actionHtml = `<button type="button" class="btn-request-purchase" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-student-id="${child.id}" data-tb-name="${tb.name}" data-tb-price="${tb.price}">구매 요청</button>`;
                     } else if (!req.isConfirmed) {
                         actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">승인 대기</span>`;
                     } else if (req.paymentStatus === '입금확인중') {
@@ -5695,161 +6011,209 @@ document.addEventListener('DOMContentLoaded', () => {
                         actionHtml = `
                             <div style="display: flex; gap: 6px; align-items: center;">
                                 <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
-                                <button type="button" class="btn-pay-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;">결제하기</button>
+                                <button type="button" class="btn-pay-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-req-id="${req.id}" data-tb-name="${req.textbookName}" data-tb-price="${req.price}">결제하기</button>
                             </div>
                         `;
                     } else {
                         actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
                     }
-                    
-                    item.innerHTML = `
-                        <div style="text-align: left;">
-                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tb.name}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(tb.price).toLocaleString()}원</span></div>
-                        </div>
-                        <div>
-                            ${actionHtml}
+
+                    const itemHtml = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #ffffff; margin-bottom: 6px;">
+                            <div style="text-align: left;">
+                                <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tb.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(tb.price).toLocaleString()}원</span></div>
+                            </div>
+                            <div>
+                                ${actionHtml}
+                            </div>
                         </div>
                     `;
-                    
-                    // Bind action listeners
-                    const reqBtn = item.querySelector('.btn-request-purchase');
-                    if (reqBtn) {
-                        reqBtn.addEventListener('click', async () => {
-                            const newReq = {
-                                id: Date.now(),
-                                studentId: student.id,
-                                studentName: student.name,
-                                classId: studentClass.id,
-                                className: studentClass.name,
-                                textbookName: tb.name,
-                                price: tb.price,
-                                isConfirmed: false,
-                                paymentStatus: '미결제',
-                                createdAt: new Date().toISOString()
-                            };
-                            textbookRequests.unshift(newReq);
-                            await saveTextbookRequests();
-                            renderMyClass();
-                            if (isAdmin) renderTextbookRequests();
-                            showToast('교재 구매 요청이 전송되었습니다. 관리자 확인 후 결제가 가능합니다.');
-                        });
-                    }
-                    
-                    const payBtn = item.querySelector('.btn-pay-toss');
-                    if (payBtn) {
-                        payBtn.addEventListener('click', () => {
-                            const payModal = document.getElementById('textbook-payment-modal');
-                            const payTbName = document.getElementById('pay-textbook-name');
-                            const payTbPrice = document.getElementById('pay-textbook-price');
-                            const payReqId = document.getElementById('pay-request-id');
-                            const linkToss = document.getElementById('link-toss-transfer');
-                            
-                            if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
-                                payTbName.textContent = req.textbookName;
-                                payTbPrice.textContent = `${Number(req.price).toLocaleString()}원`;
-                                payReqId.value = req.id;
-                                linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${req.price}`;
-                                payModal.classList.add('open');
-                            }
-                        });
-                    }
-                    
-                    textbookListEl.appendChild(item);
-                });
-            }
-        }
 
-        // Render Monthly Tuition Fee Status
-        const tuitionContainer = document.getElementById('myclass-tuition-status-container');
-        if (tuitionContainer) {
-            tuitionContainer.innerHTML = '';
-            
-            // Current year and month
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const tuitionName = `회비 (${year}년 ${month}월)`;
-            const feeAmount = student.tuitionFeeAmount || 250000;
-            const feeDay = student.tuitionFeeDay || 10;
-            
-            // Find existing tuition payment record
-            let req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tuitionName);
-            
-            // If no record exists, create a default "미결제" record and save/sync immediately
-            if (!req) {
-                req = {
-                    id: Date.now(),
-                    studentId: student.id,
-                    studentName: student.name,
-                    classId: studentClass ? studentClass.id : 1,
-                    className: studentClass ? studentClass.name : '없음',
-                    textbookName: tuitionName,
-                    price: feeAmount,
-                    isConfirmed: true, // auto confirmed request for tuition
-                    paymentStatus: '미결제',
-                    createdAt: new Date().toISOString()
-                };
-                textbookRequests.unshift(req);
-                saveTextbookRequests();
-            }
-            
-            const item = document.createElement('div');
-            item.style.display = 'flex';
-            item.style.justifyContent = 'space-between';
-            item.style.alignItems = 'center';
-            item.style.padding = '12px';
-            item.style.border = '1px solid var(--border-color)';
-            item.style.borderRadius = '12px';
-            item.style.background = '#ffffff';
-            
-            let actionHtml = '';
-            if (req.paymentStatus === '입금확인중') {
-                actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
-            } else if (req.paymentStatus === '미결제') {
-                actionHtml = `
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
-                        <button type="button" class="btn-pay-tuition-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;">결제하기</button>
-                    </div>
-                `;
-            } else {
-                actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
-            }
-            
-            item.innerHTML = `
-                <div style="text-align: left;">
-                    <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tuitionName}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-                        금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(feeAmount).toLocaleString()}원</span> | 
-                        기준일: <span style="font-weight: 600; color: var(--text-primary);">매월 ${feeDay}일</span>
-                    </div>
-                </div>
-                <div>
-                    ${actionHtml}
-                </div>
-            `;
-            
-            const payBtn = item.querySelector('.btn-pay-tuition-toss');
-            if (payBtn) {
-                payBtn.addEventListener('click', () => {
+                    if (isPaid) {
+                        paidHtml += itemHtml;
+                    } else {
+                        unpaidHtml += itemHtml;
+                    }
+                });
+
+                if (unpaidHtml) {
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: #ef4444; margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></span> 미결제 교재</div>` + unpaidHtml;
+                }
+                if (paidHtml) {
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: var(--mascot-green-bg); margin-top: 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mascot-green-bg);"></span> 구매 완료 교재</div>` + paidHtml;
+                }
+
+                totalHtml += childHtml;
+            });
+
+            textbookListEl.innerHTML = totalHtml;
+
+            // Bind purchase request click handler
+            textbookListEl.querySelectorAll('.btn-request-purchase').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const cId = btn.getAttribute('data-student-id');
+                    const targetChild = students.find(s => String(s.id) === String(cId));
+                    const tbName = btn.getAttribute('data-tb-name');
+                    const tbPrice = btn.getAttribute('data-tb-price');
+                    const childClass = classes.find(c => String(c.id) === String(targetChild?.classId));
+                    if (!targetChild) return;
+
+                    const newReq = {
+                        id: Date.now(),
+                        studentId: targetChild.id,
+                        studentName: targetChild.name,
+                        classId: childClass ? childClass.id : 1,
+                        className: childClass ? childClass.name : '없음',
+                        textbookName: tbName,
+                        price: tbPrice,
+                        isConfirmed: false,
+                        paymentStatus: '미결제',
+                        createdAt: new Date().toISOString()
+                    };
+                    textbookRequests.unshift(newReq);
+                    await saveTextbookRequests();
+                    renderMyClass();
+                    if (isAdmin) renderTextbookRequests();
+                    showToast('교재 구매 요청이 전송되었습니다. 관리자 확인 후 결제가 가능합니다.');
+                });
+            });
+
+            // Bind 결제하기 (Toss Pay) click handler
+            textbookListEl.querySelectorAll('.btn-pay-toss').forEach(btn => {
+                btn.addEventListener('click', () => {
                     const payModal = document.getElementById('textbook-payment-modal');
                     const payTbName = document.getElementById('pay-textbook-name');
                     const payTbPrice = document.getElementById('pay-textbook-price');
                     const payReqId = document.getElementById('pay-request-id');
                     const linkToss = document.getElementById('link-toss-transfer');
                     
+                    const reqId = btn.getAttribute('data-req-id');
+                    const tbName = btn.getAttribute('data-tb-name');
+                    const tbPrice = btn.getAttribute('data-tb-price');
+                    
+                    if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                        payTbName.textContent = tbName;
+                        payTbPrice.textContent = `${Number(tbPrice).toLocaleString()}원`;
+                        payReqId.value = reqId;
+                        linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${tbPrice}`;
+                        payModal.classList.add('open');
+                    }
+                });
+            });
+        }
+
+        // Render Monthly Tuition Fee Status
+        const tuitionContainer = document.getElementById('myclass-tuition-status-container');
+        const tuitionWidget = document.getElementById('myclass-tuition-widget');
+        if (tuitionWidget) {
+            tuitionWidget.style.display = isParent ? 'flex' : 'none';
+        }
+
+        if (isParent && tuitionContainer) {
+            tuitionContainer.innerHTML = '';
+            let totalTuitionHtml = '';
+
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const tuitionName = `회비 (${year}년 ${month}월)`;
+
+            parentChildren.forEach(child => {
+                const childClass = classes.find(c => String(c.id) === String(child.classId));
+                let childHtml = `
+                    <div style="font-weight: 800; font-size: 0.95rem; color: var(--mascot-pink-bg); margin-top: 14px; margin-bottom: 8px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="user" style="width: 16px; height: 16px;"></i> ${child.name}의 교육비 회비
+                    </div>
+                `;
+
+                const feeAmount = child.tuitionFeeAmount || 250000;
+                const feeDay = child.tuitionFeeDay || 10;
+
+                // Find existing tuition payment record
+                let req = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tuitionName);
+                
+                // If no record exists, create a default "미결제" record and save/sync immediately
+                if (!req) {
+                    req = {
+                        id: Date.now(),
+                        studentId: child.id,
+                        studentName: child.name,
+                        classId: childClass ? childClass.id : 1,
+                        className: childClass ? childClass.name : '없음',
+                        textbookName: tuitionName,
+                        price: feeAmount,
+                        isConfirmed: true, // auto confirmed request for tuition
+                        paymentStatus: '미결제',
+                        createdAt: new Date().toISOString()
+                    };
+                    textbookRequests.unshift(req);
+                    saveTextbookRequests();
+                }
+
+                const isPaid = req.paymentStatus === '결제완료';
+
+                let actionHtml = '';
+                if (req.paymentStatus === '입금확인중') {
+                    actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
+                } else if (req.paymentStatus === '미결제') {
+                    actionHtml = `
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
+                            <button type="button" class="btn-pay-tuition-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-req-id="${req.id}" data-fee-amount="${feeAmount}">결제하기</button>
+                        </div>
+                    `;
+                } else {
+                    actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                }
+
+                const itemHtml = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #ffffff; margin-bottom: 6px;">
+                        <div style="text-align: left;">
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tuitionName}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                                금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(feeAmount).toLocaleString()}원</span> | 
+                                기준일: <span style="font-weight: 600; color: var(--text-primary);">매월 ${feeDay}일</span>
+                            </div>
+                        </div>
+                        <div>
+                            ${actionHtml}
+                        </div>
+                    </div>
+                `;
+
+                if (isPaid) {
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: var(--mascot-green-bg); margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mascot-green-bg);"></span> 결제 완료 회비</div>` + itemHtml;
+                } else {
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: #ef4444; margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></span> 결제 대기 회비</div>` + itemHtml;
+                }
+
+                totalTuitionHtml += childHtml;
+            });
+
+            tuitionContainer.innerHTML = totalTuitionHtml;
+
+            // Bind 결제하기 (Toss Pay) click handler
+            tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const payModal = document.getElementById('textbook-payment-modal');
+                    const payTbName = document.getElementById('pay-textbook-name');
+                    const payTbPrice = document.getElementById('pay-textbook-price');
+                    const payReqId = document.getElementById('pay-request-id');
+                    const linkToss = document.getElementById('link-toss-transfer');
+                    
+                    const reqId = btn.getAttribute('data-req-id');
+                    const feeAmount = btn.getAttribute('data-fee-amount');
+                    
                     if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
                         payTbName.textContent = tuitionName;
                         payTbPrice.textContent = `${Number(feeAmount).toLocaleString()}원`;
-                        payReqId.value = req.id;
+                        payReqId.value = reqId;
                         linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${feeAmount}`;
                         payModal.classList.add('open');
                     }
                 });
-            }
-            
-            tuitionContainer.appendChild(item);
+            });
         }
 
         renderMyClassAiHistory();
@@ -7228,11 +7592,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const filter = document.getElementById('student-class-filter');
             if (!filter) return;
             const currentValue = filter.value;
-            filter.innerHTML = '<option value="">전체 반 보기</option>';
+            filter.innerHTML = `<option value="">전체 반 보기 (${students.length})</option>`;
             classes.forEach(c => {
+                const classStudents = students.filter(s => String(s.classId) === String(c.id));
+                const count = classStudents.length;
                 const opt = document.createElement('option');
                 opt.value = c.id;
-                opt.textContent = c.name;
+                opt.textContent = `${c.name} (${count})`;
                 if (String(c.id) === String(currentValue)) {
                     opt.selected = true;
                 }
@@ -7296,7 +7662,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const allBtn = document.createElement('button');
             allBtn.type = 'button';
             allBtn.className = `class-tab ${activeId === '' ? 'active' : ''}`;
-            allBtn.textContent = '전체 반 보기';
+            allBtn.textContent = `전체 반 보기 (${students.length})`;
             allBtn.setAttribute('data-class-id', '');
             allBtn.addEventListener('click', () => {
                 if (filterSelect) {
@@ -7308,10 +7674,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Class Tabs
             classes.forEach(c => {
+                const classStudents = students.filter(s => String(s.classId) === String(c.id));
+                const count = classStudents.length;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `class-tab ${String(c.id) === String(activeId) ? 'active' : ''}`;
-                btn.textContent = c.name;
+                btn.textContent = `${c.name} (${count})`;
                 btn.setAttribute('data-class-id', c.id);
                 btn.addEventListener('click', () => {
                     if (filterSelect) {
@@ -8142,7 +8510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Click delegation on Consultations Table Body
         if (consultListTbody) {
-            consultListTbody.addEventListener('click', (e) => {
+            consultListTbody.addEventListener('click', async (e) => {
                 const chkToggle = e.target.closest('.chk-toggle-status');
                 if (chkToggle) {
                     const id = Number(chkToggle.getAttribute('data-id'));
@@ -8160,10 +8528,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const btnDelete = e.target.closest('.btn-delete-consult');
                 if (btnDelete) {
-                    const id = Number(btnDelete.getAttribute('data-id'));
+                    const rawId = btnDelete.getAttribute('data-id');
                     if (confirm('이 상담 예약 신청 내역을 정말 삭제하시겠습니까?')) {
-                        consultations = consultations.filter(c => c.id !== id);
-                        saveConsultations();
+                        consultations = consultations.filter(c => String(c.id) !== String(rawId));
+                        try {
+                            localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations));
+                        } catch(err) {}
+                        
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                if (Number.isInteger(Number(rawId))) {
+                                    await supabase.from('sb_consultations').delete().eq('id', Number(rawId));
+                                } else {
+                                    await supabase.from('sb_consultations').delete().eq('id', rawId);
+                                }
+                            } catch(err) {
+                                console.error('Failed to delete consultation from Supabase:', err);
+                            }
+                        }
                         showToast('상담 내역이 삭제되었습니다.');
                         renderConsultList();
                     }
@@ -9013,7 +9395,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             const childrenData = u.user_metadata?.children || [];
                             childrenData.forEach((c, idx) => {
-                                let exist = students.find(s => s.name === c.name && (s.parentPhone === u.phone || s.phone === c.phone));
+                                let exist = students.find(s => 
+                                    (s.name === c.name && s.birthdate && s.birthdate === c.birthdate) ||
+                                    (s.name === c.name && (s.parentPhone === u.phone || s.phone === c.phone))
+                                );
                                 let age = 10;
                                 if (c.birthdate) {
                                     const birthYear = new Date(c.birthdate).getFullYear();
@@ -11315,9 +11700,18 @@ document.addEventListener('DOMContentLoaded', () => {
             );
             
             // Sub-filter: Studying vs Completed
-            const filtered = baseFiltered.filter(w => {
+            let filtered = baseFiltered.filter(w => {
                 const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(w.id) && String(c.studentId) === String(student.id));
                 return currentVocabFilter === 'completed' ? isDone : !isDone;
+            });
+            
+            // Sort "7월 06일" / "7월 6일" set to the absolute top of the list
+            filtered.sort((a, b) => {
+                const aSpecial = a.title.includes('7월 06일') || a.title.includes('7월06일') || a.title.includes('7월 6일') || a.title.includes('7월6일');
+                const bSpecial = b.title.includes('7월 06일') || b.title.includes('7월06일') || b.title.includes('7월 6일') || b.title.includes('7월6일');
+                if (aSpecial && !bSpecial) return -1;
+                if (!aSpecial && bSpecial) return 1;
+                return 0;
             });
             
             if (filtered.length === 0) {
@@ -11334,14 +11728,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.style.justifyContent = 'space-between';
                 item.style.alignItems = 'center';
                 item.style.padding = '12px 18px';
-                item.style.border = '1px solid var(--border-color)';
                 item.style.borderRadius = '16px';
-                item.style.background = '#ffffff';
                 item.style.cursor = 'pointer';
                 item.style.transition = 'all 0.2s';
                 
+                const isSpecial = set.title.includes('7월 06일') || set.title.includes('7월06일') || set.title.includes('7월 6일') || set.title.includes('7월6일');
+                if (isSpecial) {
+                    item.style.background = 'linear-gradient(135deg, #fdf4ff, #fae8ff)';
+                    item.style.border = '2px solid var(--mascot-purple-bg)';
+                } else {
+                    item.style.background = '#ffffff';
+                    item.style.border = '1px solid var(--border-color)';
+                }
+                item.style.transition = 'all 0.2s';
+                
                 item.onmouseover = () => { item.style.borderColor = 'var(--mascot-purple-bg)'; item.style.transform = 'translateY(-2px)'; };
-                item.onmouseout = () => { item.style.borderColor = 'var(--border-color)'; item.style.transform = 'none'; };
+                item.onmouseout = () => { item.style.borderColor = isSpecial ? 'var(--mascot-purple-bg)' : 'var(--border-color)'; item.style.transform = 'none'; };
                 
                 const isPersonal = !!set.studentId;
                 const isCompleted = completedVocabSets.some(c => String(c.vocabSetId) === String(set.id) && String(c.studentId) === String(student.id));
@@ -11960,12 +12362,28 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         // --- Student Vocabulary Creator Form Engine ---
-        const renderStudentVocabCreatorRows = (wordsData = []) => {
+        let vocabRowCount = 30;
+        const renderStudentVocabCreatorRows = (wordsData = null) => {
             const container = document.getElementById('student-vocab-words-container');
             if (!container) return;
             
+            if (wordsData && wordsData.length > 0) {
+                vocabRowCount = wordsData.length;
+            }
+            
+            // Capture currently typed values to preserve them during row addition/deletion
+            const currentInputs = [];
+            const existingWords = container.querySelectorAll('.student-vocab-row-word');
+            const existingMeanings = container.querySelectorAll('.student-vocab-row-meaning');
+            for (let i = 0; i < existingWords.length; i++) {
+                currentInputs.push({
+                    word: existingWords[i].value,
+                    meaning: existingMeanings[i].value
+                });
+            }
+            
             container.innerHTML = '';
-            for (let i = 0; i < 30; i++) {
+            for (let i = 0; i < vocabRowCount; i++) {
                 const row = document.createElement('div');
                 row.style.display = 'grid';
                 row.style.gridTemplateColumns = '50px 1.2fr 1.2fr';
@@ -11974,8 +12392,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.style.padding = '6px 8px';
                 row.style.gap = '8px';
                 
-                const wordVal = wordsData[i]?.word || '';
-                const meaningVal = wordsData[i]?.meaning || '';
+                const wordVal = (wordsData && wordsData[i]) ? (wordsData[i].word || '') : (currentInputs[i]?.word || '');
+                const meaningVal = (wordsData && wordsData[i]) ? (wordsData[i].meaning || '') : (currentInputs[i]?.meaning || '');
                 
                 const numStr = String(i + 1).padStart(3, '0');
                 row.innerHTML = `
@@ -11987,6 +12405,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        // Row addition and deletion listeners
+        const btnAddVocabRow = document.getElementById('btn-student-vocab-add-row');
+        const btnDelVocabRow = document.getElementById('btn-student-vocab-del-row');
+        if (btnAddVocabRow) {
+            btnAddVocabRow.addEventListener('click', () => {
+                vocabRowCount++;
+                renderStudentVocabCreatorRows();
+            });
+        }
+        if (btnDelVocabRow) {
+            btnDelVocabRow.addEventListener('click', () => {
+                if (vocabRowCount > 1) {
+                    vocabRowCount--;
+                    renderStudentVocabCreatorRows();
+                }
+            });
+        }
+
         // Form toggle
         const btnToggleCreator = document.getElementById('btn-toggle-student-vocab-creator');
         const creatorContainer = document.getElementById('student-vocab-creator-container');
@@ -11995,6 +12431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isHidden = creatorContainer.style.display === 'none';
                 creatorContainer.style.display = isHidden ? 'block' : 'none';
                 if (isHidden) {
+                    vocabRowCount = 30; // reset default on open
                     renderStudentVocabCreatorRows();
                 }
             });
@@ -12016,7 +12453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }));
                         renderStudentVocabCreatorRows(withExamples);
                         const titleInput = document.getElementById('student-vocab-title');
-                        if (titleInput) titleInput.value = '이준 영단어 6월29일';
+                        if (titleInput) titleInput.value = '이준 영단어 7월 06일';
                         showToast('유인물 분석이 완료되었습니다. 1~30번 영단어가 자동으로 매핑되었습니다!');
                     }, 1200);
                 }
@@ -12036,7 +12473,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const wordInputs = document.querySelectorAll('.student-vocab-row-word');
                 const meaningInputs = document.querySelectorAll('.student-vocab-row-meaning');
                 
-                for (let i = 0; i < 30; i++) {
+                for (let i = 0; i < wordInputs.length; i++) {
                     const w = wordInputs[i]?.value.trim();
                     const m = meaningInputs[i]?.value.trim();
                     
@@ -12287,4 +12724,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // PWA Install & Home Screen Shortcut Simulation
+        let deferredPrompt = null;
+        const btnPwaInstall = document.getElementById('btn-pwa-install');
+        
+        if (btnPwaInstall) {
+            // Always show the button for simulation/instructions purposes
+            btnPwaInstall.style.display = 'inline-flex';
+            
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                btnPwaInstall.style.display = 'inline-flex';
+            });
+
+            window.addEventListener('appinstalled', (e) => {
+                console.log('PWA installed successfully');
+                btnPwaInstall.style.display = 'none';
+            });
+
+            btnPwaInstall.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    deferredPrompt = null;
+                    btnPwaInstall.style.display = 'none';
+                } else {
+                    alert('📱 홈 화면 바로가기 추가 안내\n\n1. 모바일(Safari): 하단의 공유(공유하기) 버튼 클릭 후 "홈 화면에 추가" 선택\n2. 모바일(Chrome/Samsung): 우측 상단 메뉴(점 3개) 클릭 후 "홈 화면에 추가" 또는 "앱 설치" 선택\n3. PC(Chrome): 주소창 우측의 설치 아이콘 또는 브라우저 주소창 메뉴 클릭');
+                }
+            });
+        }
 });

@@ -107,6 +107,9 @@
                     <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
                 </nav>
                 <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
+                    <button id="btn-pwa-install" style="display: none; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; border-radius: 50px; background: linear-gradient(135deg, var(--mascot-purple-bg), var(--primary-color)); color: white; border: none; cursor: pointer; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <i data-lucide="download" style="width: 14px; height: 14px;"></i> 바로가기 추가
+                    </button>
                     <span id="user-profile-display-container" style="display: none; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 600; margin-right: 4px;">
                         <a href="#" id="link-user-profile-edit" style="color: var(--primary-color); text-decoration: none; border-bottom: 1px dashed var(--primary-color); padding-bottom: 2px; transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px;">
                             <i data-lucide="user" style="width: 16px; height: 16px;"></i>
@@ -261,7 +264,8 @@
                         <a href="#class-formulas-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 반별 공식 관리
                         </a>
-                        <a href="#class-words-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                        <!-- Hidden Class Vocab Management Navigation -->
+                        <a href="#class-words-management-card" style="display: none !important;">
                             <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 영어단어 관리
                         </a>
                         <a href="#ai-query-management-card" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
@@ -662,8 +666,8 @@
                         </div>
                     </div>
 
-                    <!-- English Vocabulary Management Card -->
-                    <div class="class-management-card" id="class-words-management-card" style="margin-top: 30px; scroll-margin-top: 90px;">
+                    <!-- English Vocabulary Management Card (Hidden) -->
+                    <div class="class-management-card" id="class-words-management-card" style="display: none !important; margin-top: 30px; scroll-margin-top: 90px;">
                         <div class="class-management-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
                             <div>
                                 <h3 style="font-family: var(--ff-primary); font-size: 1.25rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
@@ -1075,6 +1079,28 @@
                         <span class="section-subtext" id="myclass-subtitle">자녀의 학습 진도, 과제 현황 및 1:1 상담 피드백입니다.</span>
                     </div>
 
+                    <!-- Student Quick Menu Bar -->
+                    <div id="student-quick-menu" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="zap" style="width: 16px; height: 16px; color: var(--mascot-purple-bg);"></i> 학생 빠른 메뉴:
+                        </span>
+                        <a href="#myclass-info-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="graduation-cap" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 나의 학습 상태
+                        </a>
+                        <a href="#myclass-badge-shelf-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 나의 배지 진열대
+                        </a>
+                        <a href="#myclass-vocab-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 영어단어 학습
+                        </a>
+                        <a href="#myclass-daily-habit-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 오늘 학습일지
+                        </a>
+                        <a href="#chat-messages-container-anchor" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="message-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 1:1 상담 메신저
+                        </a>
+                    </div>
+
                     <!-- Parent Quick Menu Bar -->
                     <div id="parent-quick-menu" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 20px; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 20px; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: sticky; top: 80px; z-index: 10;">
                         <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary); margin-right: 8px; display: flex; align-items: center; gap: 4px;">
@@ -1191,6 +1217,10 @@
                                             <div id="student-vocab-words-container" style="max-height: 250px; overflow-y: auto; background: #ffffff;">
                                                 <!-- Populated dynamically (30 rows) -->
                                             </div>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px;">
+                                            <button type="button" id="btn-student-vocab-add-row" style="padding: 4px 10px; font-size: 0.78rem; font-weight: 700; border-radius: 6px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; display: flex; align-items: center; gap: 2px;">+ 단어 추가</button>
+                                            <button type="button" id="btn-student-vocab-del-row" style="padding: 4px 10px; font-size: 0.78rem; font-weight: 700; border-radius: 6px; border: 1px solid var(--border-color); background: #ffffff; cursor: pointer; color: #ef4444; display: flex; align-items: center; gap: 2px;">- 단어 삭제</button>
                                         </div>
 
                                         <button type="submit" style="width: 100%; padding: 10px; font-size: 0.9rem; font-weight: 700; border-radius: 8px; border: none; background: var(--mascot-purple-bg); color: #ffffff; cursor: pointer; margin-top: 6px;">나만의 단어장 저장</button>
@@ -1615,6 +1645,49 @@
                     <input type="checkbox" id="notice-pin-checkbox" style="width: auto; cursor: pointer; transform: scale(1.15);">
                     <label for="notice-pin-checkbox" style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); cursor: pointer; user-select: none;">이 글을 최상위에 고정합니다 (Pin to Top)</label>
                 </div>
+                <div class="form-group-modal-checkbox" style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+                    <input type="checkbox" id="notice-recruit-checkbox" style="width: auto; cursor: pointer; transform: scale(1.15);" onchange="document.getElementById('recruit-settings-panel').style.display = this.checked ? 'block' : 'none';">
+                    <label for="notice-recruit-checkbox" style="font-size: 0.88rem; font-weight: 700; color: var(--mascot-purple-bg); cursor: pointer; user-select: none;">📢 방학 캠프 및 특별 특강 모집 설정 활성화</label>
+                </div>
+                <div id="recruit-settings-panel" style="display: none; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+                    <div class="form-group-modal-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                        <div class="form-group-modal">
+                            <label for="notice-recruit-type">모집 구분</label>
+                            <select id="notice-recruit-type">
+                                <option value="정규특강">정규 특강</option>
+                                <option value="특별특강">특별 특강</option>
+                                <option value="겨울캠프">겨울방학 캠프</option>
+                                <option value="여름캠프">여름방학 캠프</option>
+                            </select>
+                        </div>
+                        <div class="form-group-modal">
+                            <label for="notice-recruit-capacity">모집 정원 (명)</label>
+                            <input type="number" id="notice-recruit-capacity" placeholder="예: 10" min="1" value="10">
+                        </div>
+                    </div>
+                    <div class="form-group-modal-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                        <div class="form-group-modal">
+                            <label for="notice-recruit-start">시작 날짜</label>
+                            <input type="date" id="notice-recruit-start">
+                        </div>
+                        <div class="form-group-modal">
+                            <label for="notice-recruit-end">종료 날짜</label>
+                            <input type="date" id="notice-recruit-end">
+                        </div>
+                    </div>
+                    <div class="form-group-modal-row" style="display: grid; grid-template-columns: 1.2fr 1.8fr; gap: 12px;">
+                        <div class="form-group-modal">
+                            <label for="notice-recruit-fee">특강비 (원)</label>
+                            <input type="number" id="notice-recruit-fee" placeholder="예: 150000" value="150000">
+                        </div>
+                        <div class="form-group-modal" style="display: flex; align-items: center; padding-top: 20px;">
+                            <label for="notice-recruit-closed" style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ef4444; cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="notice-recruit-closed" style="width: auto; margin: 0; cursor: pointer;"> 수동 모집 마감 (Closed)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-group-modal">
                     <label for="notice-title-input">제목</label>
                     <input type="text" id="notice-title-input" required placeholder="공지사항 제목을 입력하세요">
@@ -1638,10 +1711,14 @@
                 <input type="hidden" id="edit-student-id">
                 
                 <!-- Row 1: Basic Info -->
-                <div class="form-row-three" style="display: grid; grid-template-columns: 1.2fr 0.8fr 1fr; gap: 12px;">
+                <div class="form-row-four" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr; gap: 12px;">
                     <div class="form-group-modal">
                         <label for="student-name-input">이름</label>
                         <input type="text" id="student-name-input" required placeholder="예: 김민준">
+                    </div>
+                    <div class="form-group-modal">
+                        <label for="student-birthdate-input">생년월일</label>
+                        <input type="date" id="student-birthdate-input" required>
                     </div>
                     <div class="form-group-modal">
                         <label for="student-age-input">나이</label>
