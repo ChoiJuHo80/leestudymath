@@ -52,6 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return letterA.localeCompare(letterB);
         });
     };
+    
+    const safeIntegerId = (rawId) => {
+        if (rawId === null || rawId === undefined) return rawId;
+        const num = Number(rawId);
+        if (isNaN(num)) return rawId;
+        if (num <= 2147483647) return num;
+        return num % 1000000000;
+    };
 
     const mapStudentFromDb = (dbStudent) => {
         const remarks = dbStudent.remarks || '';
@@ -72,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: dbStudent.phone,
             parentPhone: dbStudent.parent_phone,
             sibling: dbStudent.sibling,
-            classId: dbStudent.class_id,
+            classId: safeIntegerId(dbStudent.class_id),
             username: dbStudent.username,
             password: dbStudent.password,
             progress: dbStudent.progress,
@@ -95,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: jsStudent.phone,
             parent_phone: jsStudent.parentPhone,
             sibling: jsStudent.sibling,
-            class_id: jsStudent.classId,
+            class_id: safeIntegerId(jsStudent.classId),
             username: jsStudent.username,
             password: jsStudent.password,
             progress: jsStudent.progress,
@@ -106,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const mapClassFromDb = (dbClass) => ({
-        id: dbClass.id,
+        id: safeIntegerId(dbClass.id),
         name: dbClass.name,
         subject: dbClass.subject,
         duration: dbClass.duration,
@@ -132,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const thu = parseTimeRange(jsClass.schedule ? jsClass.schedule.thu : jsClass.thu);
         const fri = parseTimeRange(jsClass.schedule ? jsClass.schedule.fri : jsClass.fri);
         return {
-            id: jsClass.id,
+            id: safeIntegerId(jsClass.id),
             name: jsClass.name,
             subject: jsClass.subject,
             duration: jsClass.duration,
@@ -397,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapClassFormulaFromDb = (dbItem) => ({
         id: dbItem.id,
-        classId: dbItem.class_id,
+        classId: safeIntegerId(dbItem.class_id),
         formulaName: dbItem.formula_name,
         latex: dbItem.formula_latex,
         pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? safeJsonParse(dbItem.card_pieces) : dbItem.card_pieces) : [],
@@ -410,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: jsItem.id,
-            class_id: jsItem.classId,
+            class_id: safeIntegerId(jsItem.classId),
             formula_name: jsItem.formulaName,
             formula_latex: jsItem.latex,
             card_pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
@@ -419,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const mapWordSetFromDb = (dbItem) => ({
         id: dbItem.id,
-        classId: dbItem.class_id,
+        classId: safeIntegerId(dbItem.class_id),
         studentId: dbItem.student_id,
         title: dbItem.title,
         words: dbItem.words ? (typeof dbItem.words === 'string' ? safeJsonParse(dbItem.words) : dbItem.words) : []
@@ -431,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: jsItem.id,
-            class_id: jsItem.classId || null,
+            class_id: safeIntegerId(jsItem.classId) || null,
             student_id: jsItem.studentId || null,
             title: jsItem.title,
             words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : jsItem.words,
@@ -5351,8 +5359,9 @@ document.addEventListener('DOMContentLoaded', () => {
             parentChildren = students.filter(s => s.parentPhone === student.parentPhone);
         }
 
-        // Show/Hide and populate child selector
-        if (parentChildren.length > 1 && childSelectContainer && childSelect) {
+        // Show/Hide and populate child selector (only visible for parent role and if multiple children exist)
+        const isParentRole = (typeof userRole !== 'undefined' && userRole === 'parent');
+        if (isParentRole && parentChildren.length > 1 && childSelectContainer && childSelect) {
             childSelect.innerHTML = '';
             parentChildren.forEach(child => {
                 const btn = document.createElement('button');
@@ -5396,10 +5405,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 childSelect.appendChild(btn);
             });
             
-            // Adjust the parent selector container width and padding to dynamically fit the kids buttons
-            childSelectContainer.style.width = 'max-content';
-            childSelectContainer.style.minWidth = '220px';
-            childSelectContainer.style.padding = '16px 20px';
+            // Adjust the parent selector container to act as a clean inline buttons wrapper
             childSelectContainer.style.display = 'block';
             safeCreateIcons();
         } else {
