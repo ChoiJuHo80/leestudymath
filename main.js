@@ -5857,6 +5857,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 studentLoginModal.classList.add('open');
+                const savedUser = localStorage.getItem('gongbubang_saved_student_username') || '';
+                const savedPw = localStorage.getItem('gongbubang_saved_student_password') || '';
+                if (savedUser) {
+                    studentLoginNameInput.value = savedUser;
+                }
+                if (savedPw) {
+                    studentLoginPhoneInput.value = savedPw;
+                }
                 studentLoginNameInput.focus();
             }
             safeCreateIcons();
@@ -5948,6 +5956,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Logged in successfully
                 localStorage.setItem('gongbubang_last_student_name', inputId);
+                localStorage.setItem('gongbubang_saved_student_username', inputId);
+                localStorage.setItem('gongbubang_saved_student_password', inputPassword);
                 localStorage.setItem('gongbubang_student_session', JSON.stringify({
                     username: foundChild.username,
                     name: foundChild.name,
