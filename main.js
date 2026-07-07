@@ -2898,6 +2898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (s.name === '김민준') return { ...s, classId: 1 };
                         if (s.name === '이서윤') return { ...s, classId: 2 };
                         if (s.name === '김서아') return { ...s, classId: 3 };
+                        return { ...s, classId: 1 }; // Default fallback
                     }
                     return s;
                 });
@@ -5903,7 +5904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Backdrop click listener removed so login modal does not close when clicking outside
 
         // Submit Student Login Form (Student Login via Student ID / Password)
-        studentLoginForm.addEventListener('submit', (e) => {
+        studentLoginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const inputId = studentLoginNameInput.value.trim();
             const inputPassword = studentLoginPhoneInput.value;
@@ -5939,6 +5940,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Supabase Real-time credentials lookup fallback
+            if (!foundChild && typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    const { data: dbStudents, error } = await supabase.from('sb_students')
+                        .select('*')
+                        .eq('username', inputId)
+                        .eq('password', inputPassword);
+                    if (!error && dbStudents && dbStudents.length > 0) {
+                        const directStudent = mapStudentFromDb(dbStudents[0]);
+                        foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
+                        foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                            id: 'parent-' + directStudent.id,
+                            status: 'approved',
+                            phone: directStudent.parentPhone || '010-0000-0000',
+                            address: directStudent.address || ''
+                        };
+                        // Cache this student record locally
+                        const existingIdx = currentStudents.findIndex(s => s.username === directStudent.username);
+                        if (existingIdx >= 0) {
+                            currentStudents[existingIdx] = directStudent;
+                        } else {
+                            currentStudents.push(directStudent);
+                        }
+                        localStorage.setItem('gongbubang_students', JSON.stringify(currentStudents));
+                        students = currentStudents;
+                    }
+                } catch (err) {
+                    console.error('Real-time Supabase auth fallback failed:', err);
+                }
+            }
 
             if (foundParent && foundChild) {
                 // Check parent account status
@@ -5971,9 +6002,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         remarks: '자녀 계정으로 가입되었습니다. 스케줄을 설정해 주세요.',
                         username: foundChild.username,
                         password: foundChild.password,
-                        address: foundParent.address
+                        address: foundParent.address,
+                        classId: 1 // Default fallback to 초등 4학년 A반
                     };
                     currentStudents.unshift(foundStudent);
+                    students = currentStudents;
+                    saveStudents();
+                } else if (!foundStudent.classId) {
+                    foundStudent.classId = 1; // Heal existing student record
                     students = currentStudents;
                     saveStudents();
                 }
