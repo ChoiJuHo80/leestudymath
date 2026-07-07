@@ -5354,9 +5354,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const isEmailUser = currentUserId.length > 8 && currentUserId.includes('-') && !Number.isInteger(Number(currentUserId));
         
         if (isEmailUser) {
-            parentChildren = students.filter(s => String(s.id).startsWith(currentUserId));
+            parentChildren = students.filter(s => String(s.id).startsWith(currentUserId) || (student.parentPhone && s.parentPhone === student.parentPhone));
         } else if (student.parentPhone) {
-            parentChildren = students.filter(s => s.parentPhone === student.parentPhone);
+            parentChildren = students.filter(s => s.parentPhone === student.parentPhone || String(s.id).startsWith(currentUserId));
         }
 
         // Show/Hide and populate child selector (only visible for parent role and if multiple children exist)
@@ -5395,11 +5395,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.preventDefault();
                     loggedInStudentId = child.id;
                     renderMyClass();
-                    
-                    const selectedChild = students.find(s => String(s.id) === String(loggedInStudentId));
-                    if (selectedChild && typeof window.renderStudentFormulasAndBadges === 'function') {
-                        window.renderStudentFormulasAndBadges(selectedChild);
-                    }
                 });
                 
                 childSelect.appendChild(btn);
@@ -7037,23 +7032,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parentPhone = session.user.user_metadata?.phone || '';
                 const childrenData = session.user.user_metadata?.children || [];
 
-                // Sync linked students records with Supabase user metadata
-                if (childrenData.length > 0) {
-                    childrenData.forEach((c, idx) => {
-                        const matched = students.find(s => s.name === c.name && (s.parentPhone === parentPhone || s.phone === c.phone));
-                        if (matched && !String(matched.id).startsWith(session.user.id)) {
-                            students = students.map(s => s.id === matched.id ? { 
-                                ...s, 
-                                id: `${session.user.id}-${idx}`,
-                                sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : s.sibling 
-                            } : s);
-                        }
-                    });
-                    saveStudents();
-                }
-
-                // Retrieve all linked students
-                let parentChildren = students.filter(s => String(s.id).startsWith(session.user.id));
+                // Match parent's children by either ID startsWith or parentPhone (avoid re-assigning IDs to prevent collisions)
+                let parentChildren = students.filter(s => 
+                    String(s.id).startsWith(session.user.id) || 
+                    (parentPhone && s.parentPhone === parentPhone)
+                );
 
                 // If no records linked yet, auto-create them from children metadata
                 if (parentChildren.length === 0 && childrenData.length > 0) {
@@ -7077,7 +7060,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     });
                     saveStudents();
-                    parentChildren = students.filter(s => String(s.id).startsWith(session.user.id));
+                    parentChildren = students.filter(s => 
+                        String(s.id).startsWith(session.user.id) || 
+                        (parentPhone && s.parentPhone === parentPhone)
+                    );
                 }
 
                 // If parent has children, set default selected child
