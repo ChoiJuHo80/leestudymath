@@ -2032,7 +2032,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
-    window.addEventListener('scroll', scrollActive);
+    // requestAnimationFrame으로 스로틀링 - Android Forced Reflow 방지
+    let _scrollRafId = null;
+    window.addEventListener('scroll', () => {
+        if (_scrollRafId) return;
+        _scrollRafId = requestAnimationFrame(() => {
+            scrollActive();
+            _scrollRafId = null;
+        });
+    }, { passive: true });
 
     // ==========================================================================
     // Mascot Card Click: Smooth Scroll with Focus Offset
