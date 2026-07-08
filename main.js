@@ -71,14 +71,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapStudentFromDb = (dbStudent) => {
         const remarks = dbStudent.remarks || '';
         const feeMatch = remarks.match(/\[FEE:(\d+),DAY:(\d+)\]/);
-        let cleanRemarks = remarks;
         let tuitionFeeAmount = 250000;
         let tuitionFeeDay = 10;
         if (feeMatch) {
             tuitionFeeAmount = parseInt(feeMatch[1], 10);
             tuitionFeeDay = parseInt(feeMatch[2], 10);
-            cleanRemarks = remarks.replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '').trim();
         }
+
+        const birthMatch = remarks.match(/\[BIRTH:([^\]]+)\]/);
+        const birthdate = birthMatch ? birthMatch[1] : '';
+
+        const addrMatch = remarks.match(/\[ADDR:([^\]]+)\]/);
+        const address = addrMatch ? addrMatch[1] : '';
+
+        // Clean up metadata tags from remarks
+        let cleanRemarks = remarks
+            .replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '')
+            .replace(/\r?\n?\[BIRTH:[^\]]+\]/, '')
+            .replace(/\r?\n?\[ADDR:[^\]]+\]/, '')
+            .trim();
+
         return {
             id: String(dbStudent.id),
             name: dbStudent.name,
@@ -94,6 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
             remarks: cleanRemarks,
             tuitionFeeDay: tuitionFeeDay,
             tuitionFeeAmount: tuitionFeeAmount,
+            birthdate: birthdate,
+            address: address,
             isTerminated: dbStudent.is_terminated,
             terminationDate: dbStudent.termination_date
         };
@@ -101,7 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapStudentToDb = (jsStudent) => {
         const feeSuffix = `\n[FEE:${jsStudent.tuitionFeeAmount || 250000},DAY:${jsStudent.tuitionFeeDay || 10}]`;
-        const remarksWithFee = (jsStudent.remarks || '').trim() + feeSuffix;
+        const birthSuffix = jsStudent.birthdate ? `\n[BIRTH:${jsStudent.birthdate}]` : '';
+        const addrSuffix = jsStudent.address ? `\n[ADDR:${jsStudent.address}]` : '';
+        const remarksWithMetadata = (jsStudent.remarks || '').trim() + feeSuffix + birthSuffix + addrSuffix;
         return {
             id: jsStudent.id,
             name: jsStudent.name,
@@ -114,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             username: jsStudent.username,
             password: jsStudent.password,
             progress: jsStudent.progress,
-            remarks: remarksWithFee,
+            remarks: remarksWithMetadata,
             is_terminated: jsStudent.isTerminated || false,
             termination_date: jsStudent.terminationDate || null
         };
@@ -916,6 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[2]) students = syncResults[2];
             if (syncResults[3]) {
                 let mockUsersData = syncResults[3];
+                mockUsers = mockUsersData;
                 const adminEmails = ['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'];
                 let updated = false;
                 adminEmails.forEach(email => {
@@ -2326,6 +2343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let classFormulas = [];
     let studentBadges = [];
     let wordSets = [];
+    let mockUsers = [];
 
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
@@ -3195,6 +3213,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentTerminationDateInput = document.getElementById('student-termination-date-input');
     const studentFormModalTitle = document.getElementById('student-form-modal-title');
 
+    const populateStudentParentSelect = () => {
+        const select = document.getElementById('student-parent-select');
+        if (!select) return;
+        select.innerHTML = '<option value="">학부모 선택 연결</option>';
+        if (typeof mockUsers !== 'undefined' && Array.isArray(mockUsers)) {
+            const parentsList = mockUsers.filter(u => u.role === 'parent');
+            parentsList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.phone || '';
+                opt.textContent = `${p.name || '학부모'} (${p.phone || '연락처 없음'})`;
+                select.appendChild(opt);
+            });
+        }
+    };
+
+    // Auto-calculate age when birthdate changes in register/edit student form
+    const birthdateInputEl = document.getElementById('student-birthdate-input');
+    if (birthdateInputEl) {
+        birthdateInputEl.addEventListener('change', () => {
+            const val = birthdateInputEl.value;
+            if (val) {
+                const birthYear = new Date(val).getFullYear();
+                const currentYear = new Date().getFullYear();
+                const age = currentYear - birthYear + 1; // Korean age calculation
+                if (studentAgeInput) studentAgeInput.value = age;
+            }
+        });
+    }
+
+    // Connect select with phone input
+    const parentSelectEl = document.getElementById('student-parent-select');
+    if (parentSelectEl) {
+        parentSelectEl.addEventListener('change', () => {
+            if (parentSelectEl.value && studentParentPhoneInput) {
+                studentParentPhoneInput.value = parentSelectEl.value;
+            }
+        });
+    }
+
     const populateTerminationYears = () => {
         const yearFilter = document.getElementById('terminated-year-filter');
         if (!yearFilter) return;
@@ -3929,8 +3986,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         studentClassDurationInput.value = student.classDuration || 90;
                     }
                     
+                    // Populate student-parent-select
+                    populateStudentParentSelect();
+                    const parentSelect = document.getElementById('student-parent-select');
+                    if (parentSelect) {
+                        parentSelect.value = student.parentPhone || '';
+                    }
+
                     if (document.getElementById('student-username-input')) {
-                        document.getElementById('student-username-input').value = student.username || '';
+                        const usernameInput = document.getElementById('student-username-input');
+                        usernameInput.value = student.username || '';
+                        usernameInput.disabled = !!student.username; // disable if already exists
                     }
                     if (document.getElementById('student-password-input')) {
                         document.getElementById('student-password-input').value = student.password || '';
@@ -4276,7 +4342,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (studentTerminatedCheckbox) studentTerminatedCheckbox.checked = false;
             if (studentTerminationDateInput) studentTerminationDateInput.value = '';
-            if (document.getElementById('student-username-input')) document.getElementById('student-username-input').value = '';
+            
+            populateStudentParentSelect();
+            if (document.getElementById('student-username-input')) {
+                const usernameInput = document.getElementById('student-username-input');
+                usernameInput.value = '';
+                usernameInput.disabled = false; // enable for new registration
+            }
             if (document.getElementById('student-password-input')) document.getElementById('student-password-input').value = '';
             if (document.getElementById('student-address-input')) document.getElementById('student-address-input').value = '';
             if (document.getElementById('student-address-detail-input')) document.getElementById('student-address-detail-input').value = '';
@@ -5690,6 +5762,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show/Hide and populate child selector (only visible for parent role and if multiple children exist)
         const isParentRole = (typeof userRole !== 'undefined' && userRole === 'parent');
+        const parentChildManagementWidget = document.getElementById('parent-child-management-widget');
+        if (parentChildManagementWidget) {
+            parentChildManagementWidget.style.display = isParentRole ? 'flex' : 'none';
+        }
         if (isParentRole && parentChildren.length > 1 && childSelectContainer && childSelect) {
             childSelect.innerHTML = '';
             parentChildren.forEach(child => {
@@ -12808,6 +12884,153 @@ document.addEventListener('DOMContentLoaded', () => {
                     btnPwaInstall.style.display = 'none';
                 } else {
                     alert('📱 홈 화면 바로가기 추가 안내\n\n1. 모바일(Safari): 하단의 공유(공유하기) 버튼 클릭 후 "홈 화면에 추가" 선택\n2. 모바일(Chrome/Samsung): 우측 상단 메뉴(점 3개) 클릭 후 "홈 화면에 추가" 또는 "앱 설치" 선택\n3. PC(Chrome): 주소창 우측의 설치 아이콘 또는 브라우저 주소창 메뉴 클릭');
+                }
+            });
+        }
+
+        // --- Parent: Add Child Logic ---
+        const parentAddChildModal = document.getElementById('parent-add-child-modal');
+        const btnParentAddChild = document.getElementById('btn-parent-add-child');
+        const btnParentAddChildClose = document.getElementById('btn-parent-add-child-close');
+        const parentAddChildForm = document.getElementById('parent-add-child-form');
+        const parentChildNameInput = document.getElementById('parent-child-name-input');
+        const parentChildBirthdateInput = document.getElementById('parent-child-birthdate-input');
+        const parentChildAgeInput = document.getElementById('parent-child-age-input');
+        const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+        const parentChildPasswordInput = document.getElementById('parent-child-password-input');
+        const parentChildSchoolInput = document.getElementById('parent-child-school-input');
+
+        if (btnParentAddChild && parentAddChildModal) {
+            btnParentAddChild.addEventListener('click', () => {
+                if (parentAddChildForm) parentAddChildForm.reset();
+                if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
+                parentAddChildModal.style.display = 'flex';
+                safeCreateIcons();
+            });
+        }
+
+        if (btnParentAddChildClose && parentAddChildModal) {
+            btnParentAddChildClose.addEventListener('click', () => {
+                parentAddChildModal.style.display = 'none';
+            });
+        }
+
+        // Auto calculate age when birthdate changes in Parent Add Child Form
+        if (parentChildBirthdateInput) {
+            parentChildBirthdateInput.addEventListener('change', () => {
+                const val = parentChildBirthdateInput.value;
+                if (val) {
+                    const birthYear = new Date(val).getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear + 1; // Korean age
+                    if (parentChildAgeInput) parentChildAgeInput.value = age;
+                }
+                checkExistingStudentForParentForm();
+            });
+        }
+
+        if (parentChildNameInput) {
+            parentChildNameInput.addEventListener('input', () => {
+                checkExistingStudentForParentForm();
+            });
+        }
+
+        // Lookup existing student by name and birthdate
+        const checkExistingStudentForParentForm = () => {
+            const nameVal = (parentChildNameInput ? parentChildNameInput.value : '').trim();
+            const birthdateVal = parentChildBirthdateInput ? parentChildBirthdateInput.value : '';
+
+            if (nameVal && birthdateVal) {
+                // Search in students
+                const existing = students.find(s => 
+                    s.name === nameVal && 
+                    s.birthdate === birthdateVal
+                );
+
+                if (existing) {
+                    if (parentChildAgeInput) parentChildAgeInput.value = existing.age || '';
+                    if (parentChildUsernameInput) {
+                        parentChildUsernameInput.value = existing.username || '';
+                        parentChildUsernameInput.disabled = !!existing.username; // disable if exists
+                    }
+                    if (parentChildPasswordInput) parentChildPasswordInput.value = existing.password || '';
+                    if (parentChildSchoolInput) parentChildSchoolInput.value = existing.school || '';
+                    showToast('기존 원생 정보를 정상적으로 불러왔습니다!');
+                }
+            }
+        };
+
+        // Save/Add child submit handler
+        if (parentAddChildForm) {
+            parentAddChildForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const nameVal = parentChildNameInput.value.trim();
+                const birthdateVal = parentChildBirthdateInput.value;
+                const ageVal = parseInt(parentChildAgeInput.value || 0, 10);
+                const usernameVal = parentChildUsernameInput.value.trim();
+                const passwordVal = parentChildPasswordInput.value.trim();
+                const schoolVal = parentChildSchoolInput.value.trim();
+
+                if (!nameVal || !birthdateVal) return;
+
+                // Find current active child to look up the parent phone in mockUsers
+                const currentStudentObj = students.find(s => s.id === loggedInStudentId);
+                if (!currentStudentObj) {
+                    alert('올바른 학부모 세션을 찾을 수 없습니다.');
+                    return;
+                }
+
+                const parentPhoneVal = currentStudentObj.parentPhone;
+                const parentObj = mockUsers.find(u => u.role === 'parent' && normalizePhone(u.phone) === normalizePhone(parentPhoneVal));
+                const parentAddressVal = parentObj ? parentObj.address : '';
+
+                // Check if existing
+                let matchedStudent = students.find(s => s.name === nameVal && s.birthdate === birthdateVal);
+                let targetId = matchedStudent ? matchedStudent.id : Date.now().toString();
+
+                const updatedStudentObj = {
+                    id: targetId,
+                    name: nameVal,
+                    birthdate: birthdateVal,
+                    age: ageVal,
+                    school: schoolVal || (matchedStudent ? matchedStudent.school : '공부방 초등학교'),
+                    phone: matchedStudent ? matchedStudent.phone : '',
+                    parentPhone: parentPhoneVal,
+                    sibling: matchedStudent ? matchedStudent.sibling : '',
+                    classId: matchedStudent ? matchedStudent.classId : 1,
+                    username: usernameVal,
+                    password: passwordVal,
+                    address: parentAddressVal || (matchedStudent ? matchedStudent.address : ''),
+                    progress: matchedStudent ? matchedStudent.progress : '개념 완성 과정 등록 대기 중',
+                    remarks: matchedStudent ? matchedStudent.remarks : '\n[FEE:250000,DAY:10]',
+                    isTerminated: matchedStudent ? !!matchedStudent.isTerminated : false,
+                    terminationDate: matchedStudent ? matchedStudent.terminationDate : null
+                };
+
+                // Save to database
+                if (matchedStudent) {
+                    // Update
+                    students = students.map(s => s.id === targetId ? updatedStudentObj : s);
+                } else {
+                    // Insert new
+                    students.push(updatedStudentObj);
+                }
+
+                // Sync with Supabase & localStorage
+                try {
+                    localStorage.setItem('gongbubang_students', JSON.stringify(students));
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        await supabase.from('sb_students').upsert(mapStudentToDb(updatedStudentObj));
+                    }
+                    
+                    showToast('자녀 정보가 등록 및 정상 연동되었습니다!');
+                    parentAddChildModal.style.display = 'none';
+                    
+                    // Refresh dashboard view
+                    renderMyClass();
+                } catch (err) {
+                    console.error('Error saving student info from parent panel:', err);
+                    alert('저장 중 오류가 발생했습니다.');
                 }
             });
         }

@@ -107,7 +107,7 @@
                     <a href="#myclass" class="blog-nav-link student-nav-link" id="nav-link-myclass" style="display: none;">마이클래스</a>
                 </nav>
                 <div class="header-auth-toolbar" style="display: flex; gap: 8px; align-items: center;">
-                    <button id="btn-pwa-install" style="display: none; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; border-radius: 50px; background: linear-gradient(135deg, var(--mascot-purple-bg), var(--primary-color)); color: white; border: none; cursor: pointer; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <button id="btn-pwa-install" style="display: none; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; border-radius: 50px; background: linear-gradient(135deg, var(--mascot-purple-bg), var(--primary-color)); color: white; border: none; cursor: pointer; font-weight: 700; box-shadow: 0 4px 6px rgba(0,0,0,0.15); position: absolute; top: 72px; right: 20px; z-index: 99;">
                         <i data-lucide="download" style="width: 14px; height: 14px;"></i> 바로가기 추가
                     </button>
                     <span id="user-profile-display-container" style="display: none; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 600; margin-right: 4px;">
@@ -1151,6 +1151,18 @@
                                 </div>
                             </div>
 
+                            <!-- Parent Child Management (Add Child) -->
+                            <div class="widget" id="parent-child-management-widget" style="display: none; padding: 20px; border: 1px solid var(--border-color); border-radius: 20px; background: #faf5ff; flex-direction: column; gap: 12px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                    <h4 style="font-family: var(--ff-logo); font-size: 1.05rem; display: flex; align-items: center; gap: 6px; margin: 0; color: var(--mascot-purple-bg);">
+                                        <i data-lucide="users"></i> 자녀 관리
+                                    </h4>
+                                    <button type="button" id="btn-parent-add-child" style="padding: 8px 16px; font-size: 0.82rem; font-weight: 700; border-radius: 20px; background: var(--mascot-purple-bg); color: #ffffff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                        <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> 자녀 추가 등록
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Info Widget -->
                             <div class="widget" id="myclass-info-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px;">
                                 <!-- Will be rendered dynamically -->
@@ -1733,14 +1745,19 @@
                 </div>
 
                 <!-- Row 2: Contacts & Siblings -->
-                <div class="form-row-three" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px;">
+                <div class="form-row-three" style="display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 12px; margin-top: 12px;">
                     <div class="form-group-modal">
                         <label for="student-phone-input">학생 연락처</label>
                         <input type="text" id="student-phone-input" placeholder="010-0000-0000">
                     </div>
                     <div class="form-group-modal">
                         <label for="student-parent-phone-input">부모님 연락처</label>
-                        <input type="text" id="student-parent-phone-input" required placeholder="010-0000-0000">
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="student-parent-phone-input" required placeholder="010-0000-0000" style="flex-grow: 1;">
+                            <select id="student-parent-select" style="max-width: 140px; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.8rem; font-weight: 700; outline: none; background: #ffffff;">
+                                <option value="">학부모 선택</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group-modal">
                         <label for="student-sibling-input">형제 나이</label>
@@ -2440,6 +2457,46 @@
                     <!-- Textbook items will be listed dynamically -->
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Parent Add Child Modal -->
+    <div class="modal-overlay" id="parent-add-child-modal" style="display: none; justify-content: center; align-items: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); z-index: 1000; backdrop-filter: blur(4px);">
+        <div class="modal-content" style="background: #ffffff; padding: 28px; border-radius: 24px; width: 440px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-color); position: relative; max-height: 90vh; overflow-y: auto;">
+            <button type="button" class="btn-modal-close" id="btn-parent-add-child-close" style="position: absolute; top: 20px; right: 20px; background: none; border: none; cursor: pointer; color: var(--text-secondary); transition: color 0.2s;"><i data-lucide="x"></i></button>
+            <h3 class="modal-title" style="font-family: var(--ff-logo); font-size: 1.35rem; color: var(--mascot-purple-bg); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="plus-circle"></i> 자녀 추가 등록
+            </h3>
+            <p class="modal-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px;">자녀의 이름과 생년월일을 입력하여 자녀 정보를 등록 및 연동합니다.</p>
+            
+            <form id="parent-add-child-form" style="display: flex; flex-direction: column; gap: 14px;">
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">이름</label>
+                    <input type="text" id="parent-child-name-input" required placeholder="예: 최이준" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                </div>
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">생년월일</label>
+                    <input type="date" id="parent-child-birthdate-input" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                </div>
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">나이</label>
+                    <input type="number" id="parent-child-age-input" required readonly style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #f8fafc; color: var(--text-secondary);">
+                </div>
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">학생 아이디</label>
+                    <input type="text" id="parent-child-username-input" required placeholder="예: jun16" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                </div>
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">학생 비밀번호</label>
+                    <input type="text" id="parent-child-password-input" required placeholder="비밀번호 설정" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                </div>
+                <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">학교 (선택사항)</label>
+                    <input type="text" id="parent-child-school-input" placeholder="예: 내곡초등학교" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                </div>
+                
+                <button type="submit" style="width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; border: none; background: var(--mascot-purple-bg); color: #ffffff; cursor: pointer; margin-top: 8px; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.25);">자녀 정보 저장 및 연동</button>
+            </form>
         </div>
     </div>
 
