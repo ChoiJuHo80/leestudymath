@@ -22,6 +22,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
     };
 
+    const normalizePhone = (p) => {
+        let cleaned = String(p || '').replace(/\D/g, '');
+        if (cleaned.startsWith('82')) {
+            cleaned = '0' + cleaned.substring(2);
+        }
+        return cleaned;
+    };
+
     // ==========================================================================
     // Supabase Database Mappers and Synchronizers
     // ==========================================================================
@@ -79,10 +87,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const birthMatch = remarks.match(/\[BIRTH:([^\]]+)\]/);
-        const birthdate = birthMatch ? birthMatch[1] : '';
+        let birthdate = birthMatch ? birthMatch[1] : '';
 
         const addrMatch = remarks.match(/\[ADDR:([^\]]+)\]/);
-        const address = addrMatch ? addrMatch[1] : '';
+        let address = addrMatch ? addrMatch[1] : '';
+
+        // Fallback to local storage or parent children metadata if DB tag is missing
+        try {
+            const cachedStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
+            const cached = cachedStudents.find(s => String(s.id) === String(dbStudent.id));
+            if (cached) {
+                if (!birthdate && cached.birthdate) birthdate = cached.birthdate;
+                if (!address && cached.address) address = cached.address;
+            }
+        } catch(e){}
+
+        if (!birthdate && dbStudent.name) {
+            try {
+                const cachedUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                for (const u of cachedUsers) {
+                    const children = u.user_metadata?.children || u.children || [];
+                    const match = children.find(c => c.name === dbStudent.name);
+                    if (match && match.birthdate) {
+                        birthdate = match.birthdate;
+                        break;
+                    }
+                }
+            } catch(e){}
+        }
 
         // Clean up metadata tags from remarks
         let cleanRemarks = remarks
@@ -2344,6 +2376,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentBadges = [];
     let wordSets = [];
     let mockUsers = [];
+    try {
+        mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+    } catch(e){}
 
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
@@ -3990,7 +4025,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     populateStudentParentSelect();
                     const parentSelect = document.getElementById('student-parent-select');
                     if (parentSelect) {
-                        parentSelect.value = student.parentPhone || '';
+                        parentSelect.value = '';
+                        if (student.parentPhone) {
+                            const normStudentParent = normalizePhone(student.parentPhone);
+                            let matchedValue = '';
+                            for (const opt of parentSelect.options) {
+                                if (opt.value) {
+                                    const normOpt = normalizePhone(opt.value);
+                                    if (normOpt && (normOpt.startsWith(normStudentParent) || normStudentParent.startsWith(normOpt))) {
+                                        matchedValue = opt.value;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (matchedValue) {
+                                parentSelect.value = matchedValue;
+                            } else {
+                                // If not found in option values, try selecting it anyway
+                                parentSelect.value = student.parentPhone;
+                            }
+                        }
                     }
 
                     if (document.getElementById('student-username-input')) {
