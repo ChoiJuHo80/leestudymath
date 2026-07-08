@@ -3382,19 +3382,25 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Safe localStorage Write for students
-    const saveStudents = async () => {
+    // changedIds: 변경된 학생 ID 배열 - 지정 시 해당 학생만 upsert (다른 기기 데이터 덮어쓰기 방지)
+    const saveStudents = async (changedIds = null) => {
         try {
             localStorage.setItem('gongbubang_students', JSON.stringify(students));
             updateTotalStudentsCount();
         } catch (e) {
             console.error('Failed to save students to localStorage.', e);
         }
-        // saveStudents는 upsert(저장/수정)만 담당 - 삭제는 deleteStudent에서 직접 처리
+        // saveStudents는 upsert(저장/수정)만 담당 - 삭제는 deleteStudentFromSupabase에서 직접 처리
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
             try {
-                const mapped = students.map(mapStudentToDb);
-                if (mapped.length > 0) {
-                    await supabase.from('sb_students').upsert(mapped);
+                const toUpsert = changedIds
+                    ? students.filter(s => changedIds.includes(String(s.id)))
+                    : students;
+                if (toUpsert.length > 0) {
+                    const mapped = toUpsert.map(mapStudentToDb);
+                    const { error } = await supabase.from('sb_students').upsert(mapped);
+                    if (error) console.error('[Save] Student upsert error:', error.message);
+                    else console.log('[Save] Students upserted:', toUpsert.map(s => s.id));
                 }
             } catch(e) {
                 console.error('Error saving students to Supabase:', e);
@@ -4602,7 +4608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     return student;
                 });
-                await saveStudents();
+                await saveStudents([String(id)]);
                 showToast('원생 정보가 성공적으로 수정되었습니다.');
             } else {
                 // Create
@@ -4629,7 +4635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tuitionFeeAmount: feeAmount
                 };
                 students.unshift(newStudent);
-                await saveStudents();
+                await saveStudents([newStudent.id]);
                 showToast('새 원생 카드가 등록되었습니다.');
             }
 
@@ -8566,7 +8572,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Form Submit for Consultation Inquiry
         if (consultInquiryForm) {
-            consultInquiryForm.addEventListener('submit', (e) => {
+            consultInquiryForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const name = document.getElementById('consult-name').value.trim();
                 const phone = document.getElementById('consult-phone').value.trim();
@@ -8586,7 +8592,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 consultations.unshift(newInquiry);
-                saveConsultations();
+                await saveConsultations();
                 showToast('상담 예약 신청이 접수되었습니다. 원장님이 곧 연락드리겠습니다.');
 
                 if (consultInquiryModal) consultInquiryModal.classList.remove('open');
@@ -8721,7 +8727,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const consult = consultations.find(c => c.id === id);
                     if (consult) {
                         consult.status = nextStatus;
-                        saveConsultations();
+                        await saveConsultations();
                         showToast(nextStatus === 'completed' ? '상담 완료 처리되었습니다.' : '상담 미완료 처리되었습니다.');
                         renderConsultList();
                     }
