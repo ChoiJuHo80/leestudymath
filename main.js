@@ -3318,8 +3318,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             });
 
-            // Get earned badges for the student
-            const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
+            // Get earned badges for the student (resolving all duplicate profiles of same student name)
+            const studentProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            const studentIds = studentProfiles.map(s => String(s.id));
+            const earned = studentBadges.filter(b => studentIds.includes(String(b.studentId)) && b.status === 'Mastered');
             let badgeListHtml = '';
             if (earned.length === 0) {
                 badgeListHtml = '<span style="font-size: 0.72rem; color: var(--text-muted);">획득한 배지 없음</span>';
@@ -10789,7 +10794,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).filter(f => String(f.classId) === String(sClassId));
             }
             
-            const earned = studentBadges.filter(b => String(b.studentId) === String(student.id) && b.status === 'Mastered');
+            // Find all matching student profiles for this student (same name and parentPhone/phone)
+            const siblingOrSelfProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            const studentIds = siblingOrSelfProfiles.map(s => String(s.id));
+
+            const earned = studentBadges.filter(b => studentIds.includes(String(b.studentId)) && b.status === 'Mastered');
             
             if (profileShelf) {
                 profileShelf.innerHTML = '';
@@ -11693,15 +11705,22 @@ document.addEventListener('DOMContentLoaded', () => {
             initVocabFilters();
             container.innerHTML = '';
             
-            // Show sets that belong to the student's class, or created personally by the student
+            // Find all matching student profiles for this student (same name and parentPhone/phone)
+            const siblingOrSelfProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            const studentIds = siblingOrSelfProfiles.map(s => String(s.id));
+
+            // Show sets that belong to the student's class, or created personally by the student (matching any profile IDs)
             const baseFiltered = wordSets.filter(w => 
                 (w.classId && String(w.classId) === String(student.classId)) || 
-                (w.studentId && String(w.studentId) === String(student.id))
+                (w.studentId && studentIds.includes(String(w.studentId)))
             );
             
             // Sub-filter: Studying vs Completed
             let filtered = baseFiltered.filter(w => {
-                const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(w.id) && String(c.studentId) === String(student.id));
+                const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(w.id) && studentIds.includes(String(c.studentId)));
                 return currentVocabFilter === 'completed' ? isDone : !isDone;
             });
             
@@ -11734,45 +11753,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const isSpecial = set.title.includes('7월 06일') || set.title.includes('7월06일') || set.title.includes('7월 6일') || set.title.includes('7월6일');
                 if (isSpecial) {
-                    item.style.background = 'linear-gradient(135deg, #fdf4ff, #fae8ff)';
-                    item.style.border = '2px solid var(--mascot-purple-bg)';
+                    item.style.background = 'linear-gradient(135deg, var(--mascot-purple-bg), var(--primary-color))';
+                    item.style.color = '#ffffff';
+                    item.style.border = 'none';
+                    item.style.boxShadow = '0 4px 10px rgba(139, 92, 246, 0.3)';
+                    item.style.width = '100%';
+                    item.style.boxSizing = 'border-box';
                 } else {
                     item.style.background = '#ffffff';
                     item.style.border = '1px solid var(--border-color)';
                 }
                 item.style.transition = 'all 0.2s';
                 
-                item.onmouseover = () => { item.style.borderColor = 'var(--mascot-purple-bg)'; item.style.transform = 'translateY(-2px)'; };
-                item.onmouseout = () => { item.style.borderColor = isSpecial ? 'var(--mascot-purple-bg)' : 'var(--border-color)'; item.style.transform = 'none'; };
+                item.onmouseover = () => { 
+                    item.style.borderColor = 'var(--mascot-purple-bg)'; 
+                    item.style.transform = 'translateY(-2px)'; 
+                };
+                item.onmouseout = () => { 
+                    item.style.borderColor = isSpecial ? 'transparent' : 'var(--border-color)'; 
+                    item.style.transform = 'none'; 
+                };
                 
                 const isPersonal = !!set.studentId;
-                const isCompleted = completedVocabSets.some(c => String(c.vocabSetId) === String(set.id) && String(c.studentId) === String(student.id));
+                const isCompleted = completedVocabSets.some(c => String(c.vocabSetId) === String(set.id) && studentIds.includes(String(c.studentId)));
                 
-                item.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 0.72rem; color: #ffffff; background: ${isPersonal ? 'var(--mascot-purple-bg)' : '#82b444'}; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
-                            ${isPersonal ? '나만의' : '클래스'}
-                        </span>
-                        <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${set.title}</span>
-                        <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
-                        <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid ${isCompleted ? '#22c55e' : 'var(--border-color)'}; background: ${isCompleted ? '#f0fdf4' : '#ffffff'}; color: ${isCompleted ? '#22c55e' : 'var(--text-secondary)'}; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
-                            <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
-                        </button>
-                        <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; color: var(--text-primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
-                            <i data-lucide="printer" style="width: 13px; height: 13px;"></i> 인쇄
-                        </button>
-                        <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: var(--mascot-pink-bg); color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
-                            <i data-lucide="camera" style="width: 13px; height: 13px;"></i> 채점
-                        </button>
-                        <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
-                        ${isPersonal ? `
-                            <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
-                        ` : ''}
-                        <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
-                    </div>
-                `;
+                if (isSpecial) {
+                    item.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); background: #ffffff; padding: 2.5px 8px; border-radius: 20px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px;">
+                                🌟 대표 단어장
+                            </span>
+                            <span style="font-weight: 800; font-size: 0.95rem; color: #ffffff; letter-spacing: -0.3px;">${set.title}</span>
+                            <span style="font-size: 0.78rem; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 4px;">${set.words.length} 카드</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                            <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: ${isCompleted ? 'rgba(255,255,255,0.2)' : 'transparent'}; color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px; color: #ffffff;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
+                            </button>
+                            <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="printer" style="width: 13px; height: 13px; color: #ffffff;"></i> 인쇄
+                            </button>
+                            <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: #ffffff; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <i data-lucide="camera" style="width: 13px; height: 13px; color: var(--mascot-purple-bg);"></i> 채점
+                            </button>
+                            <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
+                            ${isPersonal ? `
+                                <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.15); color: #fee2e2; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                            ` : ''}
+                            <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: rgba(255,255,255,0.8);"></i>
+                        </div>
+                    `;
+                } else {
+                    item.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 0.72rem; color: #ffffff; background: ${isPersonal ? 'var(--mascot-purple-bg)' : '#82b444'}; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
+                                ${isPersonal ? '나만의' : '클래스'}
+                            </span>
+                            <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${set.title}</span>
+                            <span style="font-size: 0.78rem; color: var(--text-secondary);">${set.words.length} 카드</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                            <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid ${isCompleted ? '#22c55e' : 'var(--border-color)'}; background: ${isCompleted ? '#f0fdf4' : '#ffffff'}; color: ${isCompleted ? '#22c55e' : 'var(--text-secondary)'}; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
+                            </button>
+                            <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; color: var(--text-primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="printer" style="width: 13px; height: 13px;"></i> 인쇄
+                            </button>
+                            <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: var(--mascot-pink-bg); color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="camera" style="width: 13px; height: 13px;"></i> 채점
+                            </button>
+                            <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
+                            ${isPersonal ? `
+                                <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                            ` : ''}
+                            <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
+                        </div>
+                    `;
+                }
                 
                 // Clicking item launches play mode
                 item.addEventListener('click', (e) => {
