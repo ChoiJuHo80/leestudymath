@@ -12324,7 +12324,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="font-weight: 700; color: #22c55e; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
                         <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
                             <i data-lucide="star" style="cursor: pointer;"></i>
-                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"></i>
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"><i data-lucide="volume-2"></i></span>
                         </div>
                         <span style="color: #94a3b8; font-size: 0.95rem;">학습중...</span>
                     </div>
@@ -12436,7 +12436,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
                         <span style="font-weight: 700; color: #3b82f6; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
                         <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
-                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"></i>
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"><i data-lucide="volume-2"></i></span>
                         </div>
                         <span style="color: #94a3b8; font-size: 0.95rem;">리콜 학습</span>
                     </div>
@@ -12521,7 +12521,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
                         <span style="font-weight: 700; color: #a855f7; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
                         <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
-                            <i data-lucide="volume-2" class="btn-play-audio-active" style="cursor: pointer; color: #a855f7;"></i>
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #a855f7;"><i data-lucide="volume-2"></i></span>
                         </div>
                         <span style="color: #94a3b8; font-size: 0.95rem;">스펠 학습</span>
                     </div>
