@@ -3095,15 +3095,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         deleteBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const id = parseInt(btn.getAttribute('data-id'));
                 if (confirm('이 공지사항을 정말 삭제하시겠습니까?')) {
-                    notices = notices.filter(n => n.id !== id);
-                    saveNotices();
+                    // 1. Supabase에서 먼저 삭제 (upsert는 삭제 안 됨 - 별도 DELETE 필수)
                     if (typeof supabase !== 'undefined' && supabase && !isMock) {
-                        supabase.from('sb_notices').delete().eq('id', id).then(() => {});
+                        try {
+                            const { error } = await supabase.from('sb_notices').delete().eq('id', id);
+                            if (error) console.error('[Delete] Notice delete error:', error.message);
+                            else console.log('[Delete] Notice deleted from Supabase, id:', id);
+                        } catch(err) {
+                            console.error('[Delete] Notice delete exception:', err);
+                        }
                     }
+                    // 2. 로컬 상태 및 localStorage 업데이트
+                    notices = notices.filter(n => n.id !== id);
+                    try { localStorage.setItem('gongbubang_notices', JSON.stringify(notices)); } catch(e) {}
                     renderNotices();
                     showToast('공지사항이 삭제되었습니다.');
                 }
@@ -3336,12 +3344,28 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Failed to save students to localStorage.', e);
         }
+        // saveStudents는 upsert(저장/수정)만 담당 - 삭제는 deleteStudent에서 직접 처리
         if (typeof supabase !== 'undefined' && supabase && !isMock) {
             try {
                 const mapped = students.map(mapStudentToDb);
-                await supabase.from('sb_students').upsert(mapped);
+                if (mapped.length > 0) {
+                    await supabase.from('sb_students').upsert(mapped);
+                }
             } catch(e) {
                 console.error('Error saving students to Supabase:', e);
+            }
+        }
+    };
+
+    // 원생 삭제 전용 함수 - Supabase DELETE 직접 호출
+    const deleteStudentFromSupabase = async (id) => {
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const { error } = await supabase.from('sb_students').delete().eq('id', String(id));
+                if (error) console.error('[Delete] Student delete error:', error.message);
+                else console.log('[Delete] Student deleted from Supabase, id:', id);
+            } catch(err) {
+                console.error('[Delete] Student delete exception:', err);
             }
         }
     };
@@ -4125,19 +4149,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         deleteBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const id = parseStudentId(btn.getAttribute('data-id'));
                 if (confirm('이 원생의 모든 관리 정보를 삭제하시겠습니까?')) {
+                    // 1. Supabase에서 먼저 삭제 (await으로 완료 대기)
+                    await deleteStudentFromSupabase(id);
+                    // 2. 로컬 상태 업데이트
                     students = students.filter(s => s.id !== id);
-                    saveStudents();
-                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
-                        supabase.from('sb_students').delete().eq('id', String(id)).then(() => {
-                            window.location.reload();
-                        });
-                    } else {
-                        window.location.reload();
-                    }
+                    try { localStorage.setItem('gongbubang_students', JSON.stringify(students)); } catch(e) {}
+                    updateTotalStudentsCount();
+                    window.location.reload();
                 }
             });
         });
@@ -8665,22 +8687,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnDelete) {
                     const rawId = btnDelete.getAttribute('data-id');
                     if (confirm('이 상담 예약 신청 내역을 정말 삭제하시겠습니까?')) {
+                        // 1. Supabase에서 먼저 삭제 (숫자/문자 ID 모두 대응)
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                const numericId = Number(rawId);
+                                let deleteError = null;
+                                if (!isNaN(numericId) && numericId > 0) {
+                                    // 숫자 ID로 시도
+                                    const res = await supabase.from('sb_consultations').delete().eq('id', numericId);
+                                    deleteError = res.error;
+                                    if (deleteError) {
+                                        // 문자열 ID로 재시도
+                                        const res2 = await supabase.from('sb_consultations').delete().eq('id', rawId);
+                                        deleteError = res2.error;
+                                    }
+                                } else {
+                                    const res = await supabase.from('sb_consultations').delete().eq('id', rawId);
+                                    deleteError = res.error;
+                                }
+                                if (deleteError) console.error('[Delete] Consultation delete error:', deleteError.message);
+                                else console.log('[Delete] Consultation deleted from Supabase, id:', rawId);
+                            } catch(err) {
+                                console.error('[Delete] Consultation delete exception:', err);
+                            }
+                        }
+                        // 2. 로컬 상태 업데이트
                         consultations = consultations.filter(c => String(c.id) !== String(rawId));
                         try {
                             localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations));
                         } catch(err) {}
-                        
-                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
-                            try {
-                                if (Number.isInteger(Number(rawId))) {
-                                    await supabase.from('sb_consultations').delete().eq('id', Number(rawId));
-                                } else {
-                                    await supabase.from('sb_consultations').delete().eq('id', rawId);
-                                }
-                            } catch(err) {
-                                console.error('Failed to delete consultation from Supabase:', err);
-                            }
-                        }
                         showToast('상담 내역이 삭제되었습니다.');
                         renderConsultList();
                     }
