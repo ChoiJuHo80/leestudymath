@@ -78,27 +78,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapStudentFromDb = (dbStudent) => {
         const remarks = dbStudent.remarks || '';
-        const feeMatch = remarks.match(/\[FEE:(\d+),DAY:(\d+)\]/);
-        let tuitionFeeAmount = 250000;
-        let tuitionFeeDay = 10;
-        if (feeMatch) {
-            tuitionFeeAmount = parseInt(feeMatch[1], 10);
-            tuitionFeeDay = parseInt(feeMatch[2], 10);
+
+        // 1. 직접 컨럼에서 읽기 (신규 방식)
+        let birthdate   = dbStudent.birthdate || '';
+        let address     = dbStudent.address || '';
+        let tuitionFeeAmount = dbStudent.tuition_fee_amount || 0;
+        let tuitionFeeDay    = dbStudent.tuition_fee_day    || 0;
+
+        // 2. 이전 remarks 태그 방식 fallback (구데이터 호환)
+        if (!birthdate) {
+            const birthMatch = remarks.match(/\[BIRTH:([^\]]+)\]/);
+            if (birthMatch) birthdate = birthMatch[1];
         }
+        if (!address) {
+            const addrMatch = remarks.match(/\[ADDR:([^\]]+)\]/);
+            if (addrMatch) address = addrMatch[1];
+        }
+        if (!tuitionFeeAmount || !tuitionFeeDay) {
+            const feeMatch = remarks.match(/\[FEE:(\d+),DAY:(\d+)\]/);
+            if (feeMatch) {
+                if (!tuitionFeeAmount) tuitionFeeAmount = parseInt(feeMatch[1], 10);
+                if (!tuitionFeeDay)    tuitionFeeDay    = parseInt(feeMatch[2], 10);
+            }
+        }
+        tuitionFeeAmount = tuitionFeeAmount || 250000;
+        tuitionFeeDay    = tuitionFeeDay    || 10;
 
-        const birthMatch = remarks.match(/\[BIRTH:([^\]]+)\]/);
-        let birthdate = birthMatch ? birthMatch[1] : '';
-
-        const addrMatch = remarks.match(/\[ADDR:([^\]]+)\]/);
-        let address = addrMatch ? addrMatch[1] : '';
-
-        // Fallback to local storage or parent children metadata if DB tag is missing
+        // 3. 로컀 localStorage fallback (이전 데이터 호환)
         try {
             const cachedStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
             const cached = cachedStudents.find(s => String(s.id) === String(dbStudent.id));
             if (cached) {
                 if (!birthdate && cached.birthdate) birthdate = cached.birthdate;
-                if (!address && cached.address) address = cached.address;
+                if (!address   && cached.address)   address   = cached.address;
             }
         } catch(e){}
 
@@ -108,20 +120,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const u of cachedUsers) {
                     const children = u.user_metadata?.children || u.children || [];
                     const match = children.find(c => c.name === dbStudent.name);
-                    if (match && match.birthdate) {
-                        birthdate = match.birthdate;
-                        break;
-                    }
+                    if (match && match.birthdate) { birthdate = match.birthdate; break; }
                 }
             } catch(e){}
         }
 
-        // Clean up metadata tags from remarks
-        let cleanRemarks = remarks
+        // 4. remarks 정리 (태그 제거)
+        const cleanRemarks = remarks
             .replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '')
             .replace(/\r?\n?\[BIRTH:[^\]]+\]/, '')
             .replace(/\r?\n?\[ADDR:[^\]]+\]/, '')
             .trim();
+
+        // 5. 수업 시간표 읽기
+        const parseRange = (s, e) => (s && e) ? `${s} ~ ${e}` : ((s || e) ? (s || e) : '');
+        const schedule = {
+            mon: parseRange(dbStudent.mon_start, dbStudent.mon_end),
+            tue: parseRange(dbStudent.tue_start, dbStudent.tue_end),
+            wed: parseRange(dbStudent.wed_start, dbStudent.wed_end),
+            thu: parseRange(dbStudent.thu_start, dbStudent.thu_end),
+            fri: parseRange(dbStudent.fri_start, dbStudent.fri_end)
+        };
 
         return {
             id: String(dbStudent.id),
@@ -132,24 +151,42 @@ document.addEventListener('DOMContentLoaded', () => {
             parentPhone: dbStudent.parent_phone,
             sibling: dbStudent.sibling,
             classId: safeIntegerId(dbStudent.class_id),
+            classDuration: dbStudent.class_duration || 90,
             username: dbStudent.username,
             password: dbStudent.password,
             progress: dbStudent.progress,
             remarks: cleanRemarks,
-            tuitionFeeDay: tuitionFeeDay,
-            tuitionFeeAmount: tuitionFeeAmount,
-            birthdate: birthdate,
-            address: address,
+            schedule,
+            tuitionFeeDay,
+            tuitionFeeAmount,
+            birthdate,
+            address,
             isTerminated: dbStudent.is_terminated,
             terminationDate: dbStudent.termination_date
         };
     };
 
     const mapStudentToDb = (jsStudent) => {
-        const feeSuffix = `\n[FEE:${jsStudent.tuitionFeeAmount || 250000},DAY:${jsStudent.tuitionFeeDay || 10}]`;
-        const birthSuffix = jsStudent.birthdate ? `\n[BIRTH:${jsStudent.birthdate}]` : '';
-        const addrSuffix = jsStudent.address ? `\n[ADDR:${jsStudent.address}]` : '';
-        const remarksWithMetadata = (jsStudent.remarks || '').trim() + feeSuffix + birthSuffix + addrSuffix;
+        // remarks에서 메타데이터 태그를 제거한 순수 메모만 저장
+        const cleanRemarks = (jsStudent.remarks || '')
+            .replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '')
+            .replace(/\r?\n?\[BIRTH:[^\]]+\]/, '')
+            .replace(/\r?\n?\[ADDR:[^\]]+\]/, '')
+            .trim();
+
+        // 수업 시간표 파싱
+        const parseTimeRange = (rangeStr) => {
+            if (!rangeStr) return { start: '', end: '' };
+            const parts = rangeStr.split('~');
+            return { start: parts[0] ? parts[0].trim() : '', end: parts[1] ? parts[1].trim() : '' };
+        };
+        const sch = jsStudent.schedule || {};
+        const mon = parseTimeRange(sch.mon);
+        const tue = parseTimeRange(sch.tue);
+        const wed = parseTimeRange(sch.wed);
+        const thu = parseTimeRange(sch.thu);
+        const fri = parseTimeRange(sch.fri);
+
         return {
             id: jsStudent.id,
             name: jsStudent.name,
@@ -159,10 +196,20 @@ document.addEventListener('DOMContentLoaded', () => {
             parent_phone: jsStudent.parentPhone,
             sibling: jsStudent.sibling,
             class_id: safeIntegerId(jsStudent.classId),
+            class_duration: jsStudent.classDuration || 90,
             username: jsStudent.username,
             password: jsStudent.password,
             progress: jsStudent.progress,
-            remarks: remarksWithMetadata,
+            remarks: cleanRemarks,
+            birthdate: jsStudent.birthdate || '',
+            address: jsStudent.address || '',
+            tuition_fee_amount: jsStudent.tuitionFeeAmount || 250000,
+            tuition_fee_day: jsStudent.tuitionFeeDay || 10,
+            mon_start: mon.start, mon_end: mon.end,
+            tue_start: tue.start, tue_end: tue.end,
+            wed_start: wed.start, wed_end: wed.end,
+            thu_start: thu.start, thu_end: thu.end,
+            fri_start: fri.start, fri_end: fri.end,
             is_terminated: jsStudent.isTerminated || false,
             termination_date: jsStudent.terminationDate || null
         };
@@ -389,19 +436,17 @@ document.addEventListener('DOMContentLoaded', () => {
         id: dbA.id,
         studentId: dbA.student_id,
         date: dbA.date,
-        checkIn: dbA.check_in,
-        checkOut: dbA.check_out,
-        status: dbA.status,
-        temp: dbA.temp
+        type: dbA.type || 'in',
+        time: dbA.time || '',
+        memo: dbA.memo || ''
     });
     const mapAttendanceToDb = (jsA) => ({
         id: jsA.id,
         student_id: jsA.studentId,
         date: jsA.date,
-        check_in: jsA.checkIn || '',
-        check_out: jsA.checkOut || '',
-        status: jsA.status,
-        temp: jsA.temp || ''
+        type: jsA.type || 'in',
+        time: jsA.time || '',
+        memo: jsA.memo || ''
     });
 
     const mapCurriculumFromDb = (dbC) => ({
@@ -4460,7 +4505,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // Add / Edit form submit
-        studentEditorForm.addEventListener('submit', (e) => {
+        studentEditorForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const editId = editStudentIdInput.value;
             const name = studentNameInput.value.trim();
@@ -4557,7 +4602,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     return student;
                 });
-                saveStudents();
+                await saveStudents();
                 showToast('원생 정보가 성공적으로 수정되었습니다.');
             } else {
                 // Create
@@ -4584,7 +4629,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tuitionFeeAmount: feeAmount
                 };
                 students.unshift(newStudent);
-                saveStudents();
+                await saveStudents();
                 showToast('새 원생 카드가 등록되었습니다.');
             }
 
@@ -4850,7 +4895,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        noticeEditorForm.addEventListener('submit', (e) => {
+        noticeEditorForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const editId = editNoticeIdInput.value;
             const tag = noticeTagSelect.value;
@@ -4893,7 +4938,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     return notice;
                 });
-                saveNotices();
+                await saveNotices();
                 showToast('공지사항이 정상적으로 수정되었습니다.');
             } else {
                 // Create
@@ -4917,7 +4962,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     recruitClosed
                 };
                 notices.unshift(newNotice); // Put to top
-                saveNotices();
+                await saveNotices();
                 showToast('새 공지사항이 성공적으로 등록되었습니다.');
             }
 
