@@ -12331,7 +12331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <!-- Flashcard Outer Body -->
                     <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 40px 20px; min-height: 240px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #1e293b; margin: 20px 0; position: relative; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);">
-                        <h2 style="font-size: 2.2rem; font-weight: 700; margin: 0;">${w.word}</h2>
+                        <h2 style="font-size: 2.2rem; font-weight: 700; margin: 0; word-break: break-word; line-height: 1.2; width: 100%;">${w.word}</h2>
                         
                         ${!activeStudyState.showMeaning ? `
                             <!-- Covered Cover Box -->
@@ -12516,7 +12516,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
             } else if (activeStudyState.mode === 'spell') {
-                // Spell input learning layout
+                // Spell input learning layout (Letter Scramble Game)
                 playerView.innerHTML = `
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
                         <span style="font-weight: 700; color: #a855f7; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
@@ -12532,8 +12532,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <h2 style="font-size: 2.2rem; font-weight: 700; color:#8e44ad; margin-bottom: 20px;">${w.meaning}</h2>
                         
-                        <input type="text" id="spell-input-text" placeholder="단어 스펠링을 입력해 주세요" autofocus style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 2px solid #cbd5e1; outline: none; font-size: 1.1rem; font-weight: 700; text-align: center; color: #1e293b; margin-bottom: 12px;">
-                        <div class="correct-spelling-answer" style="display: none; font-weight: 700; color: #22c55e; font-size: 0.95rem;">정답: &nbsp;${w.word}</div>
+                        <div id="spell-slots-area" style="display:flex; justify-content:center; gap:8px; margin-bottom: 20px; flex-wrap:wrap; min-height: 48px;"></div>
+                        <div id="spell-letters-area" style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-bottom: 12px;"></div>
                     </div>
                     
                     <button type="button" class="btn-unknown-word" style="width: 100%; max-width: 400px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
@@ -12544,54 +12544,99 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;">나가기</span>
                     </div>
                 `;
-                
-                const spellInput = playerView.querySelector('#spell-input-text');
-                if (spellInput) {
-                    spellInput.focus();
-                    
-                    // Live validation on keystroke
-                    spellInput.addEventListener('input', () => {
-                        const val = spellInput.value.trim().toLowerCase();
-                        const targetWord = w.word.split(' ')[0].toLowerCase();
-                        
-                        if (val === '') {
-                            spellInput.style.borderColor = '#cbd5e1';
-                            spellInput.style.color = '#1e293b';
-                            return;
-                        }
-                        
-                        if (targetWord.startsWith(val) || w.word.toLowerCase().startsWith(val)) {
-                            spellInput.style.borderColor = 'var(--mascot-purple-bg)';
-                            spellInput.style.color = '#1e293b';
-                        } else {
-                            spellInput.style.borderColor = '#ef4444';
-                            spellInput.style.color = '#ef4444';
-                        }
-                    });
 
-                    spellInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            const val = spellInput.value.trim().toLowerCase();
-                            // Clean targets for matching spelling like build - built - built
-                            const targetWord = w.word.split(' ')[0].toLowerCase();
-                            
-                            if (val === targetWord || val === w.word.toLowerCase()) {
-                                spellInput.style.borderColor = '#22c55e';
-                                spellInput.style.color = '#22c55e';
-                                setTimeout(() => {
-                                    activeStudyState.currentIndex++;
-                                    renderStudyPlayerStep();
-                                }, 1000);
-                            } else {
-                                spellInput.style.borderColor = '#ef4444';
-                                spellInput.style.color = '#ef4444';
-                                playerView.querySelector('.try-again-badge').style.display = 'block';
-                                playerView.querySelector('.correct-spelling-answer').style.display = 'block';
-                            }
-                        }
-                    });
+                // Logic for Spelling Game
+                const targetRaw = w.word.split(' ')[0].toLowerCase();
+                const cleanTarget = targetRaw.replace(/[-<>\s]/g, '');
+                const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+                let letters = cleanTarget.split('');
+                
+                // Add 3 random letters
+                for(let i=0; i<3; i++) {
+                    letters.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
                 }
                 
+                // Shuffle
+                letters = letters.sort(() => Math.random() - 0.5);
+                
+                let currentGuess = [];
+                
+                const renderSpellGame = () => {
+                    const slotsHtml = cleanTarget.split('').map((_, i) => {
+                        const letterObj = currentGuess[i];
+                        if (letterObj) {
+                             return `<span class="spell-slot filled" data-index="${i}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: var(--mascot-purple-bg); color: white; border-radius: 8px; font-weight: 700; font-size: 1.4rem; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid var(--mascot-purple-bg); transition: all 0.15s;">${letterObj.char}</span>`;
+                        }
+                        return `<span class="spell-slot empty" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 1.4rem; color: transparent; transition: all 0.15s;">_</span>`;
+                    }).join('');
+                    
+                    const poolHtml = letters.map((char, i) => {
+                        const isUsed = currentGuess.find(g => g.id === i);
+                        if (isUsed) {
+                            return `<span style="width: 44px; height: 44px; display: inline-block;"></span>`;
+                        }
+                        return `<span class="spell-letter-btn" data-id="${i}" data-char="${char}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: white; border: 2px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 1.4rem; cursor: pointer; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.15s;">${char}</span>`;
+                    }).join('');
+                    
+                    const slotsArea = playerView.querySelector('#spell-slots-area');
+                    const lettersArea = playerView.querySelector('#spell-letters-area');
+                    
+                    if (slotsArea) slotsArea.innerHTML = slotsHtml;
+                    if (lettersArea) lettersArea.innerHTML = poolHtml;
+                    
+                    if (lettersArea) {
+                        lettersArea.querySelectorAll('.spell-letter-btn').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                if (currentGuess.length < cleanTarget.length) {
+                                    currentGuess.push({ id: parseInt(btn.getAttribute('data-id')), char: btn.getAttribute('data-char') });
+                                    renderSpellGame();
+                                    checkAnswer();
+                                }
+                            });
+                        });
+                    }
+                    
+                    if (slotsArea) {
+                        slotsArea.querySelectorAll('.spell-slot.filled').forEach(slot => {
+                            slot.addEventListener('click', () => {
+                                const idx = parseInt(slot.getAttribute('data-index'));
+                                currentGuess.splice(idx, 1);
+                                renderSpellGame();
+                            });
+                        });
+                    }
+                };
+
+                const checkAnswer = () => {
+                    if (currentGuess.length === cleanTarget.length) {
+                        const guessStr = currentGuess.map(g => g.char).join('');
+                        if (guessStr === cleanTarget) {
+                            playerView.querySelectorAll('.spell-slot').forEach(s => {
+                                s.style.background = '#22c55e';
+                                s.style.borderColor = '#22c55e';
+                            });
+                            setTimeout(() => {
+                                activeStudyState.currentIndex++;
+                                renderStudyPlayerStep();
+                            }, 1000);
+                        } else {
+                            playerView.querySelector('.try-again-badge').style.display = 'block';
+                            playerView.querySelectorAll('.spell-slot').forEach(s => {
+                                s.style.background = '#ef4444';
+                                s.style.borderColor = '#ef4444';
+                            });
+                            setTimeout(() => {
+                                currentGuess = [];
+                                renderSpellGame();
+                                playerView.querySelector('.try-again-badge').style.display = 'none';
+                            }, 800);
+                        }
+                    }
+                };
+
+                renderSpellGame();
+
+
                 const playAudio = playerView.querySelector('.btn-play-audio-active');
                 if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
                 
