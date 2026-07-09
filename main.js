@@ -1,6 +1,25 @@
 import { supabase, isMock } from './supabase.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    // [HOTFIX] 기존 하드코딩된 더미 데이터가 로컬 스토리지에 남아있는 경우 강제 초기화
+    try {
+        const checkClasses = localStorage.getItem('gongbubang_classes');
+        const checkStudents = localStorage.getItem('gongbubang_students');
+        if ((checkClasses && checkClasses.includes('초등 4학년 A반')) || 
+            (checkStudents && checkStudents.includes('김민준'))) {
+            console.log('[Cache Clear] Detected legacy dummy data. Purging local storage...');
+            const keysToClear = [
+                'gongbubang_notices', 'gongbubang_classes', 'gongbubang_students',
+                'gongbubang_homework', 'gongbubang_messages', 'gongbubang_feedbacks',
+                'gongbubang_progress', 'gongbubang_attendance', 'gongbubang_consultations',
+                'gongbubang_curriculums', 'gongbubang_ai_queries', 'gongbubang_textbook_requests',
+                'gongbubang_habits_admin'
+            ];
+            keysToClear.forEach(k => localStorage.removeItem(k));
+        }
+    } catch(e) {}
+
     // Helper to safely re-render Lucide icons
     let iconTimeout = null;
     const safeCreateIcons = () => {
@@ -3174,34 +3193,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let students = defaultStudents.map(s => ({ ...s, id: String(s.id) }));
+        // students는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
+    let students = [];
     try {
         const stored = localStorage.getItem('gongbubang_students');
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed)) {
                 students = parsed.filter(s => s && typeof s === 'object').map(s => ({ ...s, id: String(s.id) }));
-                let updated = false;
-                students = students.map(s => {
-                    if (s.classId === undefined || s.classId === null) {
-                        updated = true;
-                        if (s.name === '김민준') return { ...s, classId: 1 };
-                        if (s.name === '이서윤') return { ...s, classId: 2 };
-                        if (s.name === '김서아') return { ...s, classId: 3 };
-                        return { ...s, classId: 1 }; // Default fallback
-                    }
-                    return s;
-                });
-                if (updated) {
-                    localStorage.setItem('gongbubang_students', JSON.stringify(students));
-                }
-            } else {
-                localStorage.setItem('gongbubang_students', JSON.stringify(defaultStudents));
             }
         }
     } catch (e) {
         console.error('localStorage is not accessible for students data.', e);
-        students = defaultStudents;
+        students = [];
     }
 
     // Student DOM Elements
