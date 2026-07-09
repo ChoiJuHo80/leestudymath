@@ -68,12 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     
-    const safeIntegerId = (rawId) => {
+    const safeStringId = (rawId) => {
         if (rawId === null || rawId === undefined) return rawId;
-        const num = Number(rawId);
-        if (isNaN(num)) return rawId;
-        if (num <= 2147483647) return num;
-        return num % 1000000000;
+        return String(rawId);
     };
 
     const mapStudentFromDb = (dbStudent) => {
@@ -150,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: dbStudent.phone,
             parentPhone: dbStudent.parent_phone,
             sibling: dbStudent.sibling,
-            classId: safeIntegerId(dbStudent.class_id),
+            classId: safeStringId(dbStudent.class_id),
             classDuration: dbStudent.class_duration || 90,
             username: dbStudent.username,
             password: dbStudent.password,
@@ -162,7 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
             birthdate,
             address,
             isTerminated: dbStudent.is_terminated,
-            terminationDate: dbStudent.termination_date
+            terminationDate: dbStudent.termination_date,
+            parentEmail: dbStudent.parent_email || ''
         };
     };
 
@@ -195,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: jsStudent.phone,
             parent_phone: jsStudent.parentPhone,
             sibling: jsStudent.sibling,
-            class_id: safeIntegerId(jsStudent.classId),
+            class_id: safeStringId(jsStudent.classId),
             class_duration: jsStudent.classDuration || 90,
             username: jsStudent.username,
             password: jsStudent.password,
@@ -211,12 +209,13 @@ document.addEventListener('DOMContentLoaded', () => {
             thu_start: thu.start, thu_end: thu.end,
             fri_start: fri.start, fri_end: fri.end,
             is_terminated: jsStudent.isTerminated || false,
-            termination_date: jsStudent.terminationDate || null
+            termination_date: jsStudent.terminationDate || null,
+            parent_email: jsStudent.parentEmail || ''
         };
     };
 
     const mapClassFromDb = (dbClass) => ({
-        id: safeIntegerId(dbClass.id),
+        id: safeStringId(dbClass.id),
         name: dbClass.name,
         subject: dbClass.subject,
         duration: dbClass.duration,
@@ -242,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const thu = parseTimeRange(jsClass.schedule ? jsClass.schedule.thu : jsClass.thu);
         const fri = parseTimeRange(jsClass.schedule ? jsClass.schedule.fri : jsClass.fri);
         return {
-            id: safeIntegerId(jsClass.id),
+            id: safeStringId(jsClass.id),
             name: jsClass.name,
             subject: jsClass.subject,
             duration: jsClass.duration,
@@ -519,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapClassFormulaFromDb = (dbItem) => ({
         id: dbItem.id,
-        classId: safeIntegerId(dbItem.class_id),
+        classId: safeStringId(dbItem.class_id),
         formulaName: dbItem.formula_name,
         latex: dbItem.formula_latex,
         pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? safeJsonParse(dbItem.card_pieces) : dbItem.card_pieces) : [],
@@ -532,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: jsItem.id,
-            class_id: safeIntegerId(jsItem.classId),
+            class_id: safeStringId(jsItem.classId),
             formula_name: jsItem.formulaName,
             formula_latex: jsItem.latex,
             card_pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
@@ -541,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const mapWordSetFromDb = (dbItem) => ({
         id: dbItem.id,
-        classId: safeIntegerId(dbItem.class_id),
+        classId: safeStringId(dbItem.class_id),
         studentId: dbItem.student_id,
         title: dbItem.title,
         words: dbItem.words ? (typeof dbItem.words === 'string' ? safeJsonParse(dbItem.words) : dbItem.words) : []
@@ -553,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return {
             id: jsItem.id,
-            class_id: safeIntegerId(jsItem.classId) || null,
+            class_id: safeStringId(jsItem.classId) || null,
             student_id: jsItem.studentId || null,
             title: jsItem.title,
             words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : jsItem.words,
@@ -588,13 +587,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapCompletedVocabFromDb = (dbItem) => ({
         id: dbItem.id,
         studentId: dbItem.student_id,
-        vocabSetId: safeIntegerId(dbItem.vocab_set_id)
+        vocabSetId: safeStringId(dbItem.vocab_set_id)
     });
 
     const mapCompletedVocabToDb = (jsItem) => ({
-        id: jsItem.id || Number(String(safeIntegerId(jsItem.vocabSetId)) + String(jsItem.studentId).replace(/[^\d]/g, '').slice(0, 5)),
+        id: jsItem.id || Number(String(safeStringId(jsItem.vocabSetId)) + String(jsItem.studentId).replace(/[^\d]/g, '').slice(0, 5)),
         student_id: String(jsItem.studentId),
-        vocab_set_id: safeIntegerId(jsItem.vocabSetId),
+        vocab_set_id: safeStringId(jsItem.vocabSetId),
         created_at: new Date().toISOString()
     });
 
@@ -944,30 +943,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const { data, error } = await supabase.from(tableName).select('*');
                     if (error) {
                         console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
-                        // Fallback to local storage
                         const stored = localStorage.getItem(localKey);
                         return stored ? JSON.parse(stored) : defaultData;
                     }
                     
-                    let localData = [];
-                    try {
-                        const stored = localStorage.getItem(localKey);
-                        if (stored) localData = JSON.parse(stored);
-                    } catch(e){}
-                    
                     if (data.length === 0) {
-                        const dataToMigrate = localData.length > 0 ? localData : defaultData;
-                        if (dataToMigrate && dataToMigrate.length > 0) {
-                            console.log(`[Database Debug] Migrating ${dataToMigrate.length} rows to ${tableName}...`);
-                            const mappedRows = dataToMigrate.map(mapperToDb);
-                            const { error: insertErr } = await supabase.from(tableName).insert(mappedRows);
-                            if (insertErr) {
-                                console.error(`[Database Debug] Migration insert error for ${tableName}:`, insertErr.message);
-                            } else {
-                                console.log(`[Database Debug] Migration to ${tableName} succeeded.`);
-                            }
-                        }
-                        return dataToMigrate;
+                        // Supabase가 비어있으면 → Supabase가 진실의 원체(source of truth)
+                        // 로컈 데이터를 역으로 올리지 않고, 로컈스토리지도 빈 배열로 갱신
+                        console.log('[Database Debug] ' + tableName + ' is empty in Supabase. Clearing local cache.');
+                        localStorage.setItem(localKey, JSON.stringify([]));
+                        return [];
                     } else {
                         const fetchedData = data.map(mapperFromDb);
                         localStorage.setItem(localKey, JSON.stringify(fetchedData));
@@ -1084,28 +1069,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 1. Sync habits
+            // 1. Sync habits — Supabase가 진실의 원천(source of truth)
             const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
             if (!habitsErr) {
                 if (dbHabits.length === 0) {
-                    const allHabitKeys = Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_'));
-                    for (const key of allHabitKeys) {
-                        const sId = key.replace('gongbubang_habits_', '');
-                        try {
-                            const hList = JSON.parse(localStorage.getItem(key));
-                            if (hList && hList.length > 0) {
-                                const mapped = hList.map(h => ({
-                                    id: sId + '_' + h.id,
-                                    student_id: String(sId),
-                                    habit_id: h.id,
-                                    habit_name: h.text,
-                                    frequency: h.frequency || 7,
-                                    is_active: true
-                                }));
-                                await supabase.from('sb_habits').insert(mapped);
-                            }
-                        } catch(e){}
-                    }
+                    // Supabase가 비어있으면 로컬 캐시도 모두 삭제
+                    console.log('[Database Debug] sb_habits is empty in Supabase. Clearing local habit caches.');
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_')).forEach(k => localStorage.removeItem(k));
                 } else {
                     const grouped = {};
                     dbHabits.forEach(h => {
@@ -1796,6 +1766,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" class="child-phone-input" placeholder="010-0000-0000" style="padding: 8px 12px; font-size: 0.85rem;">
                 </div>
             </div>
+            <div class="form-group-modal" style="margin-bottom: 8px; margin-top: 8px;">
+                <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학교 이름 (예: 공부방초등학교)</label>
+                <input type="text" class="child-school-input" placeholder="예: 공부방초등학교" style="padding: 8px 12px; font-size: 0.85rem;">
+            </div>
             <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
                 <div class="form-group-modal" style="margin-bottom: 0;">
                     <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
@@ -2291,15 +2265,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let notices = defaultNotices;
-    try {
-        const stored = localStorage.getItem('gongbubang_notices');
-        if (stored) {
-            notices = JSON.parse(stored);
-        }
-    } catch (e) {
-        console.error('localStorage is not accessible, using in-memory notices.', e);
-    }
+    let notices = [];
+    // notices는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다
     
     let isAdmin = false;
     let isStudent = false;
@@ -2414,16 +2381,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let homework = defaultHomework;
-    let messages = defaultMessages;
-    let feedbacks = defaultFeedbacks;
-    let progressList = defaultProgressList;
-    let attendance = defaultAttendance;
-    let consultations = defaultConsultations;
-    let curriculums = defaultCurriculums;
-    let aiQueries = defaultAiQueries;
+    // 모든 데이터는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
+    let homework = [];
+    let messages = [];
+    let feedbacks = [];
+    let progressList = [];
+    let attendance = [];
+    let consultations = [];
+    let curriculums = [];
+    let aiQueries = [];
     const defaultTextbookRequests = [];
-    let textbookRequests = defaultTextbookRequests;
+    let textbookRequests = [];
 
     let classFormulas = [];
     let studentBadges = [];
@@ -2436,39 +2404,30 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         const storedHw = localStorage.getItem('gongbubang_homework');
         if (storedHw) homework = JSON.parse(storedHw);
-        else localStorage.setItem('gongbubang_homework', JSON.stringify(defaultHomework));
 
         const storedMsg = localStorage.getItem('gongbubang_messages');
         if (storedMsg) messages = JSON.parse(storedMsg);
-        else localStorage.setItem('gongbubang_messages', JSON.stringify(defaultMessages));
 
         const storedFb = localStorage.getItem('gongbubang_feedbacks');
         if (storedFb) feedbacks = JSON.parse(storedFb);
-        else localStorage.setItem('gongbubang_feedbacks', JSON.stringify(defaultFeedbacks));
 
         const storedProg = localStorage.getItem('gongbubang_progress');
         if (storedProg) progressList = JSON.parse(storedProg);
-        else localStorage.setItem('gongbubang_progress', JSON.stringify(defaultProgressList));
 
         const storedAtt = localStorage.getItem('gongbubang_attendance');
         if (storedAtt) attendance = JSON.parse(storedAtt);
-        else localStorage.setItem('gongbubang_attendance', JSON.stringify(defaultAttendance));
 
         const storedConsult = localStorage.getItem('gongbubang_consultations');
         if (storedConsult) consultations = JSON.parse(storedConsult);
-        else localStorage.setItem('gongbubang_consultations', JSON.stringify(defaultConsultations));
 
         const storedCurriculum = localStorage.getItem('gongbubang_curriculums');
         if (storedCurriculum) curriculums = JSON.parse(storedCurriculum);
-        else localStorage.setItem('gongbubang_curriculums', JSON.stringify(defaultCurriculums));
 
         const storedAiQueries = localStorage.getItem('gongbubang_ai_queries');
         if (storedAiQueries) aiQueries = JSON.parse(storedAiQueries);
-        else localStorage.setItem('gongbubang_ai_queries', JSON.stringify(defaultAiQueries));
 
         const storedTextbookReqs = localStorage.getItem('gongbubang_textbook_requests');
         if (storedTextbookReqs) textbookRequests = JSON.parse(storedTextbookReqs);
-        else localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(defaultTextbookRequests));
 
         const storedClassFormulas = localStorage.getItem('gongbubang_class_formulas');
         if (storedClassFormulas) classFormulas = JSON.parse(storedClassFormulas);
@@ -2667,39 +2626,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    let classes = sortClassesByName(defaultClasses);
-
-    // Load classes from localStorage
+    // classes는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다 - 기본값 사용 안 함
+    let classes = [];
     try {
         const storedClasses = localStorage.getItem('gongbubang_classes');
         if (storedClasses) {
             const parsed = JSON.parse(storedClasses);
             if (Array.isArray(parsed)) {
                 classes = sortClassesByName(parsed.filter(c => c && typeof c === 'object'));
-                if (!classes.some(c => c.id === 3)) {
-                    classes.push({
-                        id: 3,
-                        name: '초등 1학년 A반',
-                        schedule: {
-                            mon: '',
-                            tue: '15:30 ~ 17:00',
-                            wed: '',
-                            thu: '15:30 ~ 17:00',
-                            fri: ''
-                        }
-                    });
-                    classes = sortClassesByName(classes);
-                    localStorage.setItem('gongbubang_classes', JSON.stringify(classes));
-                }
-            } else {
-                localStorage.setItem('gongbubang_classes', JSON.stringify(defaultClasses));
             }
-        } else {
-            localStorage.setItem('gongbubang_classes', JSON.stringify(defaultClasses));
         }
     } catch (e) {
         console.error('localStorage is not accessible for classes data.', e);
-        classes = sortClassesByName(defaultClasses);
+        classes = [];
     }
 
     const getEarliestTime = (c) => {
@@ -3059,7 +2998,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (confirm(`"${targetStudent.name}" 자녀를 "${notice.title}" 특강에 신청하시겠습니까?\n신청 시 특강비가 청구 요청 항목에 추가됩니다.`)) {
                     const newSignup = {
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         noticeId,
                         studentId: targetStudent.id,
                         studentName: targetStudent.name,
@@ -3073,7 +3012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await saveCampSignups();
                     
                     const billingReq = {
-                        id: Date.now() + 1,
+                        id: crypto.randomUUID(),
                         studentId: targetStudent.id,
                         studentName: targetStudent.name,
                         bookName: `[특강] ${notice.title}`,
@@ -4196,7 +4135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     attendance = attendance.filter(a => !(a.studentId === id && a.date === todayStr && (a.type === 'in' || a.type === 'out' || a.type === 'absent')));
 
                     attendance.push({
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         studentId: id,
                         date: todayStr,
                         type: 'in',
@@ -4225,7 +4164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     attendance = attendance.filter(a => !(a.studentId === id && a.date === todayStr && (a.type === 'in' || a.type === 'out' || a.type === 'absent')));
 
                     attendance.push({
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         studentId: id,
                         date: todayStr,
                         type: 'absent',
@@ -4820,7 +4759,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!cls.textbooks) cls.textbooks = [];
             cls.textbooks.push({
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 name,
                 price
             });
@@ -4915,7 +4854,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Create
                 const newNotice = {
-                    id: Date.now(),
+                    id: crypto.randomUUID(),
                     tag,
                     title,
                     content,
@@ -5261,23 +5200,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const [yearStr, monthStr] = selectedDate.split('-');
         const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
 
-        // Seed default habits if empty
+        // Supabase를 진실의 원천으로: 로컬스토리지에 있는 데이터만 사용, 없으면 빈 배열
         let habits = [];
         try {
             const stored = localStorage.getItem('gongbubang_habits_admin');
-            habits = stored ? JSON.parse(stored) : null;
-        } catch(e) {}
-
-        if (!habits) {
-            habits = [
-                { id: 'ah1', text: '학원 전체 청소 및 환기하기', frequency: 7 },
-                { id: 'ah2', text: '오늘 수업 교재 및 맞춤형 프린트 준비하기', frequency: 7 },
-                { id: 'ah3', text: '출결 현황 확인 및 등원/하원 문자 발송하기', frequency: 7 },
-                { id: 'ah4', text: '신규 상담 예약 문의 내역 확인 및 연락하기', frequency: 7 },
-                { id: 'ah5', text: '블로그 소식지 및 교육 정보 업데이트하기', frequency: 5 }
-            ];
-            saveStudentHabits('admin', habits);
-        }
+            habits = stored ? JSON.parse(stored) : [];
+        } catch(e) { habits = []; }
 
         // Fill missing frequencies (defaults to 7)
         habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
@@ -5521,25 +5449,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const [yearStr, monthStr] = selectedDate.split('-');
         const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
 
-        // Seed default habits if empty
+        // Supabase를 진실의 원천으로: 로컬스토리지에 있는 데이터만 사용, 없으면 빈 배열
         let habits = [];
         try {
             const stored = localStorage.getItem('gongbubang_habits_' + studentId);
-            habits = stored ? JSON.parse(stored) : null;
-        } catch(e) {}
-
-        if (!habits) {
-            habits = [
-                { id: 'h1', text: '기상 후 물 2잔 마시기', frequency: 7 },
-                { id: 'h2', text: '햇빛 10~20분 쬐기', frequency: 7 },
-                { id: 'h3', text: '30분 걷기', frequency: 7 },
-                { id: 'h4', text: '단백질 2~3번 챙겨 먹기', frequency: 7 },
-                { id: 'h5', text: '채소와 과일 먹기', frequency: 7 },
-                { id: 'h6', text: '물 1.5~2L 마시기', frequency: 7 },
-                { id: 'h7', text: '오후 2시 이후 카페인 줄이기', frequency: 7 }
-            ];
-            saveStudentHabits(studentId, habits);
-        }
+            habits = stored ? JSON.parse(stored) : [];
+        } catch(e) { habits = []; }
 
         // Fill missing frequencies (defaults to 7)
         habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
@@ -6234,7 +6149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!targetChild) return;
 
                     const newReq = {
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         studentId: targetChild.id,
                         studentName: targetChild.name,
                         classId: childClass ? childClass.id : 1,
@@ -6301,7 +6216,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let req = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tuitionName);
                 if (!req) {
                     req = {
-                        id: Date.now() + Math.round(Math.random() * 1000),
+                        id: crypto.randomUUID(),
                         studentId: child.id,
                         studentName: child.name,
                         classId: childClass ? childClass.id : 1,
@@ -6489,10 +6404,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!error && dbStudents && dbStudents.length > 0) {
                         const directStudent = mapStudentFromDb(dbStudents[0]);
                         foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
-                        foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                        let parentData = null;
+                        if (directStudent.parentEmail) {
+                            const { data: dbParents } = await supabase.from('sb_mock_users').select('*').eq('email', directStudent.parentEmail);
+                            if (dbParents && dbParents.length > 0) parentData = mapMockUserFromDb(dbParents[0]);
+                        }
+                        if (!parentData && directStudent.parentPhone) {
+                            const { data: dbParents2 } = await supabase.from('sb_mock_users').select('*').eq('phone', directStudent.parentPhone);
+                            if (dbParents2 && dbParents2.length > 0) parentData = mapMockUserFromDb(dbParents2[0]);
+                        }
+                        foundParent = parentData || mockUsers.find(u => u.phone === directStudent.parentPhone) || {
                             id: 'parent-' + directStudent.id,
                             status: 'approved',
                             phone: directStudent.parentPhone || '010-0000-0000',
+                            email: directStudent.parentEmail || '',
                             address: directStudent.address || ''
                         };
                         // Sync remote data back to local students list
@@ -6843,7 +6768,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         childValidationError = '자녀 정보(이름, 생년월일, 아이디, 비밀번호)를 모두 입력해 주세요.';
                     }
                     
-                    children.push({ name, birthdate, phone: childPhone, username: childUsername, password: childPassword });
+                    const childSchool = block.querySelector('.child-school-input') ? block.querySelector('.child-school-input').value.trim() : '';
+                    children.push({ name, birthdate, phone: childPhone, school: childSchool, username: childUsername, password: childPassword });
                 });
 
                 if (childValidationError) {
@@ -6930,7 +6856,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const description = homeworkDescriptionInput.value.trim();
 
             const newHw = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId,
                 dueDate,
                 title,
@@ -6970,7 +6896,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const content = feedbackContentInput.value.trim();
 
             const newFb = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId,
                 date,
                 content
@@ -7008,7 +6934,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const content = progressContentInput.value.trim();
 
             const newProg = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId,
                 date,
                 content
@@ -7128,7 +7054,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const exists = attendance.some(a => a.studentId === sid && a.date === date && a.type === 'makeup');
                 if (!exists) {
                     attendance.push({
-                        id: Date.now() + idx,
+                        id: crypto.randomUUID(),
                         studentId: sid,
                         date,
                         type: 'makeup',
@@ -7179,7 +7105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const newRecord = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId: currentCalStudentId,
                 date,
                 type,
@@ -7235,7 +7161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!text || !loggedInStudentId) return;
 
             const newMsg = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId: loggedInStudentId,
                 sender: 'parent',
                 text,
@@ -7273,7 +7199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!text || !studentId) return;
 
             const newMsg = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId,
                 sender: 'teacher',
                 text,
@@ -7307,7 +7233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!text || !studentId) return;
 
             const newMsg = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 studentId,
                 sender: 'teacher',
                 text,
@@ -7438,7 +7364,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Initial load & Auth Listener Setup
-    supabase.auth.onAuthStateChange((event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('[Auth Debug] Event:', event, 'Session:', session ? 'Present' : 'Null');
         if (session && session.user) {
             const emailLower = String(session.user.email || '').toLowerCase();
@@ -7502,12 +7428,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                const existsInMockUsers = mockUsers.some(u => {
+                let existsInMockUsers = mockUsers.some(u => {
                     if (u.id === session.user.id) return true;
                     const uEmail = String(u.email || '').toLowerCase();
                     const uPhone = normalizePhone(u.phone);
                     return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
                 });
+                
+                if (!existsInMockUsers && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    if (userEmail) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('email', userEmail);
+                        if (data && data.length > 0) existsInMockUsers = true;
+                    }
+                    if (!existsInMockUsers && sessionPhone) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('phone', sessionPhone);
+                        if (data && data.length > 0) existsInMockUsers = true;
+                    }
+                }
                 const existsInStudents = students.some(s => {
                     const sPhone = normalizePhone(s.phone);
                     const sParentPhone = normalizePhone(s.parentPhone);
@@ -7526,7 +7463,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 // Create locally in mock database with status 'pending'
                                 const localPendingUser = {
-                                    id: session.user.id,
+                                    id: userEmail,
                                     email: userEmail,
                                     name: pendingData.parentName,
                                     phone: pendingData.phone,
@@ -7545,7 +7482,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 // Push and save
                                 mockUsers.push(localPendingUser);
-                                saveMockUsers(mockUsers);
+                                if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                                    await supabase.from('sb_mock_users').upsert(mapMockUserToDb(localPendingUser));
+                                } else {
+                                    saveMockUsers(mockUsers);
+                                }
                                 
                                 alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
                             } catch (e) {
@@ -7595,36 +7536,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parentPhone = session.user.user_metadata?.phone || '';
                 const childrenData = session.user.user_metadata?.children || [];
 
-                // Match parent's children by either ID startsWith or parentPhone (avoid re-assigning IDs to prevent collisions)
-                let parentChildren = students.filter(s => 
-                    String(s.id).startsWith(session.user.id) || 
+                // Match parent's children by username(=id), parentEmail, or parentPhone
+                const parentEmail = session.user.email || '';
+                const childUsernames = childrenData.map(c => c.username).filter(Boolean);
+                let parentChildren = students.filter(s =>
+                    (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
+                    (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
+                    String(s.id).startsWith(session.user.id) ||
                     (parentPhone && s.parentPhone === parentPhone)
                 );
 
                 // If no records linked yet, auto-create them from children metadata
                 if (parentChildren.length === 0 && childrenData.length > 0) {
                     childrenData.forEach((c, idx) => {
+                        const studentId = c.username || `${session.user.id}-${idx}`;
+                        if (students.some(s => String(s.id) === String(studentId))) return;
                         let age = 10;
                         if (c.birthdate) {
                             const birthYear = new Date(c.birthdate).getFullYear();
                             age = new Date().getFullYear() - birthYear + 1;
                         }
                         students.unshift({
-                            id: `${session.user.id}-${idx}`,
+                            id: studentId,
                             name: c.name,
                             age,
-                            school: '공부방 초등학교',
+                            birthdate: c.birthdate || '',
+                            school: c.school || '',
                             phone: c.phone || '',
                             parentPhone: parentPhone,
+                            parentEmail: parentEmail,
                             sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : '없음',
                             schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
                             progress: '개념 완성 과정 등록 대기 중',
-                            remarks: 'Supabase로 가입된 자녀입니다. 스케줄을 설정해 주세요.'
+                            remarks: 'Supabase로 가입된 자녀입니다. 스케줄을 설정해 주세요.',
+                            username: c.username,
+                            password: c.password
                         });
                     });
-                    saveStudents();
-                    parentChildren = students.filter(s => 
-                        String(s.id).startsWith(session.user.id) || 
+                    await saveStudents();
+                    parentChildren = students.filter(s =>
+                        (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
+                        (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
+                        String(s.id).startsWith(session.user.id) ||
                         (parentPhone && s.parentPhone === parentPhone)
                     );
                 }
@@ -8017,7 +7970,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('반 정보가 수정되었습니다.');
                 } else {
                     const newClass = {
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         name,
                         duration,
                         schedule
@@ -8264,7 +8217,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Add progress for each student
                 classStudents.forEach((student, index) => {
                     const newProg = {
-                        id: Date.now() + Math.floor(Math.random() * 1000) + index,
+                        id: crypto.randomUUID(),
                         studentId: student.id,
                         date: date,
                         content: content
@@ -8551,7 +8504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const memo = document.getElementById('consult-memo').value.trim();
 
                 const newInquiry = {
-                    id: Date.now(),
+                    id: crypto.randomUUID(),
                     name,
                     phone,
                     school,
@@ -8848,7 +8801,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('커리큘럼 단계가 성공적으로 수정되었습니다.');
                 } else {
                     const newStep = {
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         title,
                         stepNum,
                         description,
@@ -9162,7 +9115,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const name = currentStudent ? currentStudent.name : '학부모 자녀';
                     
                     const newQuery = {
-                        id: Date.now(),
+                        id: crypto.randomUUID(),
                         studentId: loggedInStudentId,
                         studentName: name,
                         question: queryText || `[사진 질문] ${attachedAiImageName}`,
@@ -9579,14 +9532,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Bind actions
                 if (filterStatus === 'pending') {
-                    tr.querySelector('.btn-approve').addEventListener('click', () => {
+                    tr.querySelector('.btn-approve').addEventListener('click', async () => {
                         if (confirm(`"${u.name}" 학부모 계정을 가입 승인하시겠습니까?\n승인 시 자녀 계정들도 활성화되며 원생 명단에 추가됩니다.`)) {
                             u.status = 'approved';
                             u.approvedAt = new Date().toISOString();
                             
                             const childrenData = u.user_metadata?.children || [];
+                            const parentEmail = u.email || '';
                             childrenData.forEach((c, idx) => {
-                                let exist = students.find(s => 
+                                const studentId = c.username || `${u.id}-${idx}`;
+                                let exist = students.find(s =>
+                                    String(s.id) === String(studentId) ||
                                     (s.name === c.name && s.birthdate && s.birthdate === c.birthdate) ||
                                     (s.name === c.name && (s.parentPhone === u.phone || s.phone === c.phone))
                                 );
@@ -9597,12 +9553,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                                 if (!exist) {
                                     students.unshift({
-                                        id: `${u.id}-${idx}`,
+                                        id: studentId,
                                         name: c.name,
                                         age,
-                                        school: '공부방 초등학교',
+                                        birthdate: c.birthdate || '',
+                                        school: c.school || '',
                                         phone: c.phone || '',
                                         parentPhone: u.phone,
+                                        parentEmail: parentEmail,
                                         sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : '없음',
                                         schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
                                         progress: '개념 완성 과정 등록 대기 중',
@@ -9615,12 +9573,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                     exist.username = c.username;
                                     exist.password = c.password;
                                     exist.address = u.address;
-                                    exist.id = `${u.id}-${idx}`;
+                                    exist.birthdate = exist.birthdate || c.birthdate || '';
+                                    exist.school = exist.school || c.school || '';
+                                    exist.parentEmail = exist.parentEmail || parentEmail;
+                                    exist.id = studentId;
                                 }
                             });
                             
                             saveMockUsers(mockUsers);
-                            saveStudents();
+                            await saveStudents();
                             renderApprovalList();
                             renderStudents();
                             showToast(`"${u.name}" 학부모 가입이 승인되었습니다.`);
@@ -11793,7 +11754,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const newSet = {
-                    id: Date.now(),
+                    id: crypto.randomUUID(),
                     classId: null,
                     studentId: String(classSelect.value),
                     title: titleInput.value.trim() || `단어 세트 (${new Date().toLocaleDateString()})`,
@@ -12042,13 +12003,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await supabase.from('sb_completed_vocab_sets')
                                     .delete()
                                     .eq('student_id', String(studentId))
-                                    .eq('vocab_set_id', safeIntegerId(vocabSetId));
+                                    .eq('vocab_set_id', safeStringId(vocabSetId));
                             } catch(err){}
                         }
                         showToast('학습 중으로 완료 상태가 해제되었습니다.');
                     } else {
                         const newCompleted = {
-                            id: Date.now(),
+                            id: crypto.randomUUID(),
                             studentId,
                             vocabSetId
                         };
@@ -12781,7 +12742,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const newSet = {
-                    id: Date.now(),
+                    id: crypto.randomUUID(),
                     studentId: loggedInStudentId,
                     title: titleInput.value.trim() || `나의 단어장 (${new Date().toLocaleDateString()})`,
                     words: wordsList
