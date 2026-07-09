@@ -3823,8 +3823,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             
-            // Date label
-            cell.innerHTML = `<span class="calendar-date-number">${day}</span>`;
+            // --- Pre-compute indicators for this date (used both in header and later) ---
+            const dateFeedbacksEarly = feedbacks.filter(f => f.studentId === studentId && f.date === dateStr);
+            const dateHomeworksEarly = homework.filter(h => String(h.studentId) === String(studentId) && h.dueDate === dateStr);
+            const dateProgressEarly = progressList.filter(p => String(p.studentId) === String(studentId) && p.date === dateStr);
+
+            // Build compact indicator icons for inline display next to date number
+            let indicatorHtml = '';
+            if (dateFeedbacksEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-fb" title="피드백 ${dateFeedbacksEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>`;
+            }
+            if (dateHomeworksEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-hw" title="과제 ${dateHomeworksEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>`;
+            }
+            if (dateProgressEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-pg" title="진도 ${dateProgressEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>`;
+            }
+
+            // Date label row: number + inline indicators
+            cell.innerHTML = `<div class="cal-date-header"><span class="calendar-date-number">${day}</span>${indicatorHtml ? `<span class="cal-ind-group">${indicatorHtml}</span>` : ''}</div>`;
 
             // Filter attendance/makeup logs for this date
             const dateLogs = attendance.filter(a => a.studentId === studentId && a.date === dateStr);
@@ -3887,71 +3904,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 eventContainer.appendChild(badge);
             });
 
-            // Add purple feedback, pink homework, and green progress indicators if registered on this date
-            const dateFeedbacks = feedbacks.filter(f => f.studentId === studentId && f.date === dateStr);
-            const dateHomeworks = homework.filter(h => String(h.studentId) === String(studentId) && h.dueDate === dateStr);
-            const dateProgress = progressList.filter(p => String(p.studentId) === String(studentId) && p.date === dateStr);
+            // (Indicator icons are now displayed inline next to date number, not in a separate row)
+            // The dateFeedbacks/dateHomeworks/dateProgress variables are still referenced below for click detail modal
+            const dateFeedbacks = dateFeedbacksEarly;
+            const dateHomeworks = dateHomeworksEarly;
+            const dateProgress = dateProgressEarly;
 
-            const iconRow = document.createElement('div');
-            iconRow.style.display = 'flex';
-            iconRow.style.gap = '4px';
-            iconRow.style.justifyContent = 'center';
-            iconRow.style.marginTop = '4px';
-
-            if (dateFeedbacks.length > 0) {
-                const marker = document.createElement('span');
-                marker.style.display = 'inline-flex';
-                marker.style.alignItems = 'center';
-                marker.style.justifyContent = 'center';
-                marker.style.width = '16px';
-                marker.style.height = '16px';
-                marker.style.borderRadius = '50%';
-                marker.style.background = '#f3e8ff';
-                marker.style.border = '1px solid #c084fc';
-                marker.style.color = '#7e22ce';
-                marker.style.fontSize = '0.58rem';
-                marker.innerHTML = '💬';
-                marker.title = `피드백: ${dateFeedbacks.map(f => f.content).join(', ')}`;
-                iconRow.appendChild(marker);
-            }
-
-            if (dateHomeworks.length > 0) {
-                const marker = document.createElement('span');
-                marker.style.display = 'inline-flex';
-                marker.style.alignItems = 'center';
-                marker.style.justifyContent = 'center';
-                marker.style.width = '16px';
-                marker.style.height = '16px';
-                marker.style.borderRadius = '50%';
-                marker.style.background = '#fce7f3';
-                marker.style.border = '1px solid #fbcfe8';
-                marker.style.color = '#db2777';
-                marker.style.fontSize = '0.58rem';
-                marker.innerHTML = '✔';
-                marker.title = `과제 기한일: ${dateHomeworks.map(h => h.title).join(', ')}`;
-                iconRow.appendChild(marker);
-            }
-
-            if (dateProgress.length > 0) {
-                const marker = document.createElement('span');
-                marker.style.display = 'inline-flex';
-                marker.style.alignItems = 'center';
-                marker.style.justifyContent = 'center';
-                marker.style.width = '16px';
-                marker.style.height = '16px';
-                marker.style.borderRadius = '50%';
-                marker.style.background = '#dcfce7';
-                marker.style.border = '1px solid #bbf7d0';
-                marker.style.color = '#15803d';
-                marker.style.fontSize = '0.58rem';
-                marker.innerHTML = '📖';
-                marker.title = `진도: ${dateProgress.map(p => p.content).join(', ')}`;
-                iconRow.appendChild(marker);
-            }
-
-            if (iconRow.children.length > 0) {
-                eventContainer.appendChild(iconRow);
-            }
 
             cell.appendChild(eventContainer);
 

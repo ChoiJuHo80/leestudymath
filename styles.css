@@ -1896,7 +1896,54 @@ a {
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 0;
+    line-height: 1;
+}
+/* Date header row: number + indicator icons side-by-side */
+.cal-date-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    gap: 2px;
+}
+/* Group of indicator icons to the right of the date number */
+.cal-ind-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+/* Base indicator icon chip */
+.cal-ind {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.cal-ind svg {
+    display: block;
+}
+/* Feedback: purple */
+.cal-ind-fb {
+    background: #ede9fe;
+    color: #7c3aed;
+    border: 1px solid #c4b5fd;
+}
+/* Homework: pink */
+.cal-ind-hw {
+    background: #fce7f3;
+    color: #db2777;
+    border: 1px solid #fbcfe8;
+}
+/* Progress: green */
+.cal-ind-pg {
+    background: #dcfce7;
+    color: #16a34a;
+    border: 1px solid #86efac;
 }
 .calendar-cell-events {
     display: flex;
