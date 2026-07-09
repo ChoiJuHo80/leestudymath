@@ -1412,8 +1412,12 @@
                             <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
                                 <i data-lucide="credit-card" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 매월 회비 결제
                             </h3>
-                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">이번 달 교육비 납부 현황 및 입금 요청을 진행합니다.</p>
-                            <div id="myclass-tuition-status-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                            <!-- Filter tabs -->
+                            <div id="tuition-filter-tabs" style="display: flex; gap: 8px; margin-top: -4px;">
+                                <button type="button" id="btn-tuition-filter-pending" class="tuition-filter-tab active" style="padding: 6px 16px; border-radius: 20px; border: 1.5px solid #3b82f6; background: #3b82f6; color: #fff; font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;">결제 대기</button>
+                                <button type="button" id="btn-tuition-filter-done" class="tuition-filter-tab" style="padding: 6px 16px; border-radius: 20px; border: 1.5px solid var(--border-color); background: #ffffff; color: var(--text-secondary); font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;">완료</button>
+                            </div>
+                            <div id="myclass-tuition-status-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 0;">
                                 <!-- Dynamic content -->
                             </div>
                         </div>

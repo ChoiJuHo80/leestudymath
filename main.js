@@ -6285,39 +6285,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (isParent && tuitionContainer) {
-            tuitionContainer.innerHTML = '';
-            let totalTuitionHtml = '';
-
             const today = new Date();
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
-            const tuitionName = `회비 (${year}년 ${month}월)`;
+            const tuitionMonth = year + '년 ' + month + '월';
+
+            const allItems = [];
 
             parentChildren.forEach(child => {
                 const childClass = classes.find(c => String(c.id) === String(child.classId));
-                let childHtml = `
-                    <div style="font-weight: 800; font-size: 0.95rem; color: var(--mascot-pink-bg); margin-top: 14px; margin-bottom: 8px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="user" style="width: 16px; height: 16px;"></i> ${child.name}의 교육비 회비
-                    </div>
-                `;
-
+                const tuitionName = '회비 (' + tuitionMonth + ')';
                 const feeAmount = child.tuitionFeeAmount || 250000;
                 const feeDay = child.tuitionFeeDay || 10;
 
-                // Find existing tuition payment record
                 let req = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tuitionName);
-                
-                // If no record exists, create a default "미결제" record and save/sync immediately
                 if (!req) {
                     req = {
-                        id: Date.now(),
+                        id: Date.now() + Math.round(Math.random() * 1000),
                         studentId: child.id,
                         studentName: child.name,
                         classId: childClass ? childClass.id : 1,
                         className: childClass ? childClass.name : '없음',
                         textbookName: tuitionName,
                         price: feeAmount,
-                        isConfirmed: true, // auto confirmed request for tuition
+                        isConfirmed: true,
                         paymentStatus: '미결제',
                         createdAt: new Date().toISOString()
                     };
@@ -6325,72 +6316,85 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveTextbookRequests();
                 }
 
-                const isPaid = req.paymentStatus === '결제완료';
-
-                let actionHtml = '';
-                if (req.paymentStatus === '입금확인중') {
-                    actionHtml = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
-                } else if (req.paymentStatus === '미결제') {
-                    actionHtml = `
-                        <div style="display: flex; gap: 6px; align-items: center;">
-                            <span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px;">결제 대기</span>
-                            <button type="button" class="btn-pay-tuition-toss" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: none; background: #0064ff; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s;" data-req-id="${req.id}" data-fee-amount="${feeAmount}">결제하기</button>
-                        </div>
-                    `;
-                } else {
-                    actionHtml = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
-                }
-
-                const itemHtml = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #ffffff; margin-bottom: 6px;">
-                        <div style="text-align: left;">
-                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${tuitionName}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-                                금액: <span style="font-weight: 600; color: var(--primary-color);">${Number(feeAmount).toLocaleString()}원</span> | 
-                                기준일: <span style="font-weight: 600; color: var(--text-primary);">매월 ${feeDay}일</span>
-                            </div>
-                        </div>
-                        <div>
-                            ${actionHtml}
-                        </div>
-                    </div>
-                `;
-
-                if (isPaid) {
-                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: var(--mascot-green-bg); margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mascot-green-bg);"></span> 결제 완료 회비</div>` + itemHtml;
-                } else {
-                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: #ef4444; margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></span> 결제 대기 회비</div>` + itemHtml;
-                }
-
-                totalTuitionHtml += childHtml;
-            });
-
-            tuitionContainer.innerHTML = totalTuitionHtml;
-
-            // Bind 결제하기 (Toss Pay) click handler
-            tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const payModal = document.getElementById('textbook-payment-modal');
-                    const payTbName = document.getElementById('pay-textbook-name');
-                    const payTbPrice = document.getElementById('pay-textbook-price');
-                    const payReqId = document.getElementById('pay-request-id');
-                    const linkToss = document.getElementById('link-toss-transfer');
-                    
-                    const reqId = btn.getAttribute('data-req-id');
-                    const feeAmount = btn.getAttribute('data-fee-amount');
-                    
-                    if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
-                        payTbName.textContent = tuitionName;
-                        payTbPrice.textContent = `${Number(feeAmount).toLocaleString()}원`;
-                        payReqId.value = reqId;
-                        linkToss.href = `supertoss://send?bank=국민&accountNo=76870201244813&amount=${feeAmount}`;
-                        payModal.classList.add('open');
-                    }
+                allItems.push({ child, req, feeAmount, feeDay,
+                    isPaid: req.paymentStatus === '결제완료',
+                    itemTitle: child.name + ' 회비(' + tuitionMonth + ')'
                 });
             });
+
+            const renderTuitionList = (filter) => {
+                tuitionContainer.dataset.filter = filter;
+                tuitionContainer.innerHTML = '';
+
+                const visibleItems = allItems.filter(item => filter === 'done' ? item.isPaid : !item.isPaid);
+
+                if (visibleItems.length === 0) {
+                    tuitionContainer.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.88rem;">' + (filter === 'done' ? '결제 완료된 항목이 없습니다.' : '결제 대기 중인 항목이 없습니다. 🎉') + '</div>';
+                    return;
+                }
+
+                visibleItems.forEach(({ child, req, isPaid, feeAmount, feeDay, itemTitle }) => {
+                    let actionHtml = '';
+                    if (req.paymentStatus === '입금확인중') {
+                        actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">입금확인중</span>';
+                    } else if (req.paymentStatus === '미결제') {
+                        actionHtml = '<div style="display:flex;gap:6px;align-items:center;"><span style="font-size:0.78rem;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:20px;font-weight:700;">결제 대기</span><button type="button" class="btn-pay-tuition-toss" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:#3b82f6;color:white;font-weight:700;cursor:pointer;" data-req-id="' + req.id + '" data-fee-amount="' + feeAmount + '">결제하기</button></div>';
+                    } else {
+                        actionHtml = '<span style="font-size:0.78rem;color:#10b981;background:#d1fae5;padding:3px 10px;border-radius:20px;font-weight:700;">✓ 결제완료</span>';
+                    }
+
+                    const itemEl = document.createElement('div');
+                    itemEl.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border-color);border-radius:14px;background:#ffffff;';
+                    itemEl.innerHTML = '<div style="text-align:left;min-width:0;flex:1;"><div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">' + itemTitle + '</div><div style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;">금액: <span style="font-weight:600;color:var(--primary-color);">' + Number(feeAmount).toLocaleString() + '원</span> &nbsp;|&nbsp; 기준일: <span style="font-weight:600;">매월 ' + feeDay + '일</span></div></div><div style="flex-shrink:0;margin-left:10px;">' + actionHtml + '</div>';
+                    tuitionContainer.appendChild(itemEl);
+                });
+
+                tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const payModal = document.getElementById('textbook-payment-modal');
+                        const payTbName = document.getElementById('pay-textbook-name');
+                        const payTbPrice = document.getElementById('pay-textbook-price');
+                        const payReqId = document.getElementById('pay-request-id');
+                        const linkToss = document.getElementById('link-toss-transfer');
+                        const reqId = btn.getAttribute('data-req-id');
+                        const feeAmt = btn.getAttribute('data-fee-amount');
+                        const matchedItem = allItems.find(it => String(it.req.id) === String(reqId));
+                        if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                            payTbName.textContent = matchedItem ? matchedItem.itemTitle : '회비(' + tuitionMonth + ')';
+                            payTbPrice.textContent = Number(feeAmt).toLocaleString() + '원';
+                            payReqId.value = reqId;
+                            linkToss.href = 'supertoss://send?bank=국민&accountNo=76870201244813&amount=' + feeAmt;
+                            payModal.classList.add('open');
+                        }
+                    });
+                });
+            };
+
+            const btnPending = document.getElementById('btn-tuition-filter-pending');
+            const btnDone = document.getElementById('btn-tuition-filter-done');
+
+            const setActiveTab = (active, inactive) => {
+                active.style.background = '#3b82f6';
+                active.style.color = '#fff';
+                active.style.borderColor = '#3b82f6';
+                inactive.style.background = '#ffffff';
+                inactive.style.color = 'var(--text-secondary)';
+                inactive.style.borderColor = 'var(--border-color)';
+            };
+
+            if (btnPending && !btnPending.dataset.bound) {
+                btnPending.dataset.bound = 'true';
+                btnPending.addEventListener('click', () => { setActiveTab(btnPending, btnDone); renderTuitionList('pending'); });
+            }
+            if (btnDone && !btnDone.dataset.bound) {
+                btnDone.dataset.bound = 'true';
+                btnDone.addEventListener('click', () => { setActiveTab(btnDone, btnPending); renderTuitionList('done'); });
+            }
+
+            renderTuitionList('pending');
         }
 
-        renderMyClassAiHistory();
+                renderMyClassAiHistory();
         renderStudentChat();
         renderMyClassDailyHabits(loggedInStudentId);
         renderStudentFormulasAndBadges(student);
