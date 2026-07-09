@@ -7837,16 +7837,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Populate the vocab-class-select dropdown
-            const vocabSelect = document.getElementById('vocab-class-select');
+            // Populate the vocab-student-select dropdown with student list
+            const vocabSelect = document.getElementById('vocab-student-select');
             if (vocabSelect) {
                 const prevVal = vocabSelect.value;
-                vocabSelect.innerHTML = '<option value="">반 선택</option>';
-                classes.forEach(c => {
+                vocabSelect.innerHTML = '<option value="">-- 학생을 선택하세요 --</option>';
+                [...students].sort((a, b) => a.name.localeCompare(b.name, 'ko')).forEach(stu => {
                     const opt = document.createElement('option');
-                    opt.value = c.id;
-                    opt.textContent = c.name;
-                    if (String(c.id) === String(prevVal)) {
+                    opt.value = stu.id;
+                    opt.textContent = stu.name;
+                    if (String(stu.id) === String(prevVal)) {
                         opt.selected = true;
                     }
                     vocabSelect.appendChild(opt);
@@ -11741,7 +11741,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!container) return;
             
             container.innerHTML = '';
-            const filtered = wordSets.filter(w => String(w.classId) === String(classId));
+            const filtered = wordSets.filter(w => String(w.studentId) === String(classId));
             
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다.</div>';
@@ -11782,7 +11782,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // Trigger Admin Section Seeding / View Setup
-        const onClassSelectedForVocab = (classId) => {
+        const onClassSelectedForVocab = (studentId) => {
+            const classId = studentId; // kept for internal compatibility
             const placeholder = document.getElementById('vocab-management-placeholder');
             const content = document.getElementById('vocab-management-content');
             
@@ -11804,7 +11805,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (vocabEditorForm) {
             vocabEditorForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const classSelect = document.getElementById('vocab-class-select');
+                const classSelect = document.getElementById('vocab-student-select');
                 const titleInput = document.getElementById('vocab-title-input');
                 
                 if (!classSelect || !titleInput || !classSelect.value) return;
@@ -11831,7 +11832,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const newSet = {
                     id: Date.now(),
-                    classId: classSelect.value,
+                    classId: null,
+                    studentId: String(classSelect.value),
                     title: titleInput.value.trim() || `단어 세트 (${new Date().toLocaleDateString()})`,
                     words: wordsList
                 };
@@ -11841,7 +11843,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 titleInput.value = '';
                 renderVocabAdminRows();
-                renderAdminVocabSetsList(classSelect.value);
+                renderAdminVocabSetsList(classSelect.value); // pass studentId
                 
                 if (loggedInStudentId) {
                     const student = students.find(s => s.id === loggedInStudentId);
@@ -11937,19 +11939,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Also include the current student ID directly (for type-safe matching)
             const studentIds = [...new Set([String(student.id), ...siblingOrSelfProfiles.map(s => String(s.id))])];
             
-            // Resolve effective classId - use classId from any sibling profile that has one
-            const effectiveClassId = student.classId || 
-                (siblingOrSelfProfiles.find(s => s.classId)?.classId) || null;
 
-            // Show sets that:
-            // 1. Belong to student's class (classId match)
-            // 2. Created personally by the student (studentId match)
-            // 3. classId is null/undefined (공용 단어장 - visible to all)
+            // Word sets are per-student: show only sets assigned to this student's ID(s)
             const baseFiltered = wordSets.filter(w => {
-                const byClass = effectiveClassId && w.classId && String(w.classId) === String(effectiveClassId);
                 const byStudent = w.studentId && studentIds.includes(String(w.studentId));
-                const isPublic = !w.classId && !w.studentId; // 클래스/학생 지정 없으면 공용
-                return byClass || byStudent || isPublic;
+                return byStudent;
             });
             
             // Sub-filter: Studying vs Completed

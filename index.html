@@ -726,18 +726,19 @@
                                 </h3>
                                 <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">반별 영어 단어장을 생성하고 배포합니다. 유인물 사진(이미지) 업로드 시 자동으로 단어와 뜻이 매핑됩니다.</p>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label for="vocab-class-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">관리 반 선택:</label>
-                                <select id="vocab-class-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; outline: none; background: #ffffff;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <label for="vocab-student-select" style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">학생 선택:</label>
+                                <select id="vocab-student-select" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.88rem; outline: none; background: #ffffff; min-width: 180px;">
+                                    <option value="">-- 학생을 선택하세요 --</option>
                                     <!-- filled dynamically -->
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Placeholder for unselected class state -->
+                        <!-- Placeholder for unselected student state -->
                         <div id="vocab-management-placeholder" style="text-align: center; padding: 40px; color: var(--text-secondary); font-weight: 700; border: 1px dashed var(--border-color); border-radius: 12px; margin-top: 20px; font-size: 0.9rem;">
                             <i data-lucide="info" style="width: 28px; height: 28px; display: block; margin: 0 auto 10px auto; color: var(--text-muted);"></i>
-                            상단의 '관리 반 선택' 목록에서 단어장을 등록/관리할 반을 먼저 선택해 주세요.
+                            상단의 '학생 선택' 목록에서 단어장을 등록할 학생을 먼저 선택해 주세요.
                         </div>
 
                         <div id="vocab-management-content" style="display: none; margin-top: 20px;">
