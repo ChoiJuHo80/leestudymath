@@ -2544,7 +2544,14 @@
                 </div>
                 <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">생년월일</label>
-                    <input type="date" id="parent-child-birthdate-input" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="parent-child-birth-y" placeholder="YYYY" maxlength="4" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff; width: 40%; text-align: center;">
+                        <span style="display: flex; align-items: center; color: var(--text-secondary); font-weight: bold;">-</span>
+                        <input type="text" id="parent-child-birth-m" placeholder="MM" maxlength="2" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff; width: 30%; text-align: center;">
+                        <span style="display: flex; align-items: center; color: var(--text-secondary); font-weight: bold;">-</span>
+                        <input type="text" id="parent-child-birth-d" placeholder="DD" maxlength="2" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; outline: none; background: #ffffff; width: 30%; text-align: center;">
+                    </div>
+                    <input type="hidden" id="parent-child-birthdate-input">
                 </div>
                 <div class="form-group-modal" style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">나이</label>
