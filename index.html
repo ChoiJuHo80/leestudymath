@@ -6,7 +6,19 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="이공수학">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <!-- iOS Home Screen Icon -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon.png">
+    <!-- iOS Splash Screen (prevents white flash) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png">
     <!-- Cache headers removed: aggressive no-cache forces full reload on every visit, harming mobile performance -->
     <title>거제 이공수학 공부방 | 아주동 수학 학원 · 거제 공부방</title>
     <meta name="description" content="거제 아주동 수학 학원 및 수학 공부방 찾으시나요? 초·중등 완벽 연산 및 서술형 내신 관리 전문! 상위 1%로 이끄는 거제 이공수학 공부방입니다. 아주동 공부방, 거제 수학 공부방 대표 브랜드.">
@@ -2736,5 +2748,186 @@
         // Initialize Lucide icons
         lucide.createIcons();
     </script>
+
+    <!-- ===== PWA 홈 화면 추가 배너 ===== -->
+    <div id="pwa-install-banner" style="
+        display: none;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        z-index: 99999;
+        padding: 0 16px 16px;
+        pointer-events: none;
+    ">
+        <!-- iOS 안내 배너 -->
+        <div id="pwa-ios-banner" style="
+            display: none;
+            background: linear-gradient(135deg, #6C3AE8 0%, #9B59B6 100%);
+            color: white;
+            border-radius: 20px;
+            padding: 18px 20px 14px;
+            box-shadow: 0 -4px 30px rgba(108,58,232,0.4);
+            pointer-events: all;
+            animation: slideUpBanner 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+        ">
+            <button id="pwa-ios-close" style="
+                position: absolute; top: 12px; right: 16px;
+                background: rgba(255,255,255,0.2); border: none; color: white;
+                width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+                font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
+            ">✕</button>
+            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+                <img src="/icon-192.png" style="width: 52px; height: 52px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                <div>
+                    <div style="font-weight: 700; font-size: 1rem; margin-bottom: 2px;">이공수학 공부방</div>
+                    <div style="font-size: 0.8rem; opacity: 0.85;">홈 화면에 앱처럼 추가하기</div>
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 12px 14px; font-size: 0.82rem; line-height: 1.7;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="background: rgba(255,255,255,0.25); border-radius: 6px; padding: 2px 8px; font-weight: 600;">1</span>
+                    하단 Safari <span style="font-size: 1.1rem;">⬆️</span> <b>공유 버튼</b>을 탭하세요
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="background: rgba(255,255,255,0.25); border-radius: 6px; padding: 2px 8px; font-weight: 600;">2</span>
+                    <b>"홈 화면에 추가"</b> 를 탭하세요 ➕
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 10px; font-size: 0.75rem; opacity: 0.7;">앱처럼 언제든지 빠르게 접속할 수 있어요!</div>
+        </div>
+
+        <!-- Android 설치 배너 -->
+        <div id="pwa-android-banner" style="
+            display: none;
+            background: linear-gradient(135deg, #6C3AE8 0%, #9B59B6 100%);
+            color: white;
+            border-radius: 20px;
+            padding: 18px 20px;
+            box-shadow: 0 -4px 30px rgba(108,58,232,0.4);
+            pointer-events: all;
+            animation: slideUpBanner 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+        ">
+            <button id="pwa-android-close" style="
+                position: absolute; top: 12px; right: 16px;
+                background: rgba(255,255,255,0.2); border: none; color: white;
+                width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+                font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
+            ">✕</button>
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <img src="/icon-192.png" style="width: 52px; height: 52px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                <div style="flex: 1;">
+                    <div style="font-weight: 700; font-size: 1rem; margin-bottom: 2px;">이공수학 공부방</div>
+                    <div style="font-size: 0.8rem; opacity: 0.85;">홈 화면에 앱처럼 추가하기</div>
+                </div>
+                <button id="pwa-android-install" style="
+                    background: white; color: #6C3AE8;
+                    border: none; border-radius: 50px;
+                    padding: 10px 20px; font-weight: 700;
+                    font-size: 0.9rem; cursor: pointer;
+                    white-space: nowrap;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                    transition: transform 0.15s;
+                ">설치하기</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes slideUpBanner {
+            from { opacity: 0; transform: translateY(40px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+
+    <script>
+    (function() {
+        // 이미 PWA로 실행 중이면 배너 불필요
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+            || window.navigator.standalone === true;
+        if (isStandalone) return;
+
+        // 오늘 이미 닫았으면 24시간 후에 다시 표시
+        const dismissed = localStorage.getItem('pwa-banner-dismissed');
+        if (dismissed && (Date.now() - parseInt(dismissed)) < 86400000) return;
+
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+            && !/crios/i.test(navigator.userAgent);  // Chrome on iOS 제외
+        const isAndroid = /android/i.test(navigator.userAgent);
+
+        const banner = document.getElementById('pwa-install-banner');
+        const iosBanner = document.getElementById('pwa-ios-banner');
+        const androidBanner = document.getElementById('pwa-android-banner');
+        const iosClose = document.getElementById('pwa-ios-close');
+        const androidClose = document.getElementById('pwa-android-close');
+        const androidInstallBtn = document.getElementById('pwa-android-install');
+
+        let deferredPrompt = null;
+
+        // Android: beforeinstallprompt 이벤트 캡처
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        // Android: 이벤트 발생과 상관없이 일단 배너 표시 (안내용)
+        if (isAndroid || (!isIOS && !isAndroid)) {
+            setTimeout(function() {
+                banner.style.display = 'block';
+                androidBanner.style.display = 'block';
+            }, 3000);
+        }
+
+        // iOS Safari: 직접 안내 배너 표시
+        if (isIOS) {
+            setTimeout(function() {
+                banner.style.display = 'block';
+                iosBanner.style.display = 'block';
+            }, 3000);
+        }
+
+        // Android 설치 버튼 클릭
+        if (androidInstallBtn) {
+            androidInstallBtn.addEventListener('click', function() {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(function(choiceResult) {
+                        if (choiceResult.outcome === 'accepted') {
+                            banner.style.display = 'none';
+                        }
+                        deferredPrompt = null;
+                    });
+                } else {
+                    // 수동 설치 안내
+                    alert("우측 상단 브라우저 메뉴(⋮)를 누르시고\n[홈 화면에 추가] 또는 [앱 설치]를 선택해주세요!");
+                }
+            });
+            androidInstallBtn.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.05)';
+            });
+            androidInstallBtn.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+            });
+        }
+
+        // 닫기 버튼
+        function closeBanner() {
+            banner.style.opacity = '0';
+            banner.style.transition = 'opacity 0.3s';
+            setTimeout(function() { banner.style.display = 'none'; }, 300);
+            localStorage.setItem('pwa-banner-dismissed', Date.now().toString());
+        }
+        if (iosClose) iosClose.addEventListener('click', closeBanner);
+        if (androidClose) androidClose.addEventListener('click', closeBanner);
+
+        // Service Worker 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(reg) { console.log('[PWA] Service Worker 등록 성공:', reg.scope); })
+                    .catch(function(err) { console.warn('[PWA] Service Worker 등록 실패:', err); });
+            });
+        }
+    })();
+    </script>
+
 </body>
 </html>

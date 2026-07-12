@@ -1,0 +1,62 @@
+{
+  "name": "거제 이공수학 공부방",
+  "short_name": "이공수학",
+  "description": "거제 아주동 수학 공부방 · 학생 포털 앱",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#6C3AE8",
+  "theme_color": "#6C3AE8",
+  "orientation": "portrait",
+  "lang": "ko",
+  "dir": "ltr",
+  "categories": ["education"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "내 학습 현황",
+      "short_name": "학습현황",
+      "description": "나의 학습 기록 보기",
+      "url": "/?tab=my-progress",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "공지사항",
+      "short_name": "공지",
+      "description": "최신 공지사항 확인",
+      "url": "/?tab=notice",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

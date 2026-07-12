@@ -1,4 +1,8 @@
 import { supabase, isMock } from './supabase.js';
+import { initStudentExamView, initTeacherExamView, initAdminExamDashboard } from './src/examManager.js';
+window.initStudentExamView = initStudentExamView;
+window.initTeacherExamView = initTeacherExamView;
+window.initAdminExamDashboard = initAdminExamDashboard;
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -956,6 +960,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log('[Database Debug] Starting initialization from Supabase...');
+        const overlay = document.createElement('div');
+        overlay.id = 'app-init-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0'; overlay.style.left = '0';
+        overlay.style.width = '100vw'; overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(255,255,255,0.9)';
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.innerHTML = `
+            <div style="border:4px solid #f3f3f3; border-top:4px solid #6C3AE8; border-radius:50%; width:40px; height:40px; animation:spin 1s linear infinite;"></div>
+            <div style="margin-top:16px; font-weight:bold; color:#6C3AE8;">데이터 동기화 중...</div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        document.body.appendChild(overlay);
         try {
             const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
                 try {
@@ -1158,19 +1179,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[Database Debug] All tables synchronized with Supabase.');
 
             // Refresh all views dynamically
-            renderNotices();
+            if (typeof renderMainScheduleTable === 'function') renderMainScheduleTable();
+            if (typeof renderNotices === 'function') renderNotices();
+            
             if (isAdmin) {
-                renderStudents();
-                renderConsultList();
-                renderAdminCurriculumList();
-                renderAiQueryManagement();
+                if (typeof renderStudents === 'function') renderStudents();
+                if (typeof renderConsultList === 'function') renderConsultList();
+                if (typeof renderAdminCurriculumList === 'function') renderAdminCurriculumList();
+                if (typeof renderAiQueryManagement === 'function') renderAiQueryManagement();
                 if (typeof renderApprovalList === 'function') renderApprovalList();
             }
             if (isStudent) {
-                renderMyClass();
+                if (typeof renderMyClass === 'function') renderMyClass();
             }
         } catch (err) {
             console.error('[Database Debug] Exceptional error during Supabase sync:', err);
+        } finally {
+            const overlay = document.getElementById('app-init-overlay');
+            if (overlay) overlay.remove();
         }
     };
 
@@ -1785,9 +1811,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" class="child-phone-input" placeholder="010-0000-0000" style="padding: 8px 12px; font-size: 0.85rem;">
                 </div>
             </div>
-            <div class="form-group-modal" style="margin-bottom: 8px; margin-top: 8px;">
-                <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학교 이름 (예: 공부방초등학교)</label>
-                <input type="text" class="child-school-input" placeholder="예: 공부방초등학교" style="padding: 8px 12px; font-size: 0.85rem;">
+            <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 8px;">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학교 이름 (예: 공부방초등학교)</label>
+                    <input type="text" class="child-school-input" placeholder="예: 공부방초등학교" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학년</label>
+                    <input type="text" class="child-grade-input" placeholder="예: 3학년" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
             </div>
             <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
                 <div class="form-group-modal" style="margin-bottom: 0;">
@@ -2296,10 +2328,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentNoticeQuery = '';
     let currentVocabFilter = 'studying'; // 'studying' | 'completed'
     let completedVocabSets = [];
-    try {
-        const stored = localStorage.getItem('gongbubang_completed_vocab_sets');
-        if (stored) completedVocabSets = JSON.parse(stored);
-    } catch(e){}
 
     // Default homework dummy data
     const defaultHomework = [
@@ -2416,56 +2444,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentBadges = [];
     let wordSets = [];
     let mockUsers = [];
-    try {
-        mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
-    } catch(e){}
+    
 
-    try {
-        const storedHw = localStorage.getItem('gongbubang_homework');
-        if (storedHw) homework = JSON.parse(storedHw);
-
-        const storedMsg = localStorage.getItem('gongbubang_messages');
-        if (storedMsg) messages = JSON.parse(storedMsg);
-
-        const storedFb = localStorage.getItem('gongbubang_feedbacks');
-        if (storedFb) feedbacks = JSON.parse(storedFb);
-
-        const storedProg = localStorage.getItem('gongbubang_progress');
-        if (storedProg) progressList = JSON.parse(storedProg);
-
-        const storedAtt = localStorage.getItem('gongbubang_attendance');
-        if (storedAtt) attendance = JSON.parse(storedAtt);
-
-        const storedConsult = localStorage.getItem('gongbubang_consultations');
-        if (storedConsult) consultations = JSON.parse(storedConsult);
-
-        const storedCurriculum = localStorage.getItem('gongbubang_curriculums');
-        if (storedCurriculum) curriculums = JSON.parse(storedCurriculum);
-
-        const storedAiQueries = localStorage.getItem('gongbubang_ai_queries');
-        if (storedAiQueries) aiQueries = JSON.parse(storedAiQueries);
-
-        const storedTextbookReqs = localStorage.getItem('gongbubang_textbook_requests');
-        if (storedTextbookReqs) textbookRequests = JSON.parse(storedTextbookReqs);
-
-        const storedClassFormulas = localStorage.getItem('gongbubang_class_formulas');
-        if (storedClassFormulas) classFormulas = JSON.parse(storedClassFormulas);
-        else localStorage.setItem('gongbubang_class_formulas', JSON.stringify([]));
-
-        const storedStudentBadges = localStorage.getItem('gongbubang_student_badges');
-        if (storedStudentBadges) studentBadges = JSON.parse(storedStudentBadges);
-        else localStorage.setItem('gongbubang_student_badges', JSON.stringify([]));
-
-        const storedWordSets = localStorage.getItem('gongbubang_word_sets');
-        if (storedWordSets) wordSets = JSON.parse(storedWordSets);
-        else localStorage.setItem('gongbubang_word_sets', JSON.stringify([]));
-
-        const storedCampSignups = localStorage.getItem('gongbubang_camp_signups');
-        if (storedCampSignups) campSignups = JSON.parse(storedCampSignups);
-        else localStorage.setItem('gongbubang_camp_signups', JSON.stringify([]));
-    } catch (e) {
-        console.error('localStorage is not accessible for state tables.', e);
-    }
+    
 
     const saveHomework = async () => {
         try { localStorage.setItem('gongbubang_homework', JSON.stringify(homework)); } catch(e){}
@@ -3680,6 +3661,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn-notice-delete btn-student-delete" data-id="${student.id}" title="삭제"><i data-lucide="trash-2"></i></button>
                 </div>
             `;
+            if (window.initTeacherExamView) window.initTeacherExamView(card, student);
             studentGridContainer.appendChild(card);
         });
 
@@ -6773,7 +6755,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     const childSchool = block.querySelector('.child-school-input') ? block.querySelector('.child-school-input').value.trim() : '';
-                    children.push({ name, birthdate, phone: childPhone, school: childSchool, username: childUsername, password: childPassword });
+                    const childGrade = block.querySelector('.child-grade-input') ? block.querySelector('.child-grade-input').value.trim() : '';
+                    children.push({ name, birthdate, phone: childPhone, school: childSchool, grade: childGrade, username: childUsername, password: childPassword });
                 });
 
                 if (childValidationError) {
@@ -10918,6 +10901,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Student: Render Formulas & Badges ---
         window.renderStudentFormulasAndBadges = (student) => {
+            if (window.initStudentExamView) window.initStudentExamView(student.id);
             if (!student) return;
             
             // Seed vocabulary sets if empty
@@ -13160,3 +13144,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 });
+console.log('Deployment attempt 2');  
+
+
+setTimeout(() => {
+    const studentsSection = document.getElementById('students');
+    if (studentsSection && !document.getElementById('btn-global-exam-dashboard')) {
+        const titleBar = studentsSection.querySelector('.section-title-bar');
+        if (titleBar) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-global-exam-dashboard';
+            btn.className = 'btn-primary';
+            btn.style.marginLeft = '10px';
+            btn.innerHTML = '<i data-lucide="bar-chart-2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"></i> 전체 시험 성적 통계';
+            btn.addEventListener('click', () => {
+                if (window.initAdminExamDashboard) window.initAdminExamDashboard();
+            });
+            titleBar.appendChild(btn);
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+}, 2000);
+
