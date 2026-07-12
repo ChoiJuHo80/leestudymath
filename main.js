@@ -9495,54 +9495,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 users = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
             } catch(e){}
             
-            if (users.length === 0) {
-                const seededUsers = [
-                    {
-                        id: 'parent-1',
-                        email: 'parent@test.com',
-                        password: '123456',
-                        name: '김부모',
-                        phone: '010-9876-5432',
-                        address: '서울시 강남구 역삼동 101호',
-                        role: 'parent',
-                        status: 'approved',
-                        createdAt: new Date().toISOString(),
-                        approvedAt: new Date().toISOString(),
-                        user_metadata: {
-                            name: '김부모',
-                            phone: '010-9876-5432',
-                            address: '서울시 강남구 역삼동 101호',
-                            role: 'parent',
-                            children: [
-                                { name: '김민준', birthdate: '2016-01-01', phone: '010-1111-2222', username: 'minjun', password: '1234' },
-                                { name: '김서아', birthdate: '2018-01-01', phone: '010-5555-6666', username: 'seoah', password: '1234' }
-                            ]
-                        }
-                    },
-                    {
-                        id: 'parent-2',
-                        email: 'parent2@test.com',
-                        password: '123456',
-                        name: '이부모',
-                        phone: '010-4444-5555',
-                        address: '서울시 서초구 반포동 202호',
-                        role: 'parent',
-                        status: 'approved',
-                        createdAt: new Date().toISOString(),
-                        approvedAt: new Date().toISOString(),
-                        user_metadata: {
-                            name: '이부모',
-                            phone: '010-4444-5555',
-                            address: '서울시 서초구 반포동 202호',
-                            role: 'parent',
-                            children: [
-                                { name: '이서윤', birthdate: '2012-01-01', phone: '010-2222-3333', username: 'seoyun', password: '1234' }
-                            ]
-                        }
-                    }
-                ];
-                localStorage.setItem('gongbubang_mock_users', JSON.stringify(seededUsers));
-            }
             
             // Sync default student cards
             let updatedStudents = false;
