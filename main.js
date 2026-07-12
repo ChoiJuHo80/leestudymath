@@ -7129,6 +7129,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof renderNotices === 'function') renderNotices();
                 if (typeof renderClassList === 'function') renderClassList();
                 if (typeof renderCurriculumEditor === 'function') renderCurriculumEditor();
+                if (typeof populateClassSelect === 'function') populateClassSelect();
+                if (typeof populateClassFilter === 'function') populateClassFilter();
             }).catch(e => console.error(e));
         }
 
