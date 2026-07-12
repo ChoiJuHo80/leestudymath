@@ -7119,6 +7119,11 @@ document.addEventListener('DOMContentLoaded', () => {
         isAdmin = true;
         isStudent = false;
         loggedInStudentId = null;
+        if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+            initializeDataFromSupabase().then(() => {
+                if (typeof renderApprovalList === 'function') renderApprovalList();
+            }).catch(e => console.error(e));
+        }
 
         // Move schedule section inside students section at the bottom (fifth position)
         const scheduleSection = document.getElementById('schedule');
@@ -7215,6 +7220,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
                 });
 
+
+                let existsInMockUsers = !!matchedUser;
+                
+                if (!existsInMockUsers && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    if (userEmail) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('email', userEmail);
+                        if (data && data.length > 0) { existsInMockUsers = true; matchedUser = mapMockUserFromDb(data[0]); }
+                    }
+                    if (!existsInMockUsers && sessionPhone) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('phone', sessionPhone);
+                        if (data && data.length > 0) { existsInMockUsers = true; matchedUser = mapMockUserFromDb(data[0]); }
+                    }
+                }
+
                 if (matchedUser) {
                     // Update user ID and email in local database if different
                     let changed = false;
@@ -7227,6 +7246,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         changed = true;
                     }
                     if (changed) {
+                        if (!mockUsers.find(u => u.id === matchedUser.id)) {
+                            mockUsers.push(matchedUser);
+                        }
                         saveMockUsers(mockUsers);
                     }
                     
@@ -7242,23 +7264,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                let existsInMockUsers = mockUsers.some(u => {
-                    if (u.id === session.user.id) return true;
-                    const uEmail = String(u.email || '').toLowerCase();
-                    const uPhone = normalizePhone(u.phone);
-                    return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
-                });
-                
-                if (!existsInMockUsers && typeof supabase !== 'undefined' && supabase && !isMock) {
-                    if (userEmail) {
-                        const { data } = await supabase.from('sb_mock_users').select('*').eq('email', userEmail);
-                        if (data && data.length > 0) existsInMockUsers = true;
-                    }
-                    if (!existsInMockUsers && sessionPhone) {
-                        const { data } = await supabase.from('sb_mock_users').select('*').eq('phone', sessionPhone);
-                        if (data && data.length > 0) existsInMockUsers = true;
-                    }
-                }
                 const existsInStudents = students.some(s => {
                     const sPhone = normalizePhone(s.phone);
                     const sParentPhone = normalizePhone(s.parentPhone);
