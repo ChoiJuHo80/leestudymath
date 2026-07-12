@@ -7127,7 +7127,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof renderStudentSearchAndList === 'function') renderStudentSearchAndList();
                 if (typeof renderAdminHabits === 'function') renderAdminHabits();
                 if (typeof renderNotices === 'function') renderNotices();
-                if (typeof renderClassManagement === 'function') renderClassManagement();
+                if (typeof renderClassList === 'function') renderClassList();
                 if (typeof renderCurriculumEditor === 'function') renderCurriculumEditor();
             }).catch(e => console.error(e));
         }
