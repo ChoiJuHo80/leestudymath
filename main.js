@@ -907,7 +907,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
                 try {
-                    const { data, error } = await supabase.from(tableName).select('*');
+                    const clientToUse = ['sb_classes', 'sb_notices', 'sb_curriculums'].includes(tableName) && typeof publicSupabase !== 'undefined' && publicSupabase ? publicSupabase : supabase;
+                    const { data, error } = await clientToUse.from(tableName).select('*');
                     if (error) {
                         console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
                         const stored = localStorage.getItem(localKey);
