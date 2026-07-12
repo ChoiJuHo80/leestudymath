@@ -877,80 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return canvas.toDataURL('image/png');
     };
 
-    const defaultClassFormulas = [
-        {
-            id: 101,
-            classId: 1,
-            formulaName: '근의 공식',
-            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
-            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
-            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        },
-        {
-            id: 102,
-            classId: 1,
-            formulaName: '최대공약수',
-            latex: '\\text{GCD}(a, b)',
-            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
-            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        },
-        {
-            id: 201,
-            classId: 2,
-            formulaName: '근의 공식',
-            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
-            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
-            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        },
-        {
-            id: 202,
-            classId: 2,
-            formulaName: '최대공약수',
-            latex: '\\text{GCD}(a, b)',
-            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
-            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        },
-        {
-            id: 301,
-            classId: 3,
-            formulaName: '근의 공식',
-            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
-            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
-            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        },
-        {
-            id: 302,
-            classId: 3,
-            formulaName: '최대공약수',
-            latex: '\\text{GCD}(a, b)',
-            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
-            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
-                id: idx + 1,
-                answer: q.a,
-                imageBase64: ''
-            }))
-        }
-    ];
+    const defaultClassFormulas = []
 
 
     const initializeDataFromSupabase = async () => {
@@ -2245,35 +2172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Default Resources Data
-    const defaultResources = [
-        {
-            id: 'res-1',
-            title: '2026 초등 연산왕 특강 - 모의고사 1회 (정답/풀이 포함).pdf',
-            size: '3.4 MB',
-            target: '초등 전학년',
-            type: 'pdf',
-            filename: '2026 초등 연산왕 특강 - 모의고사 1회.pdf',
-            downloads: 1421
-        },
-        {
-            id: 'res-2',
-            title: '중등 2학기 도형(기하) 핵심 공식집 및 오답 잡는 비법 요약노트.zip',
-            size: '8.9 MB',
-            target: '중등 전학년',
-            type: 'zip',
-            filename: '중등 2학기 도형 핵심 공식집.zip',
-            downloads: 843
-        },
-        {
-            id: 'res-3',
-            title: '서술형 킬러 문항 완벽 격파 - 하루 5문제 훈련장 (중등 대수편).hwp',
-            size: '1.2 MB',
-            target: '중등 2-3학년',
-            type: 'hwp',
-            filename: '서술형 킬러 문항 완벽 격파 훈련장.hwp',
-            downloads: 911
-        }
-    ];
+    const defaultResources = []
 
     // Seed resources if empty
     let resources = defaultResources;
@@ -2411,44 +2310,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // Notice CRUD Panel
     // ==========================================================================
-    const defaultNotices = [
-        {
-            id: 1,
-            tag: '모집중',
-            title: '[공고] 2026년 여름방학 수학 특강반 원생 모집 안내 (선착순 마감)',
-            content: '여름방학 기간 동안 한 학기 앞서 연산과 핵심 개념을 완전하게 완성하는 4주 특별 코스입니다. 기초 개념반부터 심화 서술형 풀이반까지 반별 정원 6명 선착순 접수 중입니다.',
-            date: '2026. 06. 20',
-            author: '이공 원장',
-            titleSize: 'large',
-            titleColor: 'red',
-            pinned: true,
-            highlight: true
-        },
-        {
-            id: 2,
-            tag: '공지',
-            title: '[안내] 서술형 내신 완벽 대비를 위한 풀이노트 개편 및 첨삭 지도 강화',
-            content: '서술형 문항 감점을 제로화하기 위한 단단계 풀이 습관 작성 노트가 새로 적용되었습니다. 이공 원장의 1:1 집중 대면 첨삭 시간이 확대 운영됩니다.',
-            date: '2026. 06. 15',
-            author: '이공 원장',
-            titleSize: 'normal',
-            titleColor: 'default',
-            pinned: false,
-            highlight: false
-        },
-        {
-            id: 3,
-            tag: '안내',
-            title: '[안내] 공부방 차량 운행 및 등하원 안전 실시간 안심 문자 서비스 제공 안내',
-            content: '공부방 입실 및 퇴실 시 학부모님께 실시간으로 알림톡이 전송되는 지문 인식기가 설치되었습니다. 차량 등하원 경로 및 탑승 안전 수칙을 준수해 지도합니다.',
-            date: '2026. 06. 05',
-            author: '이공 원장',
-            titleSize: 'normal',
-            titleColor: 'default',
-            pinned: false,
-            highlight: false
-        }
-    ];
+    const defaultNotices = []
 
     let notices = [];
     // notices는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다
@@ -2464,103 +2326,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let completedVocabSets = [];
 
     // Default homework dummy data
-    const defaultHomework = [
-        { id: 101, studentId: 1, dueDate: '2026-06-22', title: '디딤돌 수학 5-2 12단원', description: '45~50쪽 풀기 및 채점', isCompleted: false },
-        { id: 102, studentId: 1, dueDate: '2026-06-21', title: '연산 학습지 14일차', description: '연산 오답 분석 5문항 풀이노트 작성', isCompleted: true },
-        { id: 103, studentId: 2, dueDate: '2026-06-22', title: '체크체크 중학수학 1-2', description: '기하 작도 연습문제 5문항 풀기', isCompleted: false }
-    ];
+    const defaultHomework = []
 
     // Default chat messages dummy data
-    const defaultMessages = [
-        { id: 201, studentId: 1, sender: 'parent', text: '선생님, 오늘 민준이가 연산 교재를 집에 두고 가서 공부방용 여분 프린트로 수업 진행 가능할까요?', time: '오후 1:40' },
-        { id: 202, studentId: 1, sender: 'teacher', text: '어머님 안녕하세요! 네, 공부방에 민준이 진도용 예비 프린트 준비해 두었으니 걱정하지 않으셔도 됩니다. 오늘 등원하면 풀이노트 작성 집중적으로 지도하겠습니다.', time: '오후 1:45' }
-    ];
+    const defaultMessages = []
 
     // Default feedback dummy data
-    const defaultFeedbacks = [
-        { id: 301, studentId: 1, date: '2026-06-22', content: '디딤돌 수학 5-2 분수의 곱셈 단원에서 기약분수로 나타내는 연산 실수가 종종 보이나, 개념은 완벽히 이해하고 있습니다.' },
-        { id: 302, studentId: 1, date: '2026-06-19', content: '오늘 서술형 문제 풀이 시, 풀이 과정 줄을 맞춰 쓰는 훈련을 진행했습니다. 차분하게 잘 따라왔습니다.' },
-        { id: 303, studentId: 2, date: '2026-06-22', content: '중등 수학 기하 파트 중 작도 단원 진행 중입니다. 컴퍼스 사용이 미숙했으나 오늘 실습을 통해 원리를 터득했습니다.' }
-    ];
+    const defaultFeedbacks = []
 
     // Default progress dummy data
-    const defaultProgressList = [
-        { id: 401, studentId: 1, date: '2026-06-22', content: '디딤돌 수학 5-2 기본 - 3단원 합동과 대칭 개념 강의 및 기본 유형 1~12번 풀이 진행' },
-        { id: 402, studentId: 1, date: '2026-06-19', content: '디딤돌 수학 5-2 기본 - 2단원 분수의 나눗셈 단원평가 및 오답 클리닉 (92점)' },
-        { id: 403, studentId: 2, date: '2026-06-22', content: '체크체크 수학 중 1-2 - 1단원 기본 도형 위치 관계 개념 교안 풀이완료' }
-    ];
+    const defaultProgressList = []
 
     // Default attendance dummy data
-    const defaultAttendance = [
-        { id: 501, studentId: 1, date: '2026-06-22', type: 'in', time: '15:30' },
-        { id: 502, studentId: 1, date: '2026-06-22', type: 'out', time: '17:00' },
-        { id: 503, studentId: 1, date: '2026-06-19', type: 'in', time: '15:35' },
-        { id: 504, studentId: 1, date: '2026-06-19', type: 'out', time: '17:02' },
-        { id: 505, studentId: 1, date: '2026-06-15', type: 'absent', time: '', memo: '개인 사정 결석' },
-        { id: 506, studentId: 1, date: '2026-06-20', type: 'makeup', time: '14:00', memo: '6/15 결석 보강' }
-    ];
+    const defaultAttendance = []
 
     // Default consultations dummy data
-    const defaultConsultations = [
-        { id: 901, name: '홍길동', phone: '010-1234-5678', school: '이공초등학교', grade: '초등 5학년', memo: '연산 기초가 부족하고 소수 나눗셈을 어려워해서 학원 진도를 따라갈 수 있을지 걱정입니다.', date: '2026-06-24', status: 'pending' },
-        { id: 902, name: '이순신 학부모', phone: '010-9876-5432', school: '이공중학교', grade: '중등 2학년', memo: '중등 서술형 문제 대비와 심화 서술 풀이 요령을 배우기 위해 수강 문의 드립니다.', date: '2026-06-23', status: 'completed' }
-    ];
+    const defaultConsultations = []
 
     // Default AI Queries dummy data
-    const defaultAiQueries = [
-        {
-            id: 1719273600000,
-            studentId: 1,
-            studentName: '김민준',
-            question: 'x^2 - 5x + 6 = 0의 풀이과정을 알려줘',
-            answer: '이차방정식 \\(x^2 - 5x + 6 = 0\\)의 풀이과정입니다.\n\n**1. 인수분해를 이용한 풀이:**\n방정식을 인수분해하기 위해 곱해서 \\(+6\\), 더해서 \\(-5\\)가 되는 두 정수를 찾습니다. 두 수는 \\(-2\\)와 \\(-3\\)입니다.\n\\[(x - 2)(x - 3) = 0\\]\n따라서 해는 다음과 같습니다.\n\\[x = 2 \\quad \\text{또는} \\quad x = 3\\]\n\n**2. 근의 공식을 이용한 풀이:**\n이차방정식 근의 공식은 다음과 같습니다.\n\\[x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\\]\n여기서 \\(a = 1, b = -5, c = 6\\)을 대입합니다.\n\\[x = \\frac{5 \\pm \\sqrt{(-5)^2 - 4 \\cdot 1 \\cdot 6}}{2 \\cdot 1}\\]\n\\[x = \\frac{5 \\pm \\sqrt{25 - 24}}{2} = \\frac{5 \\pm 1}{2}\\]\n\\[x_1 = \\frac{6}{2} = 3, \\quad x_2 = \\frac{4}{2} = 2\\]\n결과는 동일하게 \\(x = 2\\) 또는 \\(x = 3\\)입니다.',
-            date: '2026-06-25',
-            timestamp: '09:12:44'
-        },
-        {
-            id: 1719273650000,
-            studentId: 1,
-            studentName: '김민준',
-            question: '피타고라스 정리 공식이 뭐야?',
-            answer: '**피타고라스 정리(Pythagorean Theorem)**는 직각삼각형에서 세 변의 길이 사이의 관계를 나타내는 기하학의 기본 정리입니다.\n\n**공식:**\n\\[a^2 + b^2 = c^2\\]\n- \\(a\\), \\(b\\): 직각을 끼고 있는 두 변의 길이 (밑변과 높이)\n- \\(c\\): 직각삼각형의 가장 긴 변인 **빗변**의 길이\n\n**설명:**\n직각삼각형에서 빗변의 길이를 제곱한 값은 나머지 두 변의 길이를 각각 제곱하여 더한 값과 같습니다.\n예를 들어, 두 변의 길이가 각각 \\(3\\text{cm}\\), \\(4\\text{cm}\\)인 직각삼각형의 빗변 길이 \\(c\\)는 다음과 같이 구합니다.\n\\[3^2 + 4^2 = c^2\\]\n\\[9 + 16 = c^2\\]\n\\[25 = c^2 \\implies c = 5\\text{cm}\\]',
-            date: '2026-06-25',
-            timestamp: '09:15:10'
-        },
-        {
-            id: 1719187200000,
-            studentId: 2,
-            studentName: '이서윤',
-            question: '삼각함수 sin(30도)의 값은?',
-            answer: '특수각인 30도(\\(\\frac{\\pi}{6}\\) 라디안)에 대한 삼각비의 값은 다음과 같습니다.\n\n\\[\\sin(30^\\circ) = \\frac{1}{2} = 0.5\\]\n\n**설명:**\n한 각이 \\(30^\\circ\\), 다른 각이 \\(60^\\circ\\)인 직각삼각형에서 세 변의 길이 비는 다음과 같습니다.\n\\[\\text{높이} : \\text{밑변} : \\text{빗변} = 1 : \\sqrt{3} : 2\\]\n사인(\\(\\sin\\))의 정의는 **빗변 분의 높이**이므로 다음과 같이 유도됩니다.\n\\[\\sin(30^\\circ) = \\frac{\\text{높이}}{\\text{빗변}} = \\frac{1}{2}\\]',
-            date: '2026-06-24',
-            timestamp: '16:45:12'
-        }
-    ];
+    const defaultAiQueries = []
 
     // Default curriculums dummy data
-    const defaultCurriculums = [
-        {
-            id: 1,
-            stepNum: '01',
-            title: '초집중 연산 & 기초개념반',
-            description: '실수 없는 확실한 연산 능력을 극대화하여 수학의 자신감을 키웁니다. 시각적 개념 모델을 통한 쉽고 깊이 있는 기본 개념 수업입니다.',
-            targets: ['연산 속도 개선', '정확도 향상', '교과 개념 기초']
-        },
-        {
-            id: 2,
-            stepNum: '02',
-            title: '내신만점 서술형 & 유형분석반',
-            description: '단순 수식 계산을 넘어 문제 속 의도를 분석하고 빈틈없는 서술형 답안을 논리적으로 도출하는 논술형 풀이 훈련입니다.',
-            targets: ['오답노트 클리닉', '논술식 풀이', '시험 만점 대비']
-        },
-        {
-            id: 3,
-            stepNum: '03',
-            title: '상위 1% 심화 & 최고난도반',
-            description: '경시대회 문항, 영재고 대비 및 응용 융합 문제들을 다루며 한 문제에 30분 이상 스스로 고민하고 돌파구를 찾는 수학적 사고력을 훈련합니다.',
-            targets: ['킬러 문항 정복', '수학적 문제해결력', '영재 사고력']
-        }
-    ];
+    const defaultCurriculums = []
 
     // 모든 데이터는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
     let homework = [];
@@ -2721,44 +2508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // Default classes dummy data
-    const defaultClasses = [
-        {
-            id: 1,
-            name: '초등 4학년 A반',
-            duration: 90,
-            schedule: {
-                mon: '14:00 ~ 15:30',
-                tue: '',
-                wed: '14:00 ~ 15:30',
-                thu: '',
-                fri: '14:00 ~ 15:30'
-            }
-        },
-        {
-            id: 2,
-            name: '중등 1학년 A반',
-            duration: 90,
-            schedule: {
-                mon: '',
-                tue: '17:00 ~ 18:30',
-                wed: '',
-                thu: '17:00 ~ 18:30',
-                fri: ''
-            }
-        },
-        {
-            id: 3,
-            name: '초등 1학년 A반',
-            duration: 90,
-            schedule: {
-                mon: '',
-                tue: '15:30 ~ 17:00',
-                wed: '',
-                thu: '15:30 ~ 17:00',
-                fri: ''
-            }
-        }
-    ];
+    const defaultClasses = []
 
     // classes는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다 - 기본값 사용 안 함
     let classes = [];
@@ -3248,65 +2998,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // Student LMS Panel (Admin Only Features)
     // ==========================================================================
-    const defaultStudents = [
-        {
-            id: 1,
-            name: '김민준',
-            age: 11,
-            school: '이공초 4학년',
-            phone: '010-1234-5678',
-            parentPhone: '010-9876-5432',
-            sibling: '여동생 8세',
-            classId: 1,
-            schedule: {
-                mon: '14:00',
-                tue: '',
-                wed: '14:00',
-                thu: '',
-                fri: ''
-            },
-            progress: '디딤돌 기본+응용 5-2 (12단원 분수의 곱셈)',
-            remarks: '수학적 직관 및 서술형 논리력이 매우 뛰어남. 가끔 서둘러 푸는 버릇으로 인한 연산 실수가 있으므로 검산 습관 지도 중.'
-        },
-        {
-            id: 2,
-            name: '이서윤',
-            age: 14,
-            school: '이공중 1학년',
-            phone: '010-2222-3333',
-            parentPhone: '010-4444-5555',
-            sibling: '없음',
-            classId: 2,
-            schedule: {
-                mon: '',
-                tue: '17:00',
-                wed: '',
-                thu: '17:00',
-                fri: ''
-            },
-            progress: '체크체크 중학 수학 1-2 (기하 작도/성질)',
-            remarks: '도형 입체 형태 회전단원 오답 오인도가 높아 추가 개별 교구 첨삭 진행 완료. 풀이 노트를 깔끔하고 체계적으로 정돈하는 능력이 우수함.'
-        },
-        {
-            id: 3,
-            name: '김서아',
-            age: 8,
-            school: '이공초 1학년',
-            phone: '010-5555-6666',
-            parentPhone: '010-9876-5432',
-            sibling: '오빠 11세',
-            classId: 3,
-            schedule: {
-                mon: '',
-                tue: '15:30',
-                wed: '',
-                thu: '15:30',
-                fri: ''
-            },
-            progress: '디딤돌 초등 수학 1-2',
-            remarks: '이제 막 공부방에 합류한 학생입니다. 한글 읽기 및 10 이하의 덧뺄셈이 유창함.'
-        }
-    ];
+    const defaultStudents = []
 
         // students는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
     let students = [];
@@ -11606,38 +11298,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // --- English Vocabulary System ---
-        const defaultVocabularyWords = [
-            { word: 'ship', meaning: '배, 선박' },
-            { word: 'carry', meaning: '나르다, 운반하다' },
-            { word: 'step', meaning: '단계' },
-            { word: 'process', meaning: '과정' },
-            { word: 'build - built - built', meaning: '만들다' },
-            { word: 'frame', meaning: '틀' },
-            { word: 'crane', meaning: '기중기' },
-            { word: 'dock', meaning: '부두' },
-            { word: 'steel', meaning: '강철' },
-            { word: 'heat', meaning: '뜨겁게 하다, 가열하다' },
-            { word: 'edge', meaning: '가장자리, 모서리' },
-            { word: 'join', meaning: '연결하다' },
-            { word: 'sail', meaning: '항해하다' },
-            { word: 'near <-> far', meaning: '가까운 <-> 먼' },
-            { word: 'month', meaning: '달, 월, 개월' },
-            { word: 'face', meaning: '얼굴' },
-            { word: 'president', meaning: '대통령' },
-            { word: 'carve', meaning: '조각하다' },
-            { word: 'through', meaning: '~을 통해' },
-            { word: 'entrance', meaning: '입구' },
-            { word: 'steam', meaning: '증기, 김' },
-            { word: 'tourist', meaning: '관광객' },
-            { word: 'visit', meaning: '방문하다' },
-            { word: 'interesting', meaning: '흥미로운' },
-            { word: 'rainforest', meaning: '열대 우림' },
-            { word: 'north <-> south', meaning: '북쪽 <-> 남쪽' },
-            { word: 'famous', meaning: '유명한' },
-            { word: 'slave', meaning: '노예' },
-            { word: 'soldier', meaning: '군인' },
-            { word: 'million', meaning: '백만' }
-        ];
+        const defaultVocabularyWords = []
 
         // Seeder for database / fallback
         const seedDefaultWordSets = () => {
