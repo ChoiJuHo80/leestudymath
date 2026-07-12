@@ -1783,6 +1783,51 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     setupBirthdateFocus();
 
+    const setupGradeInputLogic = () => {
+        document.addEventListener('input', (e) => {
+            const t = e.target;
+            
+            // Handle number-only for text grade input
+            if (t.classList.contains('child-grade-text')) {
+                t.value = t.value.replace(/[^0-9]/g, '');
+            }
+
+            // Handle school name changes to swap input/select
+            if (t.classList.contains('child-school-input')) {
+                const block = t.closest('.signup-child-block');
+                if (block) {
+                    const textInput = block.querySelector('.child-grade-text');
+                    const selectInput = block.querySelector('.child-grade-select');
+                    const val = t.value.trim();
+                    
+                    if (val.includes('초등')) {
+                        textInput.style.display = 'none';
+                        textInput.classList.remove('active-grade');
+                        selectInput.style.display = 'block';
+                        selectInput.classList.add('active-grade');
+                        selectInput.innerHTML = '<option value="">선택</option>' + 
+                            [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
+                    } else if (val.includes('중') || val.includes('고등') || val.includes('중학')) {
+                        textInput.style.display = 'none';
+                        textInput.classList.remove('active-grade');
+                        selectInput.style.display = 'block';
+                        selectInput.classList.add('active-grade');
+                        selectInput.innerHTML = '<option value="">선택</option>' + 
+                            [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
+                    } else {
+                        selectInput.style.display = 'none';
+                        selectInput.classList.remove('active-grade');
+                        textInput.style.display = 'block';
+                        textInput.classList.add('active-grade');
+                        selectInput.innerHTML = '';
+                    }
+                }
+            }
+        });
+    };
+    setupGradeInputLogic();
+
+
     staticPhoneFields.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -1903,7 +1948,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="form-group-modal" style="margin-bottom: 8px;">
                     <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학년</label>
-                    <input type="text" class="child-grade-input" placeholder="예: 3학년" style="padding: 8px 12px; font-size: 0.85rem;">
+                    <div style="position: relative;">
+                        <input type="text" class="child-grade-input child-grade-text active-grade" placeholder="숫자만 입력" maxlength="2" style="padding: 8px 12px; font-size: 0.85rem; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <select class="child-grade-input child-grade-select" style="display: none; padding: 8px 12px; font-size: 0.85rem; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
@@ -6840,7 +6889,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     const childSchool = block.querySelector('.child-school-input') ? block.querySelector('.child-school-input').value.trim() : '';
-                    const childGrade = block.querySelector('.child-grade-input') ? block.querySelector('.child-grade-input').value.trim() : '';
+                    const activeGrade = block.querySelector('.active-grade') || block.querySelector('.child-grade-text');
+                    const childGrade = activeGrade ? activeGrade.value.trim() : '';
                     children.push({ name, birthdate, phone: childPhone, school: childSchool, grade: childGrade, username: childUsername, password: childPassword });
                 });
 
