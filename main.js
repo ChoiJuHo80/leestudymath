@@ -1,4 +1,4 @@
-import { supabase, isMock } from './supabase.js';
+import { supabase, publicSupabase, isMock } from './supabase.js';
 import { initStudentExamView, initTeacherExamView, initAdminExamDashboard } from './src/examManager.js';
 window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
@@ -3235,10 +3235,11 @@ document.addEventListener('DOMContentLoaded', () => {
             days.forEach(day => {
                 const timeVal = studentSchedule[day] || '';
                 const isEmpty = !timeVal;
+                const formattedTime = timeVal.replace(/\s*~\s*/g, '<br>');
                 scheduleHtml += `
                     <div class="day-slot">
                         <span class="day-label">${dayLabels[day]}</span>
-                        <span class="day-time ${isEmpty ? 'empty' : ''}">${isEmpty ? '-' : timeVal}</span>
+                        <span class="day-time ${isEmpty ? 'empty' : ''}">${isEmpty ? '-' : formattedTime}</span>
                     </div>
                 `;
             });
@@ -7122,6 +7123,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
             initializeDataFromSupabase().then(() => {
                 if (typeof renderApprovalList === 'function') renderApprovalList();
+                if (typeof renderStudentSearchAndList === 'function') renderStudentSearchAndList();
+                if (typeof renderAdminHabits === 'function') renderAdminHabits();
+                if (typeof renderNotices === 'function') renderNotices();
+                if (typeof renderClassManagement === 'function') renderClassManagement();
+                if (typeof renderCurriculumEditor === 'function') renderCurriculumEditor();
             }).catch(e => console.error(e));
         }
 

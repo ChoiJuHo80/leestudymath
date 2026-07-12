@@ -1433,7 +1433,7 @@ a {
 /* Weekly mini timeline */
 .student-schedule-timeline {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
     background: #fafafa;
     padding: 10px;
@@ -1463,12 +1463,11 @@ a {
     border-radius: var(--border-radius-sm);
     min-height: 24px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     color: var(--primary-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.3;
 }
 
 .day-time.empty {

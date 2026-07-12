@@ -4,6 +4,7 @@ const supabaseUrl = 'https://xqdfyyfiroukkluygvkq.supabase.co';
 const supabaseAnonKey = 'sb_publishable_VzYxmxytt9IFqmFuI9FW7Q_V9mDciJK';
 
 let supabaseClient = null;
+let publicSupabaseClient = null;
 let isMock = false;
 
 // Basic validation for URL and Key
@@ -26,6 +27,13 @@ if (isValidUrl(supabaseUrl) && isValidKey(supabaseAnonKey)) {
         flowType: 'implicit',
         persistSession: true,
         detectSessionInUrl: true
+      }
+    });
+    publicSupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
       }
     });
     isMock = false;
@@ -215,4 +223,4 @@ if (isMock) {
   };
 }
 
-export { supabaseClient as supabase, isMock };
+export { supabaseClient as supabase, publicSupabaseClient as publicSupabase, isMock };
