@@ -11312,7 +11312,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // --- English Vocabulary System ---
-        const defaultVocabularyWords = []
+        const defaultVocabularyWords = [
+            { word: 'ship', meaning: '배, 선박' },
+            { word: 'carry', meaning: '나르다, 운반하다' },
+            { word: 'step', meaning: '단계' },
+            { word: 'process', meaning: '과정' },
+            { word: 'build - built - built', meaning: '만들다' },
+            { word: 'frame', meaning: '틀' },
+            { word: 'crane', meaning: '기중기' },
+            { word: 'dock', meaning: '부두' },
+            { word: 'steel', meaning: '강철' },
+            { word: 'heat', meaning: '뜨겁게 하다, 가열하다' },
+            { word: 'edge', meaning: '가장자리, 모서리' },
+            { word: 'join', meaning: '연결하다' },
+            { word: 'sail', meaning: '항해하다' },
+            { word: 'near <-> far', meaning: '가까운 <-> 먼' },
+            { word: 'month', meaning: '달, 1개월' },
+            { word: 'face', meaning: '얼굴' },
+            { word: 'president', meaning: '대통령' },
+            { word: 'carve', meaning: '조각하다' },
+            { word: 'through', meaning: '~을 통해' },
+            { word: 'entrance', meaning: '입구' },
+            { word: 'steam', meaning: '증기, 김' },
+            { word: 'tourist', meaning: '관광객' },
+            { word: 'visit', meaning: '방문하다' },
+            { word: 'interesting', meaning: '흥미로운' },
+            { word: 'rainforest', meaning: '열대 우림' },
+            { word: 'north <-> south', meaning: '북쪽 <-> 남쪽' },
+            { word: 'famous', meaning: '유명한' },
+            { word: 'slave', meaning: '노예' },
+            { word: 'soldier', meaning: '군인' },
+            { word: 'million', meaning: '백만' }
+        ];
 
         // Seeder for database / fallback
         const seedDefaultWordSets = () => {
