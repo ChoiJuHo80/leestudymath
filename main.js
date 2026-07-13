@@ -4274,9 +4274,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Sync back to parent user in gongbubang_mock_users if they are linked
                         let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
                         let parentId = null;
-                        if (String(id).includes('-')) {
-                            parentId = String(id).split('-')[0];
+                        
+                        let matchedParentUser = mockUsers.find(u => {
+                            const children = u.user_metadata?.children || [];
+                            if (children.some(c => c.username === id)) return true;
+                            if (u.phone && parentPhone && normalizePhone(u.phone) === normalizePhone(parentPhone)) return true;
+                            if (String(id).startsWith(u.id + '-')) return true;
+                            return false;
+                        });
+                        
+                        if (matchedParentUser) {
+                            parentId = matchedParentUser.id;
                         }
+                        
                         if (parentId) {
                             mockUsers = mockUsers.map(u => {
                                 if (u.id === parentId) {
@@ -7277,6 +7287,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Match parent's children by username(=id), parentEmail, or parentPhone
                 const parentEmail = session.user.email || '';
                 const childUsernames = childrenData.map(c => c.username).filter(Boolean);
+                
+                // CRITICAL FIX: Ensure local students array is synced with Supabase BEFORE checking parentChildren.
+                // Otherwise, a fresh browser login will see 0 children and overwrite the DB with empty classIds.
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
+
                 let parentChildren = students.filter(s =>
                     (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
                     (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
@@ -7308,7 +7325,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             progress: '개념 완성 과정 등록 대기 중',
                             remarks: 'Supabase로 가입된 자녀입니다. 스케줄을 설정해 주세요.',
                             username: c.username,
-                            password: c.password
+                            password: c.password,
+                            classId: c.classId || null,
+                            classDuration: c.classDuration || 90
                         });
                     });
                     await saveStudents();
