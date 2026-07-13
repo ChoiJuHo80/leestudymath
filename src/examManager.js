@@ -249,6 +249,7 @@ export const initTeacherExamView = (studentContainer, student) => {
 };
 
 const openTeacherExamModal = async (student) => {
+    injectStyles();
     let modal = document.getElementById('teacher-exam-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -436,7 +437,34 @@ const openTeacherExamModal = async (student) => {
     await loadTeacherExams();
 };
 
+export const updateUngradedBadge = async () => {
+    const badge = document.getElementById('ungraded-badge');
+    const btn = document.getElementById('admin-exam-quick-btn');
+    if (!badge || !btn) return;
+    
+    try {
+        const { count, error } = await supabase
+            .from('exams')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', '미채점');
+            
+        if (!error && count > 0) {
+            badge.textContent = `${count}건`;
+            badge.style.display = 'inline-block';
+            btn.style.borderColor = '#ff4444';
+            btn.style.animation = 'pulse 2s infinite';
+        } else {
+            badge.style.display = 'none';
+            btn.style.borderColor = 'var(--border-color)';
+            btn.style.animation = 'none';
+        }
+    } catch (e) {
+        console.error('Failed to update ungraded badge:', e);
+    }
+};
+
 export const initAdminExamDashboard = () => {
+    injectStyles();
     let modal = document.getElementById('admin-exam-dashboard-modal');
     if (!modal) {
         modal = document.createElement('div');

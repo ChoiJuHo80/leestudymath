@@ -1,5 +1,5 @@
 import { supabase, publicSupabase, isMock } from './supabase.js';
-import { initStudentExamView, initTeacherExamView, initAdminExamDashboard } from './src/examManager.js';
+import { initStudentExamView, initTeacherExamView, initAdminExamDashboard, updateUngradedBadge } from './src/examManager.js';
 window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
@@ -7146,6 +7146,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof renderCurriculumEditor === 'function') renderCurriculumEditor();
                 if (typeof populateClassSelect === 'function') populateClassSelect();
                 if (typeof populateClassFilter === 'function') populateClassFilter();
+                updateUngradedBadge();
             }).catch(e => console.error(e));
         }
 
