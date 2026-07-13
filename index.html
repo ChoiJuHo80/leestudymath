@@ -1185,11 +1185,8 @@
                         <a href="#myclass-badge-shelf-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 나의 배지 진열대
                         </a>
-                        <a href="#myclass-vocab-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                        <a href="#myclass-vocab-widget" id="parent-quick-menu-vocab" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 영어단어 학습
-                        </a>
-                        <a href="#myclass-textbook-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
-                            <i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 교재 구매 요청
                         </a>
                         <a href="#myclass-tuition-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 회비 결제
@@ -1412,21 +1409,10 @@
 
                     <!-- Full Width Section for Textbook, Attendance, Habit widgets -->
                     <div class="myclass-full-width" style="display: flex; flex-direction: column; gap: 30px; margin-top: 30px; width: 100%;">
-                        <!-- Textbook Purchase Widget -->
-                        <div class="widget" id="myclass-textbook-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
-                            <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
-                                <i data-lucide="book-open" style="color: var(--mascot-purple-bg); width: 20px; height: 20px;"></i> 반 교재 및 구매 요청
-                            </h3>
-                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">현재 반에 등록된 교재 목록입니다. 구매 요청 및 모바일 결제를 진행할 수 있습니다.</p>
-                            <div id="myclass-textbook-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                                <!-- Dynamic content -->
-                            </div>
-                        </div>
-                        
-                        <!-- Monthly Tuition Payment Widget -->
+                        <!-- Monthly Tuition & Textbook Payment Widget -->
                         <div class="widget" id="myclass-tuition-widget" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; display: flex; flex-direction: column; gap: 16px;">
                             <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
-                                <i data-lucide="credit-card" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 매월 회비 결제
+                                <i data-lucide="credit-card" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 회비 및 교재 결제
                             </h3>
                             <!-- Filter tabs -->
                             <div id="tuition-filter-tabs" style="display: flex; gap: 8px; margin-top: -4px;">
@@ -1682,7 +1668,7 @@
                 <p>주소: 경남 거제시 아주2로 138 | 상담문의: 010-2579-0000</p>
             </div>
             <div class="footer-right">
-                <p>&copy; 2026 이공 수학 공부방. All Rights Reserved. <span style="color: #ff4444; font-weight: bold; margin-left: 10px;">(Build v2026-07-13-27)</span></p>
+                <p>&copy; 2026 이공 수학 공부방. All Rights Reserved. <span style="color: #ff4444; font-weight: bold; margin-left: 10px;">(Build v2026-07-13-28)</span></p>
             </div>
         </div>
     </footer>
@@ -2754,7 +2740,7 @@
         </form>
     </div>
 
-    <script type="module" src="main.js?v=202607131222"></script>
+    <script type="module" src="main.js?v=202607131245"></script>
     <script>
         // Initialize Lucide icons
         lucide.createIcons();
@@ -2941,6 +2927,6 @@
     </script>
 
     <!-- Build Version Indicator -->
-    <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; font-weight: bold; background: #ff0000; color: #ffffff; padding: 4px 8px; border-radius: 4px; z-index: 999999; pointer-events: none;">Build v2026-07-13-27</div>
+    <div style="position: fixed; bottom: 10px; right: 10px; font-size: 12px; font-weight: bold; background: #ff0000; color: #ffffff; padding: 4px 8px; border-radius: 4px; z-index: 999999; pointer-events: none;">Build v2026-07-13-28</div>
 </body>
 </html>
