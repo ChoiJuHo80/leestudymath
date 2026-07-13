@@ -229,7 +229,7 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
             uploadBtn.textContent = '시험지 업로드';
             uploadInput.value = ''; // Reset
         }
-    });
+    };
 };
 
 export const initTeacherExamView = (studentContainer, student) => {
