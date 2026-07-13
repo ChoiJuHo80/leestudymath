@@ -12877,14 +12877,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const parentChildPasswordInput = document.getElementById('parent-child-password-input');
         const parentChildSchoolInput = document.getElementById('parent-child-school-input');
 
-        if (btnParentAddChild && parentAddChildModal) {
-            btnParentAddChild.addEventListener('click', () => {
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#btn-parent-add-child')) {
+                const parentAddChildModal = document.getElementById('parent-add-child-modal');
+                const parentAddChildForm = document.getElementById('parent-add-child-form');
+                const parentChildUsernameInput = document.getElementById('parent-child-username-input');
                 if (parentAddChildForm) parentAddChildForm.reset();
                 if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
-                parentAddChildModal.style.display = 'flex';
-                safeCreateIcons();
-            });
-        }
+                if (parentAddChildModal) parentAddChildModal.style.display = 'flex';
+                if (window.lucide) window.lucide.createIcons();
+            }
+        });
 
         if (btnParentAddChildClose && parentAddChildModal) {
             btnParentAddChildClose.addEventListener('click', () => {
