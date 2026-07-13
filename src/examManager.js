@@ -67,7 +67,7 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
     section.innerHTML = `
         <div class="exam-header">
             <h3><i data-lucide="file-text" style="width:18px;height:18px;vertical-align:middle;margin-right:6px;"></i>내 시험지함</h3>
-            <input type="file" id="exam-upload-input" accept="image/*" style="display:none;" />
+            <input type="file" id="exam-upload-input" accept="image/*" multiple style="display:none;" />
             <button id="btn-upload-exam" class="exam-upload-btn">시험지 업로드</button>
         </div>
         <div id="student-exam-list" class="exam-list">로딩 중...</div>
@@ -107,10 +107,24 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
             }
             if (isGraded) previousScore = ex.final_score;
 
+            let urls = [];
+            try {
+                urls = JSON.parse(ex.image_url);
+                if (!Array.isArray(urls)) urls = [ex.image_url];
+            } catch (e) {
+                urls = [ex.image_url];
+            }
+            const firstImg = urls[0];
+            const extraCount = urls.length > 1 ? urls.length - 1 : 0;
+            const badgeHtml = extraCount > 0 ? `<div style="position:absolute; top:5px; left:5px; background:rgba(0,0,0,0.7); color:#fff; font-size:11px; padding:2px 6px; border-radius:10px; font-weight:bold;">+${extraCount}장</div>` : '';
+
             const card = document.createElement('div');
             card.className = 'exam-card';
             card.innerHTML = `
-                <img src="${ex.image_url}" class="exam-thumb" alt="시험지">
+                <div style="position:relative; width:60px; height:60px; flex-shrink:0;">
+                    <img src="${firstImg}" class="exam-thumb" alt="시험지" style="width:100%; height:100%; object-fit:cover;">
+                    ${badgeHtml}
+                </div>
                 <div class="exam-info">
                     <div class="exam-title">${ex.semester}학기 ${ex.sequence}번째 시험지</div>
                     <div class="exam-meta">업로드: ${new Date(ex.upload_date).toLocaleDateString()}</div>
@@ -134,28 +148,32 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
     });
 
     uploadInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files);
+        if (!files || files.length === 0) return;
 
         uploadBtn.disabled = true;
         uploadBtn.textContent = '업로드 중...';
 
         try {
-            // Upload to Supabase Storage
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${studentId}_${Date.now()}.${fileExt}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('exam-papers')
-                .upload(fileName, file);
+            const uploadedUrls = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${studentId}_${Date.now()}_${i}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('exam-papers')
+                    .upload(fileName, file);
+                
+                if (uploadError) throw uploadError;
 
-            if (uploadError) throw uploadError;
+                const { data: publicUrlData } = supabase.storage
+                    .from('exam-papers')
+                    .getPublicUrl(fileName);
+                
+                uploadedUrls.push(publicUrlData.publicUrl);
+            }
 
-            // Get Public URL
-            const { data: publicUrlData } = supabase.storage
-                .from('exam-papers')
-                .getPublicUrl(fileName);
-
-            const imageUrl = publicUrlData.publicUrl;
+            const imageUrlString = JSON.stringify(uploadedUrls);
 
             // Calculate next sequence
             const { data: existingExams } = await supabase.from('exams').select('semester, sequence').eq('student_id', studentId);
@@ -166,7 +184,7 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
             // Insert into exams table
             const { error: dbError } = await supabase.from('exams').insert([{
                 student_id: studentId,
-                image_url: imageUrl,
+                image_url: imageUrlString,
                 semester: currentSem,
                 sequence: nextSeq,
                 status: '미채점'
@@ -221,7 +239,7 @@ const openTeacherExamModal = async (student) => {
             <div id="teacher-exam-list" class="exam-list">로딩 중...</div>
             <div id="teacher-exam-detail" style="display:none; margin-top: 20px; border-top: 1px solid #ddd; padding-top:20px;">
                 <h3 id="detail-title"></h3>
-                <img id="detail-img" class="exam-large-img" src="">
+                <div id="detail-img-container" style="display:flex; flex-direction:column; gap:10px; max-height: 50vh; overflow-y:auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;"></div>
                 
                 <div id="ai-grading-container" style="display:none; margin-top:15px; padding:15px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
                     <h4 style="margin-bottom:10px;">가채점 결과 (수정 가능)</h4>
@@ -277,7 +295,25 @@ const openTeacherExamModal = async (student) => {
     const showExamDetail = (ex) => {
         document.getElementById('teacher-exam-detail').style.display = 'block';
         document.getElementById('detail-title').textContent = `${ex.semester}학기 ${ex.sequence}번째 시험지`;
-        document.getElementById('detail-img').src = ex.image_url;
+        const imgContainer = document.getElementById('detail-img-container');
+        imgContainer.innerHTML = '';
+        
+        let urls = [];
+        try {
+            urls = JSON.parse(ex.image_url);
+            if (!Array.isArray(urls)) urls = [ex.image_url];
+        } catch (e) {
+            urls = [ex.image_url];
+        }
+        
+        urls.forEach(url => {
+            const img = document.createElement('img');
+            img.className = 'exam-large-img';
+            img.src = url;
+            img.style.width = '100%';
+            img.style.objectFit = 'contain';
+            imgContainer.appendChild(img);
+        });
 
         // If it was already graded by AI or manual, we could display it here
         if (ex.ai_result) {
