@@ -586,9 +586,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapStudentBadgeToDb = (jsItem) => {
-        }
         return {
-            id: cleanId,
+            id: jsItem.id,
             student_id: String(jsItem.studentId),
             formula_id: Number(jsItem.formulaId),
             formula_name: jsItem.badgeName,
@@ -11640,7 +11639,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 (s.parentPhone === student.parentPhone || s.phone === student.phone)
             );
             // Also include the current student ID directly (for type-safe matching)
-            const studentIds = [...new Set([String(student.id), ...siblingOrSelfProfiles.map(s => String(s.id))])];
+            const studentIds = [...new Set([String(student.id), ...siblingOrSelfProfiles.map(s => String(s.id)), student.username])].filter(Boolean);
             
 
             // Word sets are per-student: show only sets assigned to this student's ID(s)
