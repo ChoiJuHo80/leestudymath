@@ -4036,7 +4036,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const mm = String(today.getMonth() + 1).padStart(2, '0');
                     const dd = String(today.getDate()).padStart(2, '0');
                     progressDateInput.value = `${yyyy}-${mm}-${dd}`;
-                    if (progressContentInput) progressContentInput.value = '';
+                    if (progressContentInput) {
+                        const existingProg = progressList.find(p => p.studentId === id && p.date === progressDateInput.value);
+                        progressContentInput.value = existingProg ? existingProg.content : '';
+                    }
                     
                     progressFormModal.classList.add('open');
                 }
@@ -4708,6 +4711,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressStudentIdInput = document.getElementById('progress-student-id');
     const progressDateInput = document.getElementById('progress-date');
     const progressContentInput = document.getElementById('progress-content');
+    if (progressDateInput) {
+        progressDateInput.addEventListener('change', () => {
+            const sid = parseStudentId(progressStudentIdInput.value);
+            const dt = progressDateInput.value;
+            if (sid && dt) {
+                const existing = progressList.find(p => p.studentId === sid && p.date === dt);
+                progressContentInput.value = existing ? existing.content : '';
+            }
+        });
+    }
     
     const chatSendForm = document.getElementById('chat-send-form');
     const chatInputMessage = document.getElementById('chat-input-message');
@@ -6729,14 +6742,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const date = progressDateInput.value;
             const content = progressContentInput.value.trim();
 
-            const newProg = {
-                id: crypto.randomUUID(),
-                studentId,
-                date,
-                content
-            };
-
-            progressList.unshift(newProg);
+            const existingProg = progressList.find(p => p.studentId === studentId && p.date === date);
+            if (existingProg) {
+                existingProg.content = content;
+            } else {
+                const newProg = {
+                    id: crypto.randomUUID(),
+                    studentId,
+                    date,
+                    content
+                };
+                progressList.unshift(newProg);
+            }
             saveProgressList();
             renderStudents(studentSearchInput ? studentSearchInput.value : '');
 
@@ -8000,6 +8017,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Batch Progress Registration Form Submit Listener
         const classProgressBatchForm = document.getElementById('class-progress-batch-form');
+        
+        const loadBatchProgressContent = () => {
+            const classSelect = document.getElementById('batch-progress-class-select');
+            const dateInput = document.getElementById('batch-progress-date-input');
+            const contentInput = document.getElementById('batch-progress-content-input');
+            
+            if (!classSelect || !dateInput || !contentInput || !classSelect.value || !dateInput.value) {
+                if (contentInput && !contentInput.value) contentInput.value = '';
+                return;
+            }
+            
+            const classId = parseStudentId(classSelect.value);
+            const date = dateInput.value;
+            const classStudents = students.filter(s => s.classId === classId);
+            
+            if (classStudents.length > 0) {
+                const firstStudent = classStudents[0];
+                const existingProg = progressList.find(p => p.studentId === firstStudent.id && p.date === date);
+                if (existingProg) {
+                    contentInput.value = existingProg.content;
+                } else {
+                    contentInput.value = '';
+                }
+            } else {
+                contentInput.value = '';
+            }
+        };
+
+        const batchProgressClassSelect = document.getElementById('batch-progress-class-select');
+        const batchProgressDateInput = document.getElementById('batch-progress-date-input');
+        if (batchProgressClassSelect) batchProgressClassSelect.addEventListener('change', loadBatchProgressContent);
+        if (batchProgressDateInput) batchProgressDateInput.addEventListener('change', loadBatchProgressContent);
+
         if (classProgressBatchForm) {
             classProgressBatchForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -8025,15 +8075,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Add progress for each student
-                classStudents.forEach((student, index) => {
-                    const newProg = {
-                        id: crypto.randomUUID(),
-                        studentId: student.id,
-                        date: date,
-                        content: content
-                    };
-                    progressList.unshift(newProg);
+                // Add or update progress for each student
+                classStudents.forEach((student) => {
+                    const existingProg = progressList.find(p => p.studentId === student.id && p.date === date);
+                    if (existingProg) {
+                        existingProg.content = content;
+                    } else {
+                        const newProg = {
+                            id: crypto.randomUUID(),
+                            studentId: student.id,
+                            date: date,
+                            content: content
+                        };
+                        progressList.unshift(newProg);
+                    }
                 });
 
                 saveProgressList();
