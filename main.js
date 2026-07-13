@@ -892,6 +892,17 @@ document.addEventListener('DOMContentLoaded', () => {
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
         document.body.appendChild(overlay);
+
+        // Safety fallback: force remove overlay if stuck
+        const safetyTimeout = setTimeout(() => {
+            const stuckOverlay = document.getElementById('app-init-overlay');
+            if (stuckOverlay) {
+                console.warn('[Database Debug] Force removing stuck overlay after timeout.');
+                stuckOverlay.remove();
+                if (isStudent && typeof renderMyClass === 'function') renderMyClass();
+            }
+        }, 8000);
+
         try {
             const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
                 try {
@@ -924,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
-            const syncResults = await Promise.all([
+            const syncPromise = Promise.all([
                 syncTable('sb_notices', mapNoticeFromDb, mapNoticeToDb, defaultNotices, 'gongbubang_notices'),
                 syncTable('sb_classes', mapClassFromDb, mapClassToDb, defaultClasses, 'gongbubang_classes'),
                 syncTable('sb_students', mapStudentFromDb, mapStudentToDb, defaultStudents, 'gongbubang_students'),
@@ -944,6 +955,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncTable('sb_word_sets', mapWordSetFromDb, mapWordSetToDb, [], 'gongbubang_word_sets'),
                 syncTable('sb_completed_vocab_sets', mapCompletedVocabFromDb, mapCompletedVocabToDb, [], 'gongbubang_completed_vocab_sets')
             ]);
+            
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase sync timeout")), 6000));
+            const syncResults = await Promise.race([syncPromise, timeoutPromise]);
 
             if (syncResults[0]) notices = syncResults[0];
             if (syncResults[1]) classes = sortClassesByName(syncResults[1]);
@@ -1106,17 +1120,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof renderApprovalList === 'function') renderApprovalList();
             }
             if (isStudent) {
-                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
-                    initializeDataFromSupabase().then(() => {
-                        if (typeof renderMyClass === 'function') renderMyClass();
-                    });
-                } else {
-                    if (typeof renderMyClass === 'function') renderMyClass();
-                }
+                if (typeof renderMyClass === 'function') renderMyClass();
             }
         } catch (err) {
             console.error('[Database Debug] Exceptional error during Supabase sync:', err);
         } finally {
+            clearTimeout(safetyTimeout);
             const overlay = document.getElementById('app-init-overlay');
             if (overlay) overlay.remove();
         }
