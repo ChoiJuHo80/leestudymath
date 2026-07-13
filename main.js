@@ -3070,6 +3070,16 @@ document.addEventListener('DOMContentLoaded', () => {
         parentSelectEl.addEventListener('change', () => {
             if (parentSelectEl.value && studentParentPhoneInput) {
                 studentParentPhoneInput.value = parentSelectEl.value;
+                if (typeof mockUsers !== 'undefined' && Array.isArray(mockUsers)) {
+                    const selectedParent = mockUsers.find(u => u.phone === parentSelectEl.value && u.role === 'parent');
+                    if (selectedParent && selectedParent.address) {
+                        const parts = selectedParent.address.split(' | ');
+                        const addressInput = document.getElementById('student-address-input');
+                        const addressDetailInput = document.getElementById('student-address-detail-input');
+                        if (addressInput) addressInput.value = parts[0] || '';
+                        if (addressDetailInput) addressDetailInput.value = parts[1] || '';
+                    }
+                }
             }
         });
     }
@@ -3825,7 +3835,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById('student-password-input').value = student.password || '';
                     }
                     if (document.getElementById('student-address-input')) {
-                        const parts = (student.address || '').split(' | ');
+                        let addrToUse = student.address || '';
+                        if (!addrToUse && student.parentPhone && typeof mockUsers !== 'undefined') {
+                            const p = mockUsers.find(u => u.phone === student.parentPhone && u.role === 'parent');
+                            if (p && p.address) addrToUse = p.address;
+                        }
+                        const parts = addrToUse.split(' | ');
                         document.getElementById('student-address-input').value = parts[0] || '';
                         if (document.getElementById('student-address-detail-input')) {
                             document.getElementById('student-address-detail-input').value = parts[1] || '';
