@@ -4330,7 +4330,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Create
                 const newStudent = {
-                    id: String(Date.now()),
+                    id: username || String(Date.now()),
                     name,
                     birthdate,
                     age,
@@ -12886,7 +12886,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Check if existing
                 let matchedStudent = students.find(s => s.name === nameVal && s.birthdate === birthdateVal);
-                let targetId = matchedStudent ? matchedStudent.id : Date.now().toString();
+                let targetId = matchedStudent ? matchedStudent.id : (usernameVal || Date.now().toString());
 
                 const updatedStudentObj = {
                     id: targetId,
