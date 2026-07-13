@@ -42,11 +42,7 @@ const injectStyles = () => {
     document.head.appendChild(style);
 };
 
-// Helper: Calculate Semester based on date
-const getSemester = (dateStr) => {
-    const d = new Date(dateStr);
-    return d.getMonth() < 7 ? 1 : 2; // Jan-Jul = 1, Aug-Dec = 2
-};
+// Removed duplicated getSemester
 
 // Helper: Get Mock Image URL (for testing without actual upload)
 const getMockImageUrl = () => `https://picsum.photos/seed/${Math.random()}/400/600`;
