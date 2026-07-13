@@ -1,6 +1,6 @@
 // ===== 이공수학 공부방 Service Worker =====
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE_VERSION = 'igong-math-v2';
+const CACHE_VERSION = 'igong-math-v3';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 
 // 오프라인에서도 보여줄 핵심 파일들
