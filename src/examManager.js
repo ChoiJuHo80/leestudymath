@@ -159,14 +159,14 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
 
     await loadExams();
 
-    const uploadInput = document.getElementById('exam-upload-input');
-    const uploadBtn = document.getElementById('btn-upload-exam');
+    const uploadInput = section.querySelector('#exam-upload-input');
+    const uploadBtn = section.querySelector('#btn-upload-exam');
 
-    uploadBtn.addEventListener('click', () => {
+    uploadBtn.onclick = () => {
         uploadInput.click();
-    });
+    };
 
-    uploadInput.addEventListener('change', async (e) => {
+    uploadInput.onchange = async (e) => {
         let files = Array.from(e.target.files);
         if (!files || files.length === 0) return;
 
