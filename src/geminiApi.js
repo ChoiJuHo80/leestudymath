@@ -10,6 +10,9 @@ export async function callGeminiVision(imageUrls) {
     const inlineDataParts = [];
     for (const url of imageUrls) {
         const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`이미지를 서버에서 불러올 수 없습니다. (삭제되었거나 접근할 수 없는 파일입니다. 상태코드: ${response.status})`);
+        }
         const blob = await response.blob();
         const reader = new FileReader();
         const base64Promise = new Promise(resolve => {
