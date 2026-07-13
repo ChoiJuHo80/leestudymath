@@ -671,4 +671,7 @@ export const initAdminExamDashboard = () => {
             renderRows(e.target.dataset.filter);
         });
     });
+
+    // Auto-search on open
+    loadDashboardData();
 };
