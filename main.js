@@ -11675,10 +11675,10 @@ document.addEventListener('DOMContentLoaded', () => {
             filtered.forEach(set => {
                 const item = document.createElement('div');
                 item.style.display = 'flex';
+                item.style.flexDirection = 'column';
+                item.style.gap = '12px';
                 item.style.overflow = 'hidden';
-                item.style.justifyContent = 'space-between';
-                item.style.alignItems = 'center';
-                item.style.padding = '12px 18px';
+                item.style.padding = '14px 18px';
                 item.style.borderRadius = '16px';
                 item.style.cursor = 'pointer';
                 item.style.transition = 'all 0.2s';
@@ -11711,14 +11711,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (isSpecial) {
                     item.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; overflow: hidden;">
+                        <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;">
                             <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); background: #ffffff; padding: 2.5px 8px; border-radius: 20px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; flex-shrink: 0;">
                                 🌟 대표
                             </span>
-                            <span style="font-weight: 800; font-size: 0.95rem; color: #ffffff; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;">${set.title}</span>
+                            <span style="font-weight: 800; font-size: 0.95rem; color: #ffffff; letter-spacing: -0.3px; word-break: keep-all; line-height: 1.4; flex: 1;">${set.title}</span>
                             <span style="font-size: 0.78rem; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;">${set.words.length} 카드</span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;" class="vocab-action-area">
                             <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: ${isCompleted ? 'rgba(255,255,255,0.2)' : 'transparent'}; color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
                                 <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px; color: #ffffff;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
                             </button>
@@ -11737,14 +11737,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 } else {
                     item.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; overflow: hidden;">
+                        <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;">
                             <span style="font-size: 0.72rem; color: #ffffff; background: ${isPersonal ? 'var(--mascot-purple-bg)' : '#82b444'}; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; flex-shrink: 0;">
                                 ${isPersonal ? '나만의' : '클래스'}
                             </span>
-                            <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;">${set.title}</span>
+                            <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary); word-break: keep-all; line-height: 1.4; flex: 1;">${set.title}</span>
                             <span style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap; flex-shrink: 0;">${set.words.length} 카드</span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;" class="vocab-action-area">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;" class="vocab-action-area">
                             <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid ${isCompleted ? '#22c55e' : 'var(--border-color)'}; background: ${isCompleted ? '#f0fdf4' : '#ffffff'}; color: ${isCompleted ? '#22c55e' : 'var(--text-secondary)'}; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
                                 <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
                             </button>
