@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapWordSetToDb = (jsItem) => {
         return {
-            id: jsItem.id || Date.now(),
+            id: jsItem.id || String(Date.now() + Math.random()),
             class_id: safeStringId(jsItem.classId) || null,
             student_id: jsItem.studentId || null,
             title: jsItem.title || '제목 없음',
@@ -10683,7 +10683,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!student) return;
             
             // Seed vocabulary sets if empty
-            seedDefaultWordSets();
+            // seedDefaultWordSets();
             renderStudentVocabularySets(student);
             
             const profileShelf = document.getElementById('student-profile-badge-shelf');
