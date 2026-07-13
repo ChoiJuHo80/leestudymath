@@ -24,7 +24,7 @@ const injectStyles = () => {
         .score-trend.up { color: #16a34a; font-weight: bold; }
         .score-trend.down { color: #dc2626; font-weight: bold; }
         
-        .exam-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; }
+        .exam-modal-overlay { position: absolute; left: 0; right: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; }
         .exam-modal-box { background: #fff; width: 90%; max-width: 600px; border-radius: 16px; padding: 24px; position: relative; max-height: 90vh; overflow-y: auto; }
         .exam-modal-box.admin-large { max-width: 900px; }
         .exam-modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
@@ -290,6 +290,8 @@ const openTeacherExamModal = async (student) => {
             </div>
         </div>
     `;
+    modal.style.top = window.scrollY + 'px';
+    modal.style.height = window.innerHeight + 'px';
     modal.style.display = 'flex';
 
     const loadTeacherExams = async () => {
@@ -333,28 +335,12 @@ const openTeacherExamModal = async (student) => {
         }
         
         urls.forEach(url => {
-            const wrapper = document.createElement('div');
-            wrapper.style.overflow = 'hidden';
-            wrapper.style.width = '100%';
-            wrapper.style.marginBottom = '16px';
-            wrapper.style.position = 'relative';
-
             const img = document.createElement('img');
+            img.className = 'exam-large-img';
             img.src = url;
             img.style.width = '100%';
-            img.style.display = 'block';
             img.style.objectFit = 'contain';
-            
-            wrapper.appendChild(img);
-            imgContainer.appendChild(wrapper);
-
-            if (window.Panzoom) {
-                const panzoom = Panzoom(img, {
-                    maxScale: 5,
-                    contain: 'outside'
-                });
-                wrapper.addEventListener('wheel', panzoom.zoomWithWheel);
-            }
+            imgContainer.appendChild(img);
         });
 
         // If it was already graded by AI or manual, we could display it here
@@ -572,6 +558,8 @@ export const initAdminExamDashboard = () => {
             </div>
         </div>
     `;
+    modal.style.top = window.scrollY + 'px';
+    modal.style.height = window.innerHeight + 'px';
     modal.style.display = 'flex';
     if (window.lucide) window.lucide.createIcons();
 
