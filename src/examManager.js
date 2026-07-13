@@ -393,7 +393,7 @@ const openTeacherExamModal = async (student) => {
             btn.textContent = 'AI 분석 중... (최대 1분 소요)';
             
             try {
-                const result = await callGeminiVision(ex.image_url);
+                const result = await callGeminiVision(urls);
                 window.currentAiResult = result;
                 
                 document.getElementById('ai-grading-container').style.display = 'block';
