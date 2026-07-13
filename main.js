@@ -6397,38 +6397,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.setItem('gongbubang_last_student_email', email);
                         localStorage.removeItem('gongbubang_student_session'); // clear student session
                         
-                        const name = data.user.user_metadata?.name || '신규학생';
-                        const phone = data.user.user_metadata?.phone || '';
+                        const role = data.user.user_metadata?.role || 'parent';
+                        userRole = role;
 
-                        // Check if student record exists, otherwise create
-                        let studentRecord = students.find(s => s.id === data.user.id || (s.name === name && (s.parentPhone === phone || s.phone === phone)));
-                        if (!studentRecord) {
-                            studentRecord = {
-                                id: data.user.id,
-                                name,
-                                age: 10,
-                                school: '공부방 초등학교',
-                                phone: '',
-                                parentPhone: phone,
-                                sibling: '없음',
-                                schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
-                                progress: '개념 완성 과정 등록 대기 중',
-                                remarks: 'Supabase로 가입된 계정입니다. 스케줄을 추가해 주세요.',
-                                address: data.user.user_metadata?.address || ''
-                            };
-                            students.unshift(studentRecord);
-                            saveStudents();
-                        } else if (studentRecord.id !== data.user.id) {
-                            // Sync ID
-                            students = students.map(s => s.id === studentRecord.id ? { ...s, id: data.user.id, address: data.user.user_metadata?.address || s.address } : s);
-                            saveStudents();
-                        }
-
-                        // Success login state
-                        isStudent = true;
-                        loggedInStudentId = data.user.id;
-                        userRole = 'parent';
-
+                        // Rely on onAuthStateChange to set up student/parent state properly
+                        
                         // Hide admin/teacher panels to avoid clash
                         if (isAdmin) {
                             isAdmin = false;
@@ -7308,7 +7281,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
                     (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
                     String(s.id).startsWith(session.user.id) ||
-                    (parentPhone && s.parentPhone === parentPhone)
+                    (parentPhone && s.parentPhone && normalizePhone(s.parentPhone) === normalizePhone(parentPhone))
                 );
 
                 // If no records linked yet, auto-create them from children metadata
@@ -7343,7 +7316,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
                         (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
                         String(s.id).startsWith(session.user.id) ||
-                        (parentPhone && s.parentPhone === parentPhone)
+                        (parentPhone && s.parentPhone && normalizePhone(s.parentPhone) === normalizePhone(parentPhone))
                     );
                 }
 
