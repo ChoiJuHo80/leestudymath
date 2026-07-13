@@ -1,4 +1,6 @@
 import { supabase } from '../supabase.js';
+import { callGeminiVision } from './geminiApi.js';
+import { getSemester } from './utils.js';
 
 // Inject basic CSS for exams
 const injectStyles = () => {
@@ -65,6 +67,7 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
     section.innerHTML = `
         <div class="exam-header">
             <h3><i data-lucide="file-text" style="width:18px;height:18px;vertical-align:middle;margin-right:6px;"></i>내 시험지함</h3>
+            <input type="file" id="exam-upload-input" accept="image/*" style="display:none;" />
             <button id="btn-upload-exam" class="exam-upload-btn">시험지 업로드</button>
         </div>
         <div id="student-exam-list" class="exam-list">로딩 중...</div>
@@ -123,28 +126,65 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
 
     await loadExams();
 
-    document.getElementById('btn-upload-exam').addEventListener('click', async () => {
-        if (!confirm('새로운 시험지를 가상으로 업로드하시겠습니까? (테스트를 위해 가짜 이미지 저장)')) return;
+    const uploadInput = document.getElementById('exam-upload-input');
+    const uploadBtn = document.getElementById('btn-upload-exam');
 
-        // Calculate next sequence
-        const { data: existingExams } = await supabase.from('exams').select('semester, sequence').eq('student_id', studentId);
-        const currentSem = getSemester(new Date().toISOString());
-        const semExams = (existingExams || []).filter(e => e.semester === currentSem);
-        const nextSeq = semExams.length + 1;
+    uploadBtn.addEventListener('click', () => {
+        uploadInput.click();
+    });
 
-        const { error } = await supabase.from('exams').insert([{
-            student_id: studentId,
-            image_url: getMockImageUrl(),
-            semester: currentSem,
-            sequence: nextSeq,
-            status: '미채점'
-        }]);
+    uploadInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-        if (error) {
-            alert('업로드 실패: ' + error.message);
-        } else {
-            alert('업로드 완료!');
-            loadExams();
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = '업로드 중...';
+
+        try {
+            // Upload to Supabase Storage
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${studentId}_${Date.now()}.${fileExt}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('exam-papers')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            // Get Public URL
+            const { data: publicUrlData } = supabase.storage
+                .from('exam-papers')
+                .getPublicUrl(fileName);
+
+            const imageUrl = publicUrlData.publicUrl;
+
+            // Calculate next sequence
+            const { data: existingExams } = await supabase.from('exams').select('semester, sequence').eq('student_id', studentId);
+            const currentSem = getSemester(new Date().toISOString());
+            const semExams = (existingExams || []).filter(ex => ex.semester === currentSem);
+            const nextSeq = semExams.length + 1;
+
+            // Insert into exams table
+            const { error: dbError } = await supabase.from('exams').insert([{
+                student_id: studentId,
+                image_url: imageUrl,
+                semester: currentSem,
+                sequence: nextSeq,
+                status: '미채점'
+            }]);
+
+            if (dbError) throw dbError;
+
+            if (typeof showToast === 'function') showToast('시험지가 성공적으로 업로드되었습니다.');
+            else alert('시험지 업로드 완료!');
+            
+            await loadExams();
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('업로드 중 오류가 발생했습니다: ' + error.message);
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '시험지 업로드';
+            uploadInput.value = ''; // Reset
         }
     });
 };
@@ -182,9 +222,26 @@ const openTeacherExamModal = async (student) => {
             <div id="teacher-exam-detail" style="display:none; margin-top: 20px; border-top: 1px solid #ddd; padding-top:20px;">
                 <h3 id="detail-title"></h3>
                 <img id="detail-img" class="exam-large-img" src="">
-                <div style="display:flex; gap:10px;">
-                    <button id="btn-auto-grade" class="btn-primary" style="flex:1;">정답지 등록 및 자동채점 (연동)</button>
-                    <button id="btn-manual-score" class="btn-secondary" style="flex:1;">최종 점수 확정</button>
+                
+                <div id="ai-grading-container" style="display:none; margin-top:15px; padding:15px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
+                    <h4 style="margin-bottom:10px;">가채점 결과 (수정 가능)</h4>
+                    <table class="admin-table" style="width:100%; text-align:center;">
+                        <thead>
+                            <tr>
+                                <th>문제</th>
+                                <th>AI 도출 정답</th>
+                                <th>학생 답안</th>
+                                <th>채점결과</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ai-result-tbody"></tbody>
+                    </table>
+                    <div style="text-align:right; margin-top:10px; font-weight:bold; font-size:1.1em;" id="ai-total-score"></div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button id="btn-auto-grade" class="btn-primary" style="flex:1;">AI 가채점 시작</button>
+                    <button id="btn-manual-score" class="btn-secondary" style="flex:1; display:none;">최종 채점 적용 (저장)</button>
                 </div>
             </div>
         </div>
@@ -222,27 +279,96 @@ const openTeacherExamModal = async (student) => {
         document.getElementById('detail-title').textContent = `${ex.semester}학기 ${ex.sequence}번째 시험지`;
         document.getElementById('detail-img').src = ex.image_url;
 
-        document.getElementById('btn-auto-grade').onclick = async () => {
-            if (!student.school || !student.grade) {
-                alert('학생 정보에 학교와 학년이 설정되어 있지 않아 연동이 불가능합니다.');
-                return;
-            }
-            alert(`${student.school} ${student.grade} 정답지를 기준으로 가상 자동채점을 진행합니다...`);
+        // If it was already graded by AI or manual, we could display it here
+        if (ex.ai_result) {
+            document.getElementById('ai-grading-container').style.display = 'block';
+            document.getElementById('btn-manual-score').style.display = 'inline-block';
+            document.getElementById('btn-auto-grade').textContent = 'AI 가채점 재시도';
+            window.currentAiResult = ex.ai_result;
+            renderAiResult(window.currentAiResult);
+        } else {
+            document.getElementById('ai-grading-container').style.display = 'none';
+            document.getElementById('btn-manual-score').style.display = 'none';
+            document.getElementById('btn-auto-grade').textContent = 'AI 가채점 시작';
+            window.currentAiResult = null;
+        }
+
+        const renderAiResult = (resultData) => {
+            const tbody = document.getElementById('ai-result-tbody');
+            tbody.innerHTML = '';
             
-            // Mock grading process
-            setTimeout(() => {
-                alert('자동채점 완료! 가채점 점수: 85점');
-            }, 1000);
+            let correctCount = 0;
+            
+            resultData.forEach((row, i) => {
+                const isCorrect = String(row.correct) === String(row.student);
+                if (isCorrect) correctCount++;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.q}</td>
+                    <td><input type="text" value="${row.correct}" data-index="${i}" class="edit-correct" style="width:60px; text-align:center; padding:4px; border:1px solid #cbd5e1; border-radius:4px;"></td>
+                    <td>${row.student}</td>
+                    <td id="res-${i}" style="color: ${isCorrect ? '#10b981' : '#ef4444'}; font-weight:bold;">${isCorrect ? 'O' : 'X'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            const totalScore = Math.round((correctCount / resultData.length) * 100) || 0;
+            document.getElementById('ai-total-score').textContent = `예상 점수: ${totalScore}점`;
+            
+            document.querySelectorAll('.edit-correct').forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const idx = e.target.getAttribute('data-index');
+                    resultData[idx].correct = e.target.value;
+                    renderAiResult(resultData);
+                });
+            });
+        };
+
+        document.getElementById('btn-auto-grade').onclick = async () => {
+            const btn = document.getElementById('btn-auto-grade');
+            btn.disabled = true;
+            btn.textContent = 'AI 분석 중... (최대 1분 소요)';
+            
+            try {
+                const result = await callGeminiVision(ex.image_url);
+                window.currentAiResult = result;
+                
+                document.getElementById('ai-grading-container').style.display = 'block';
+                document.getElementById('btn-manual-score').style.display = 'inline-block';
+                
+                renderAiResult(window.currentAiResult);
+            } catch (err) {
+                alert('AI 채점 중 오류 발생: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'AI 가채점 재시도';
+            }
         };
 
         document.getElementById('btn-manual-score').onclick = async () => {
-            const score = prompt('최종 점수를 입력하세요:', ex.final_score || '85');
-            if (score !== null) {
-                await supabase.from('exams').update({ status: '채점완료', final_score: parseInt(score) }).eq('id', ex.id);
-                alert('저장되었습니다.');
-                document.getElementById('teacher-exam-detail').style.display = 'none';
-                loadTeacherExams();
+            if (!window.currentAiResult) return;
+            
+            let correctCount = 0;
+            window.currentAiResult.forEach(row => {
+                if (String(row.correct) === String(row.student)) correctCount++;
+            });
+            const score = Math.round((correctCount / window.currentAiResult.length) * 100) || 0;
+            
+            const { error } = await supabase.from('exams').update({ 
+                status: '채점완료', 
+                final_score: score,
+                ai_result: window.currentAiResult,
+                final_result: window.currentAiResult
+            }).eq('id', ex.id);
+            
+            if (error) {
+                alert('저장 실패: ' + error.message);
+                return;
             }
+            alert(`최종 점수 ${score}점으로 확정되었습니다.`);
+            document.getElementById('teacher-exam-detail').style.display = 'none';
+            loadTeacherExams();
         };
     };
 
