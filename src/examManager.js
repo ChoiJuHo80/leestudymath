@@ -148,8 +148,14 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
     });
 
     uploadInput.addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files);
+        let files = Array.from(e.target.files);
         if (!files || files.length === 0) return;
+
+        if (files.length > 6) {
+            alert('사진은 한 번에 최대 6장까지만 업로드할 수 있습니다.');
+            uploadInput.value = ''; // Reset
+            return;
+        }
 
         uploadBtn.disabled = true;
         uploadBtn.textContent = '업로드 중...';
