@@ -379,10 +379,32 @@ const openTeacherExamModal = async (student) => {
             document.getElementById('ai-total-score').textContent = `예상 점수: ${totalScore}점`;
             
             document.querySelectorAll('.edit-correct').forEach(inp => {
+                inp.addEventListener('click', (e) => {
+                    e.target.value = '';
+                    const idx = e.target.getAttribute('data-index');
+                    resultData[idx].correct = '';
+                    renderAiResult(resultData);
+                    
+                    // Restore focus after re-render
+                    setTimeout(() => {
+                        const newInp = document.querySelector(`.edit-correct[data-index="${idx}"]`);
+                        if (newInp) newInp.focus();
+                    }, 0);
+                });
                 inp.addEventListener('input', (e) => {
                     const idx = e.target.getAttribute('data-index');
                     resultData[idx].correct = e.target.value;
                     renderAiResult(resultData);
+                    
+                    // Restore focus after re-render
+                    setTimeout(() => {
+                        const newInp = document.querySelector(`.edit-correct[data-index="${idx}"]`);
+                        if (newInp) {
+                            newInp.focus();
+                            // Move cursor to end
+                            newInp.selectionStart = newInp.selectionEnd = newInp.value.length;
+                        }
+                    }, 0);
                 });
             });
         };
