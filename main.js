@@ -569,11 +569,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mapWordSetToDb = (jsItem) => {
         return {
-            id: jsItem.id,
+            id: jsItem.id || Date.now(),
             class_id: safeStringId(jsItem.classId) || null,
             student_id: jsItem.studentId || null,
-            title: jsItem.title,
-            words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : jsItem.words,
+            title: jsItem.title || '제목 없음',
+            words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : (jsItem.words || '[]'),
             created_at: new Date().toISOString()
         };
     };
@@ -11354,7 +11354,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof supabase !== 'undefined' && supabase && !isMock) {
                 try {
                     const mapped = wordSets.map(mapWordSetToDb);
-                    await supabase.from('sb_word_sets').upsert(mapped);
+                    const { error } = await supabase.from('sb_word_sets').upsert(mapped);
+                    if (error) {
+                        console.error('[Supabase Error] saving word sets:', error);
+                        alert('단어장 저장 중 서버 오류가 발생했습니다: ' + error.message);
+                    }
                 } catch(e) {
                     console.error('Error saving word sets to Supabase:', e);
                 }
