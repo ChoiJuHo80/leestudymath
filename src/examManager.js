@@ -472,6 +472,11 @@ export const initAdminExamDashboard = () => {
                     <option value="4">4번째 시험</option>
                     <option value="5">5번째 시험</option>
                 </select>
+                <select id="admin-filter-status" class="admin-exam-select">
+                    <option value="전체">전체 상태</option>
+                    <option value="미채점">미채점</option>
+                    <option value="채점완료">채점완료</option>
+                </select>
                 <button id="btn-admin-search-exams" class="exam-upload-btn">조회하기</button>
             </div>
 
@@ -491,10 +496,11 @@ export const initAdminExamDashboard = () => {
                             <th>점수</th>
                             <th>향상도 (이전 순번 대비)</th>
                             <th>상태</th>
+                            <th>관리</th>
                         </tr>
                     </thead>
                     <tbody id="admin-exam-tbody">
-                        <tr><td colspan="6" style="text-align:center; padding: 20px; color:#888;">조건을 선택하고 조회하세요.</td></tr>
+                        <tr><td colspan="7" style="text-align:center; padding: 20px; color:#888;">조건을 선택하고 조회하세요.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -509,20 +515,26 @@ export const initAdminExamDashboard = () => {
         const gradeVal = document.getElementById('admin-filter-grade').value;
         const semVal = parseInt(document.getElementById('admin-filter-sem').value);
         const seqVal = parseInt(document.getElementById('admin-filter-seq').value);
+        const statusVal = document.getElementById('admin-filter-status').value;
 
         const tbody = document.getElementById('admin-exam-tbody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">데이터를 불러오는 중...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">데이터를 불러오는 중...</td></tr>';
 
         // Get target exams
-        let { data: currentExams, error } = await supabase
+        let query = supabase
             .from('exams')
             .select('*')
             .eq('semester', semVal)
-            .eq('sequence', seqVal)
-            .eq('status', '채점완료');
+            .eq('sequence', seqVal);
+            
+        if (statusVal !== '전체') {
+            query = query.eq('status', statusVal);
+        }
+
+        let { data: currentExams, error } = await query;
 
         if (error || !currentExams) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">데이터 불러오기 실패</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">데이터 불러오기 실패</td></tr>';
             return;
         }
 
@@ -560,12 +572,14 @@ export const initAdminExamDashboard = () => {
             else if (diff === null) trendType = 'none';
 
             currentRowsData.push({
+                student: st,
                 school: st.school || '-',
                 grade: st.grade || '-',
                 name: st.name,
-                score: ex.final_score,
+                score: ex.final_score !== null ? ex.final_score : '-',
                 diff,
-                trendType
+                trendType,
+                status: ex.status
             });
         });
 
@@ -583,26 +597,39 @@ export const initAdminExamDashboard = () => {
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">조건에 맞는 결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">조건에 맞는 결과가 없습니다.</td></tr>';
             return;
         }
 
-        filtered.forEach(row => {
+        filtered.forEach((row, index) => {
             let trendHtml = '-';
             if (row.trendType === 'up') trendHtml = `<span class="score-trend up">▲ +${row.diff}</span>`;
             else if (row.trendType === 'down') trendHtml = `<span class="score-trend down">▼ ${row.diff}</span>`;
             else if (row.diff === 0) trendHtml = '동일';
+
+            const statusClass = row.status === '채점완료' ? 'status-graded' : 'status-ungraded';
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${row.school}</td>
                 <td>${row.grade}</td>
                 <td><strong>${row.name}</strong></td>
-                <td>${row.score}점</td>
+                <td>${row.score}${row.score !== '-' ? '점' : ''}</td>
                 <td>${trendHtml}</td>
-                <td><span class="exam-status status-graded">채점완료</span></td>
+                <td><span class="exam-status ${statusClass}">${row.status}</span></td>
+                <td><button class="btn-manage-exam" data-index="${index}" style="padding: 4px 10px; font-size: 0.8rem; background: var(--mascot-purple-bg); color: white; border: none; border-radius: 4px; cursor: pointer;">채점/관리</button></td>
             `;
             tbody.appendChild(tr);
+        });
+
+        // Add event listeners for management buttons
+        const manageBtns = tbody.querySelectorAll('.btn-manage-exam');
+        manageBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                const row = filtered[idx];
+                openTeacherExamModal(row.student);
+            });
         });
     };
 
