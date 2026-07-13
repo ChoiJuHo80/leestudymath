@@ -52,7 +52,7 @@ export async function callGeminiVision(imageUrls) {
     const data = await res.json();
     if (data.error) {
         if (data.error.message && data.error.message.includes('Quota exceeded') || res.status === 429) {
-            throw new Error('AI 스캔 사용량이 초과되었습니다. (무료 제공 한도 초과) 약 1분 후에 다시 시도해주세요.');
+            throw new Error('AI 가채점 사용량이 초과되었습니다. (무료 제공 한도 초과) 약 1분 후에 다시 시도해주세요.');
         }
         throw new Error(data.error.message);
     }
