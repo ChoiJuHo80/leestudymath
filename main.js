@@ -5877,8 +5877,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 
-                if (!childClass || !childClass.textbooks || childClass.textbooks.length === 0) {
-                    childHtml += '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 6px 12px;">이 반에 등록된 교재가 없습니다.</div>';
+                const classTextbooks = (childClass && childClass.textbooks) ? childClass.textbooks : [];
+                const childReqs = textbookRequests.filter(r => String(r.studentId) === String(child.id));
+                
+                // Combine textbooks to display: class textbooks + any requests not in class textbooks
+                const displayItems = [];
+                const addedNames = new Set();
+                
+                classTextbooks.forEach(tb => {
+                    displayItems.push({ name: tb.name, price: tb.price, fromClass: true });
+                    addedNames.add(tb.name);
+                });
+                
+                childReqs.forEach(req => {
+                    if (!addedNames.has(req.textbookName)) {
+                        displayItems.push({ name: req.textbookName, price: req.price, fromClass: false });
+                        addedNames.add(req.textbookName);
+                    }
+                });
+
+                if (displayItems.length === 0) {
+                    childHtml += '<div style="color: var(--text-muted); font-size: 0.82rem; padding: 6px 12px;">등록된 교재나 청구 내역이 없습니다.</div>';
                     totalHtml += childHtml;
                     return;
                 }
@@ -5886,8 +5905,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let unpaidHtml = '';
                 let paidHtml = '';
 
-                childClass.textbooks.forEach(tb => {
-                    const req = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tb.name);
+                displayItems.forEach(tb => {
+                    const req = childReqs.find(r => r.textbookName === tb.name);
                     const isPaid = req && req.paymentStatus === '결제완료';
 
                     let actionHtml = '';
@@ -5928,11 +5947,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (unpaidHtml) {
-                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: #ef4444; margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></span> 미결제 교재</div>` + unpaidHtml;
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: #ef4444; margin-top: 6px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></span> 미결제 내역</div>` + unpaidHtml;
                 }
                 if (paidHtml) {
-                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: var(--mascot-green-bg); margin-top: 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mascot-green-bg);"></span> 구매 완료 교재</div>` + paidHtml;
+                    childHtml += `<div style="font-size: 0.8rem; font-weight: 800; color: var(--mascot-green-bg); margin-top: 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mascot-green-bg);"></span> 구매/결제 완료 내역</div>` + paidHtml;
                 }
+
 
                 totalHtml += childHtml;
             });
@@ -6319,11 +6339,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentStudents.unshift(foundStudent);
                     students = currentStudents;
                     saveStudents();
-                } else if (!foundStudent.classId) {
-                    foundStudent.classId = 1; // Heal existing student record
-                    students = currentStudents;
-                    saveStudents();
-                }
 
                 // Logged in successfully
                 localStorage.setItem('gongbubang_last_student_name', inputId);
