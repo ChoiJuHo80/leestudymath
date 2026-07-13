@@ -27,6 +27,7 @@ jobs:
       env:
         VITE_SUPABASE_URL: https://xqdfyyfiroukkluygvkq.supabase.co
         VITE_SUPABASE_ANON_KEY: sb_publishable_VzYxmxytt9IFqmFuI9FW7Q_V9mDciJK
+        VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
       run: npm run build
 
     - name: Authenticate to Google Cloud
