@@ -56,3 +56,39 @@ export async function callGeminiVision(imageUrls) {
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(text);
 }
+
+export async function callGeminiVocabOCR(base64Data, mimeType) {
+    if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
+    
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const prompt = `이 이미지는 영어 단어장 또는 유인물 사진입니다. 
+이미지 내의 모든 영어 단어와 그 뜻을 추출해주세요.
+결과는 반드시 순수한 JSON 배열 형태로만 반환해주세요. 다른 텍스트나 마크다운(\`\`\`json 등)은 절대 포함하지 마세요.
+형식 예시: [{"word": "apple", "meaning": "사과"}, {"word": "book", "meaning": "책"}]`;
+
+    const payload = {
+        contents: [{
+            parts: [
+                { text: prompt },
+                { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Data } }
+            ]
+        }],
+        generationConfig: {
+            temperature: 0.1
+        }
+    };
+
+    const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    
+    let text = data.candidates[0].content.parts[0].text;
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(text);
+}

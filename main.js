@@ -1,5 +1,6 @@
 import { supabase, publicSupabase, isMock } from './supabase.js';
 import { initStudentExamView, initTeacherExamView, initAdminExamDashboard, updateUngradedBadge } from './src/examManager.js';
+import { callGeminiVocabOCR } from './src/geminiApi.js';
 window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
@@ -11619,21 +11620,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const vocabOcrFile = document.getElementById('vocab-ocr-file');
         if (btnVocabOcr && vocabOcrFile) {
             btnVocabOcr.addEventListener('click', () => vocabOcrFile.click());
-            vocabOcrFile.addEventListener('change', (e) => {
+            vocabOcrFile.addEventListener('change', async (e) => {
                 if (e.target.files && e.target.files[0]) {
                     showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
-                    setTimeout(() => {
-                        // Scan complete: Map default vocabulary words
-                        const withExamples = defaultVocabularyWords.map((w, idx) => ({
-                            word: w.word,
-                            meaning: w.meaning,
-                            example: `Q${idx + 1}. Example sentence using "${w.word.split(' ')[0]}".`
-                        }));
-                        renderVocabAdminRows(withExamples);
-                        const titleInput = document.getElementById('vocab-title-input');
-                        if (titleInput) titleInput.value = '이준 영단어 6월29일';
-                        showToast('유인물 분석이 완료되었습니다. 1~30번 영단어가 자동으로 매핑되었습니다!');
-                    }, 1200);
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        try {
+                            const result = await callGeminiVocabOCR(base64Data, file.type);
+                            const withExamples = result.map((w, idx) => ({
+                                word: w.word,
+                                meaning: w.meaning,
+                                example: `Q${idx + 1}. Example sentence using "${w.word}".`
+                            }));
+                            renderVocabAdminRows(withExamples);
+                            const titleInput = document.getElementById('vocab-title-input');
+                            if (titleInput) titleInput.value = '스캔된 영단어장';
+                            showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
+                        } catch (err) {
+                            showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
+                        }
+                    };
+                    reader.readAsDataURL(file);
                 }
             });
         }
@@ -12534,20 +12543,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const studentOcrFile = document.getElementById('student-vocab-ocr-file');
         if (btnStudentOcr && studentOcrFile) {
             btnStudentOcr.addEventListener('click', () => studentOcrFile.click());
-            studentOcrFile.addEventListener('change', (e) => {
+            studentOcrFile.addEventListener('change', async (e) => {
                 if (e.target.files && e.target.files[0]) {
                     showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
-                    setTimeout(() => {
-                        const withExamples = defaultVocabularyWords.map((w, idx) => ({
-                            word: w.word,
-                            meaning: w.meaning,
-                            example: `Q${idx + 1}. Example sentence.`
-                        }));
-                        renderStudentVocabCreatorRows(withExamples);
-                        const titleInput = document.getElementById('student-vocab-title');
-                        if (titleInput) titleInput.value = '이준 영단어 7월 06일';
-                        showToast('유인물 분석이 완료되었습니다. 1~30번 영단어가 자동으로 매핑되었습니다!');
-                    }, 1200);
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        try {
+                            const result = await callGeminiVocabOCR(base64Data, file.type);
+                            const withExamples = result.map((w, idx) => ({
+                                word: w.word,
+                                meaning: w.meaning,
+                                example: `Q${idx + 1}. Example sentence.`
+                            }));
+                            renderStudentVocabCreatorRows(withExamples);
+                            const titleInput = document.getElementById('student-vocab-title');
+                            if (titleInput) titleInput.value = '스캔된 영단어장';
+                            showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
+                        } catch (err) {
+                            showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
+                        }
+                    };
+                    reader.readAsDataURL(file);
                 }
             });
         }
