@@ -4941,8 +4941,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (callback) {
             sessionStorage.removeItem('login_callback_url');
             
-            // Clean up query parameters in URL
-            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            // Clean up ONLY the login-related query parameters in URL if any, but preserve others like ?v=
+            const url = new URL(window.location.href);
+            // We don't need to strip anything here usually, but if we did we'd use url.searchParams.delete()
+            const cleanUrl = url.pathname + url.search;
             window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
 
             // Redirect / Scroll to target section
