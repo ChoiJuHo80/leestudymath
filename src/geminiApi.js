@@ -20,7 +20,7 @@ export async function callGeminiVision(imageUrls) {
         inlineDataParts.push({ inlineData: { mimeType: blob.type || 'image/jpeg', data: base64Data } });
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     const prompt = `이 이미지는 수학 시험지와 학생이 푼 답안입니다. (이미지가 여러 장일 경우 순서대로 연결된 하나의 시험지입니다.) 1번 문제부터 마지막 문제까지 순서대로 판독해주세요.
 1. 각 문제의 '정답'(AI가 스스로 푼 올바른 답)을 도출하세요.
