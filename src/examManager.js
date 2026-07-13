@@ -333,12 +333,28 @@ const openTeacherExamModal = async (student) => {
         }
         
         urls.forEach(url => {
+            const wrapper = document.createElement('div');
+            wrapper.style.overflow = 'hidden';
+            wrapper.style.width = '100%';
+            wrapper.style.marginBottom = '16px';
+            wrapper.style.position = 'relative';
+
             const img = document.createElement('img');
-            img.className = 'exam-large-img';
             img.src = url;
             img.style.width = '100%';
+            img.style.display = 'block';
             img.style.objectFit = 'contain';
-            imgContainer.appendChild(img);
+            
+            wrapper.appendChild(img);
+            imgContainer.appendChild(wrapper);
+
+            if (window.Panzoom) {
+                const panzoom = Panzoom(img, {
+                    maxScale: 5,
+                    contain: 'outside'
+                });
+                wrapper.addEventListener('wheel', panzoom.zoomWithWheel);
+            }
         });
 
         // If it was already graded by AI or manual, we could display it here
