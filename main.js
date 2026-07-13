@@ -1106,7 +1106,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof renderApprovalList === 'function') renderApprovalList();
             }
             if (isStudent) {
-                if (typeof renderMyClass === 'function') renderMyClass();
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    initializeDataFromSupabase().then(() => {
+                        if (typeof renderMyClass === 'function') renderMyClass();
+                    });
+                } else {
+                    if (typeof renderMyClass === 'function') renderMyClass();
+                }
             }
         } catch (err) {
             console.error('[Database Debug] Exceptional error during Supabase sync:', err);
@@ -6374,6 +6380,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
                 if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
 
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
                 renderMyClass();
                 showToast(`[로그인 성공] ${foundStudent.name} 학생 포털에 연결되었습니다.`);
 
@@ -6514,6 +6523,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
                         if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
 
+                        if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                            await initializeDataFromSupabase();
+                        }
                         renderMyClass();
                         showToast(`[로그인 성공] ${name} 학부모 포털에 연결되었습니다.`);
 
@@ -7438,6 +7450,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resourcesSection = document.getElementById('resources');
                 if (resourcesSection) resourcesSection.style.display = 'none';
 
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
                 renderMyClass();
             }
         } else {
