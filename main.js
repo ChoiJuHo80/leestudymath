@@ -6339,6 +6339,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentStudents.unshift(foundStudent);
                     students = currentStudents;
                     saveStudents();
+                }
 
                 // Logged in successfully
                 localStorage.setItem('gongbubang_last_student_name', inputId);
