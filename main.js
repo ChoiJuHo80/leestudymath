@@ -11636,7 +11636,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }));
                             renderVocabAdminRows(withExamples);
                             const titleInput = document.getElementById('vocab-title-input');
-                            if (titleInput) titleInput.value = '스캔된 영단어장';
+                            if (titleInput) titleInput.value = `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`;
                             showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
                         } catch (err) {
                             showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
@@ -12559,7 +12559,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }));
                             renderStudentVocabCreatorRows(withExamples);
                             const titleInput = document.getElementById('student-vocab-title');
-                            if (titleInput) titleInput.value = '스캔된 영단어장';
+                            if (titleInput) titleInput.value = `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`;
                             showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
                         } catch (err) {
                             showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
