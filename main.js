@@ -549,9 +549,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapClassFormulaToDb = (jsItem) => {
-        if (typeof jsItem.id === 'string') {
-            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
-        }
         return {
             id: jsItem.id,
             class_id: safeStringId(jsItem.classId),
@@ -570,9 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapWordSetToDb = (jsItem) => {
-        if (typeof jsItem.id === 'string') {
-            jsItem.id = Number(jsItem.id.replace(/[^\d]/g, '').slice(0, 15));
-        }
         return {
             id: jsItem.id,
             class_id: safeStringId(jsItem.classId) || null,
@@ -592,11 +586,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const mapStudentBadgeToDb = (jsItem) => {
-        let cleanId = jsItem.id;
-        if (typeof cleanId === 'string') {
-            cleanId = Number(cleanId.replace(/[^\d]/g, '').slice(0, 15));
-        } else if (typeof cleanId === 'number') {
-            cleanId = Number(String(cleanId).slice(0, 15));
         }
         return {
             id: cleanId,
@@ -1132,6 +1121,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
+    
+    const getNextSequentialId = (collection) => {
+        if (!Array.isArray(collection) || collection.length === 0) return 1;
+        const max = Math.max(...collection.map(item => {
+            const num = Number(item.id);
+            return isNaN(num) ? 0 : num;
+        }));
+        return max + 1;
+    };
+
     const parseStudentId = (rawId) => {
         if (rawId === null || rawId === undefined) return rawId;
         return String(rawId);
@@ -4573,8 +4572,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!cls.textbooks) cls.textbooks = [];
             cls.textbooks.push({
-                id: crypto.randomUUID(),
-                name,
+                id: getNextSequentialId(classes),
+                        name,
                 price
             });
 
@@ -6977,7 +6976,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!text || !loggedInStudentId) return;
 
             const newMsg = {
-                id: crypto.randomUUID(),
+                id: getNextSequentialId(wordSets),
                 studentId: loggedInStudentId,
                 sender: 'parent',
                 text,
@@ -7680,7 +7679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             schedList.push(`${dayNames[day]}: ${c.schedule[day]}`);
                         }
                     });
-                    const schedSummary = schedList.length > 0 ? schedList.join(', ') : '지정된 수업시간 없음';
+                    const schedSummary = schedList.length > 0 ? schedList.join('<br>') : '지정된 수업시간 없음';
                     
                     item.innerHTML = `
                         <div style="text-align: left; width: 100%;">
@@ -7798,7 +7797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('반 정보가 수정되었습니다.');
                 } else {
                     const newClass = {
-                        id: crypto.randomUUID(),
+                        id: getNextSequentialId(classes),
                         name,
                         duration,
                         schedule
@@ -8943,7 +8942,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const name = currentStudent ? currentStudent.name : '학부모 자녀';
                     
                     const newQuery = {
-                        id: crypto.randomUUID(),
+                        id: getNextSequentialId(wordSets),
                         studentId: loggedInStudentId,
                         studentName: name,
                         question: queryText || `[사진 질문] ${attachedAiImageName}`,
@@ -11535,7 +11534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const newSet = {
-                    id: crypto.randomUUID(),
+                    id: getNextSequentialId(wordSets),
                     classId: null,
                     studentId: String(classSelect.value),
                     title: titleInput.value.trim() || `단어 세트 (${new Date().toLocaleDateString()})`,
@@ -12523,7 +12522,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const newSet = {
-                    id: crypto.randomUUID(),
+                    id: getNextSequentialId(wordSets),
                     studentId: loggedInStudentId,
                     title: titleInput.value.trim() || `나의 단어장 (${new Date().toLocaleDateString()})`,
                     words: wordsList
