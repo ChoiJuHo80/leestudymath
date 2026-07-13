@@ -906,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
                 try {
-                    const clientToUse = (!isAdmin && ['sb_classes', 'sb_notices', 'sb_curriculums'].includes(tableName) && typeof publicSupabase !== 'undefined' && publicSupabase) ? publicSupabase : supabase;
+                    const clientToUse = (!isAdmin && typeof publicSupabase !== 'undefined' && publicSupabase) ? publicSupabase : supabase;
                     const { data, error } = await clientToUse.from(tableName).select('*');
                     if (error) {
                         console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
@@ -999,45 +999,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncResults[15]) studentBadges = syncResults[15];
             if (syncResults[16]) wordSets = syncResults[16];
             if (syncResults[17]) completedVocabSets = syncResults[17];
-
-            // Generate default formulas dynamically for actual classes from Supabase to prevent Foreign Key constraint violations
-            if (classes.length > 0) {
-                let updatedFormulas = false;
-                classes.forEach(cls => {
-                    const hasFormula = classFormulas.some(f => String(f.classId) === String(cls.id));
-                    if (!hasFormula) {
-                        const rootIdNum = typeof cls.id === 'number' ? cls.id : Number(String(cls.id).replace(/[^\d]/g, '').slice(0, 12));
-                        classFormulas.push({
-                            id: Number(String(rootIdNum) + '1'),
-                            classId: cls.id,
-                            formulaName: '근의 공식',
-                            latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
-                            pieces: ["x", "=", "-b", "±", "√", "b²", "-", "4ac", "/", "2a"],
-                            quizzes: getRecommendedQuestionsForFormula('근의 공식').map((q, idx) => ({
-                                id: idx + 1,
-                                answer: q.a,
-                                imageBase64: ''
-                            }))
-                        });
-                        classFormulas.push({
-                            id: Number(String(rootIdNum) + '2'),
-                            classId: cls.id,
-                            formulaName: '최대공약수',
-                            latex: '\\text{GCD}(a, b)',
-                            pieces: ["G", "C", "D", "(", "a", ",", "b", ")"],
-                            quizzes: getRecommendedQuestionsForFormula('최대공약수').map((q, idx) => ({
-                                id: idx + 1,
-                                answer: q.a,
-                                imageBase64: ''
-                            }))
-                        });
-                        updatedFormulas = true;
-                    }
-                });
-                if (updatedFormulas) {
-                    await saveClassFormulas();
-                }
-            }
 
             // 1. Sync habits — Supabase가 진실의 원천(source of truth)
             const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
