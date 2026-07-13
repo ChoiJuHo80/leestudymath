@@ -132,8 +132,27 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
                 </div>
                 <div>
                     <span class="exam-status ${isGraded ? 'status-graded' : 'status-ungraded'}">${ex.status}</span>
+                    <button class="exam-delete-btn" style="margin-left:8px; background:none; border:none; color:#ff4444; cursor:pointer; font-size:12px; text-decoration:underline;">삭제</button>
                 </div>
             `;
+            
+            const deleteBtn = card.querySelector('.exam-delete-btn');
+            deleteBtn.addEventListener('click', async () => {
+                if (confirm('정말로 이 시험지를 삭제하시겠습니까?')) {
+                    deleteBtn.textContent = '삭제중...';
+                    deleteBtn.disabled = true;
+                    const { error } = await supabase.from('exams').delete().eq('id', ex.id);
+                    if (error) {
+                        alert('삭제 실패: ' + error.message);
+                        deleteBtn.textContent = '삭제';
+                        deleteBtn.disabled = false;
+                    } else {
+                        if (typeof showToast === 'function') showToast('시험지가 삭제되었습니다.');
+                        await loadExams();
+                    }
+                }
+            });
+
             listContainer.appendChild(card);
         });
     };
