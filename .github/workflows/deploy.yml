@@ -28,6 +28,8 @@ jobs:
         VITE_SUPABASE_URL: https://xqdfyyfiroukkluygvkq.supabase.co
         VITE_SUPABASE_ANON_KEY: sb_publishable_VzYxmxytt9IFqmFuI9FW7Q_V9mDciJK
         VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+        VITE_TELEGRAM_BOT_TOKEN: ${{ secrets.VITE_TELEGRAM_BOT_TOKEN }}
+        VITE_TELEGRAM_CHAT_ID: ${{ secrets.VITE_TELEGRAM_CHAT_ID }}
       run: npm run build
 
     - name: Authenticate to Google Cloud
