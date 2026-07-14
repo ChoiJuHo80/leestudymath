@@ -6194,7 +6194,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 renderMyClassAiHistory();
         renderStudentChat();
-        renderMyClassDailyHabits(loggedInStudentId);
+        const habitTargetId = window.currentHabitStudentId || (student ? student.id : loggedInStudentId);
+        renderMyClassDailyHabits(habitTargetId);
         renderStudentFormulasAndBadges(student);
         safeCreateIcons();
     };
