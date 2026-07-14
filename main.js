@@ -5565,20 +5565,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#student-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
             el.style.display = 'none';
         });
-        // Force hide elements for Parent role
-        const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
-        if (badgeWidget) badgeWidget.style.display = 'none';
-        const examSection = document.getElementById('student-exam-section');
-        if (examSection) examSection.style.display = 'none';
-        const chatWidget = document.getElementById('chat-messages-container-anchor');
-        if (chatWidget) chatWidget.style.display = 'none';
-        // Hide parent quick menu links for those items
-        document.querySelectorAll('#parent-quick-menu a[href="#student-exam-section"], #parent-quick-menu a[href="#myclass-badge-shelf-widget"], #parent-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
-            el.style.display = 'none';
-        });
-        document.querySelectorAll('#student-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
-            el.style.display = 'none';
-        });
 
         // 1. Unread feedbacks badge
         const fbBadge = document.getElementById('parent-menu-feedback-badge');
