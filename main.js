@@ -12,8 +12,13 @@ window.openParentAddChildModal = function() {
     
     const parentAddChildForm = document.getElementById('parent-add-child-form');
     const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+    const checkMsg = document.getElementById('parent-child-id-check-msg');
+    const gradeInput = document.getElementById('parent-child-grade-input');
+    
     if (parentAddChildForm) parentAddChildForm.reset();
     if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
+    if (checkMsg) checkMsg.style.display = 'none';
+    if (gradeInput) gradeInput.innerHTML = '<option value="">학년 선택</option>';
     parentAddChildModal.classList.add('open');
     if (window.lucide) window.lucide.createIcons();
 };
@@ -12893,6 +12898,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkExistingStudentForParentForm();
             });
         }
+        
+        // Add ID Duplicate Check
+        const btnCheckParentChildId = document.getElementById('btn-check-parent-child-id');
+        const parentChildIdCheckMsg = document.getElementById('parent-child-id-check-msg');
+        if (btnCheckParentChildId && parentChildUsernameInput && parentChildIdCheckMsg) {
+            btnCheckParentChildId.addEventListener('click', () => {
+                const username = parentChildUsernameInput.value.trim();
+                if (!username) {
+                    parentChildIdCheckMsg.style.display = 'block';
+                    parentChildIdCheckMsg.style.color = '#ff4d4f';
+                    parentChildIdCheckMsg.textContent = '아이디를 입력해 주세요.';
+                    return;
+                }
+                if (username.length < 4) {
+                    parentChildIdCheckMsg.style.display = 'block';
+                    parentChildIdCheckMsg.style.color = '#ff4d4f';
+                    parentChildIdCheckMsg.textContent = '아이디는 4자 이상이어야 합니다.';
+                    return;
+                }
+                
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === username.toLowerCase());
+                let takenInMock = false;
+                mockUsers.forEach(u => {
+                    if (u.role === 'student' && u.email === username) takenInMock = true;
+                    const children = u.user_metadata?.children || u.children || [];
+                    if (children.some(c => c.username && c.username.toLowerCase() === username.toLowerCase())) {
+                        takenInMock = true;
+                    }
+                });
+                
+                parentChildIdCheckMsg.style.display = 'block';
+                if (takenInStudents || takenInMock) {
+                    parentChildIdCheckMsg.style.color = '#ff4d4f';
+                    parentChildIdCheckMsg.textContent = '이미 사용 중인 아이디입니다.';
+                } else {
+                    parentChildIdCheckMsg.style.color = '#2e7d32';
+                    parentChildIdCheckMsg.textContent = '사용 가능한 아이디입니다!';
+                }
+            });
+        }
+        
+        // Auto-update grade options based on school
+        if (parentChildSchoolInput) {
+            parentChildSchoolInput.addEventListener('input', (e) => {
+                const schoolName = e.target.value.trim();
+                const gradeInput = document.getElementById('parent-child-grade-input');
+                if (!gradeInput) return;
+                
+                let optionsHtml = '<option value="">학년 선택</option>';
+                if (schoolName.includes('초등')) {
+                    optionsHtml += '<option value="1학년">1학년</option><option value="2학년">2학년</option><option value="3학년">3학년</option><option value="4학년">4학년</option><option value="5학년">5학년</option><option value="6학년">6학년</option>';
+                } else if (schoolName.includes('중학') || schoolName.includes('중학교') || schoolName.includes('고등')) {
+                    optionsHtml += '<option value="1학년">1학년</option><option value="2학년">2학년</option><option value="3학년">3학년</option>';
+                }
+                
+                // Only update options if it changed based on keyword
+                if (schoolName && (schoolName.includes('초등') || schoolName.includes('중학') || schoolName.includes('중학교') || schoolName.includes('고등'))) {
+                    const prevValue = gradeInput.value;
+                    gradeInput.innerHTML = optionsHtml;
+                    // Restore previous value if it exists in new options
+                    if (prevValue && Array.from(gradeInput.options).some(opt => opt.value === prevValue)) {
+                        gradeInput.value = prevValue;
+                    }
+                } else if (!schoolName) {
+                    gradeInput.innerHTML = '<option value="">학년 선택</option>';
+                }
+            });
+        }
 
         // Lookup existing student by name and birthdate
         const checkExistingStudentForParentForm = () => {
@@ -12928,7 +13002,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ageVal = parseInt(parentChildAgeInput.value || 0, 10);
                 const usernameVal = parentChildUsernameInput.value.trim();
                 const passwordVal = parentChildPasswordInput.value.trim();
-                const schoolVal = parentChildSchoolInput.value.trim();
+                
+                const schoolInputVal = parentChildSchoolInput.value.trim();
+                const gradeInput = document.getElementById('parent-child-grade-input');
+                const gradeVal = gradeInput ? gradeInput.value.trim() : '';
+                const schoolVal = `${schoolInputVal} ${gradeVal}`.trim();
 
                 if (!nameVal || !birthdateVal) return;
 
@@ -12940,8 +13018,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const parentPhoneVal = currentStudentObj.parentPhone;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
                 const parentObj = mockUsers.find(u => u.role === 'parent' && normalizePhone(u.phone) === normalizePhone(parentPhoneVal));
-                const parentAddressVal = parentObj ? parentObj.address : '';
+                const parentAddressVal = (parentObj ? parentObj.address : '') || currentStudentObj.address || '';
 
                 // Check if existing
                 let matchedStudent = students.find(s => s.name === nameVal && s.birthdate === birthdateVal);
