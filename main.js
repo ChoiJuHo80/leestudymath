@@ -1,6 +1,7 @@
 import { supabase, publicSupabase, isMock } from './supabase.js';
 import { initStudentExamView, initTeacherExamView, initAdminExamDashboard, updateUngradedBadge } from './src/examManager.js';
 import { callGeminiVocabOCR, callGeminiMathSolver } from './src/geminiApi.js';
+import { sendTelegramNotification } from './src/telegramApi.js';
 window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
@@ -8330,6 +8331,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 consultations.unshift(newInquiry);
                 await saveConsultations();
                 showToast('상담 예약 신청이 접수되었습니다. 원장님이 곧 연락드리겠습니다.');
+
+                // Send Telegram Notification
+                const telegramMessage = `🔔 <b>신규 상담 예약</b>\n\n` +
+                    `👤 <b>이름:</b> ${name}\n` +
+                    `📱 <b>연락처:</b> ${phone}\n` +
+                    `🏫 <b>학교/학년:</b> ${school} ${grade}\n` +
+                    `📝 <b>메모:</b> ${memo || '없음'}`;
+                await sendTelegramNotification(telegramMessage);
 
                 if (consultInquiryModal) consultInquiryModal.classList.remove('open');
                 consultInquiryForm.reset();
