@@ -13256,14 +13256,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isCompleted = e.target.checked;
                 try {
                     const { error } = await supabase
-                        .from('homework')
-                        .update({ is_completed: isCompleted })
+                        .from('sb_homework')
+                        .update({ status: isCompleted ? 'completed' : 'pending', submission_date: isCompleted ? new Date().toISOString() : null })
                         .eq('id', hwId);
                     if (error) throw error;
                     
                     const hwIndex = homework.findIndex(h => String(h.id) === String(hwId));
                     if (hwIndex !== -1) {
                         homework[hwIndex].isCompleted = isCompleted;
+                        homework[hwIndex].completedAt = isCompleted ? new Date().toISOString() : null;
                         renderDashboard();
                     }
                 } catch (err) {
@@ -13276,7 +13277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isConfirmed = e.target.checked;
                 try {
                     const { error } = await supabase
-                        .from('homework')
+                        .from('sb_homework')
                         .update({ parent_confirmed: isConfirmed })
                         .eq('id', hwId);
                     if (error) throw error;
