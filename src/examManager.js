@@ -290,16 +290,18 @@ const openTeacherExamModal = async (student) => {
             <h2 style="margin-bottom:16px;">${student.name} 학생의 시험지 목록</h2>
             <div id="teacher-exam-list" class="exam-list">로딩 중...</div>
             <div id="teacher-exam-detail" style="display:none; margin-top: 20px; border-top: 1px solid #ddd; padding-top:20px;">
-                <h3 id="detail-title"></h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                    <h3 id="detail-title" style="margin: 0;"></h3>
+                    <div>
+                        <button id="btn-register-answer-sheet" class="btn-secondary" style="font-size:0.8em; padding:4px 8px;">📝 공식 답안지 등록/수정</button>
+                        <input type="file" id="answer-sheet-upload-input" accept="image/*" style="display:none;" />
+                    </div>
+                </div>
                 <div id="detail-img-container" style="display:flex; flex-direction:column; gap:10px; max-height: 50vh; overflow-y:auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;"></div>
                 
                 <div id="ai-grading-container" style="display:none; margin-top:15px; padding:15px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <h4 style="margin:0;">가채점 결과 (수정 가능)</h4>
-                        <div>
-                            <button id="btn-register-answer-sheet" class="btn-secondary" style="font-size:0.8em; padding:4px 8px;">📝 공식 답안지 등록/수정</button>
-                            <input type="file" id="answer-sheet-upload-input" accept="image/*" style="display:none;" />
-                        </div>
                     </div>
                     <table class="admin-table" style="width:100%; text-align:center;">
                         <thead>
@@ -468,7 +470,7 @@ const openTeacherExamModal = async (student) => {
                     const answersJson = await callGeminiAnswerSheetOCR(base64Data, file.type);
                     
                     // Upload image
-                    const fileName = `answer_sheets/${Date.now()}_${file.name}`;
+                    const fileName = `answer_sheets/${Date.now()}_${encodeURIComponent(file.name)}`;
                     const { error: uploadError } = await supabase.storage
                         .from('gongbubang_assets')
                         .upload(fileName, file);
@@ -498,7 +500,7 @@ const openTeacherExamModal = async (student) => {
                         
                     if (dbError) throw dbError;
                     
-                    alert('공식 답안지가 성공적으로 등록되었습니다.\n이제 AI 가채점 시 이 답안지가 우선 적용됩니다.');
+                    alert('공식 답안지가 성공적으로 등록되었습니다.\n이제 AI 가채점 시 이 답안지가 우선 적용됩니다.\n(등록 결과 확인을 위해 AI 가채점을 다시 실행해주세요)');
                 } catch (err) {
                     alert('답안지 등록 중 오류 발생: ' + err.message);
                 } finally {
