@@ -5762,11 +5762,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Homework list render
         if (homeworkList) {
-            homeworkList.innerHTML = '';
+            if (typeof window.myClassHwFilterYear === 'undefined') {
+                window.myClassHwFilterYear = new Date().getFullYear();
+                window.myClassHwFilterMonth = new Date().getMonth() + 1;
+                window.myClassHwFilterStatus = 'all';
+            }
+            
+            let filterHtml = `
+                <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+                    <select id="myclass-hw-year-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-family: 'Pretendard', sans-serif;">
+                        ${[2024, 2025, 2026, 2027].map(y => `<option value="${y}" ${y === window.myClassHwFilterYear ? 'selected' : ''}>${y}년</option>`).join('')}
+                    </select>
+                    <select id="myclass-hw-month-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-family: 'Pretendard', sans-serif;">
+                        ${Array.from({length: 12}, (_, i) => i + 1).map(m => `<option value="${m}" ${m === window.myClassHwFilterMonth ? 'selected' : ''}>${m}월</option>`).join('')}
+                    </select>
+                    <select id="myclass-hw-status-filter" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-family: 'Pretendard', sans-serif;">
+                        <option value="all" ${window.myClassHwFilterStatus === 'all' ? 'selected' : ''}>전체 상태</option>
+                        <option value="pending" ${window.myClassHwFilterStatus === 'pending' ? 'selected' : ''}>미확인</option>
+                        <option value="completed" ${window.myClassHwFilterStatus === 'completed' ? 'selected' : ''}>완료됨</option>
+                    </select>
+                </div>
+            `;
+
+            let listHtml = '';
             const targets = (isParentRole && parentChildren && parentChildren.length > 0) ? parentChildren : [student];
             
             targets.forEach(targetStudent => {
-                const studentHomework = homework.filter(h => String(h.studentId) === String(targetStudent.id));
+                let studentHomework = homework.filter(h => String(h.studentId) === String(targetStudent.id));
+                
+                // Apply Year/Month Filter
+                studentHomework = studentHomework.filter(h => {
+                    const d = h.dueDate ? new Date(h.dueDate) : (h.createdAt ? new Date(h.createdAt) : new Date());
+                    if (isNaN(d.getTime())) return true;
+                    return d.getFullYear() === window.myClassHwFilterYear && (d.getMonth() + 1) === window.myClassHwFilterMonth;
+                });
+                
                 const pending = studentHomework.filter(h => !h.isCompleted);
                 const completed = studentHomework.filter(h => h.isCompleted);
                 
@@ -5778,9 +5808,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 
                 if (studentHomework.length === 0) {
-                    targetHwHtml += '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 12px 0;">등록된 과제가 없습니다.</div>';
+                    targetHwHtml += '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 12px 0;">해당 월에 등록된 과제가 없습니다.</div>';
                 } else {
-                    if (pending.length > 0) {
+                    if ((window.myClassHwFilterStatus === 'all' || window.myClassHwFilterStatus === 'pending') && pending.length > 0) {
                         targetHwHtml += pending.map(hw => `
                             <div class="homework-item pending" style="display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
@@ -5793,12 +5823,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </div>
                                     <div style="text-align: right; white-space: nowrap;">
                                         <span style="font-size: 0.72rem; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 6px; display: block; margin-bottom: 2px;">대기 중</span>
-                                        <span style="font-size: 0.65rem; color: #ef4444; display: block; font-weight: 600;">마감: ${hw.dueDate}</span>
+                                        <span style="font-size: 0.65rem; color: #ef4444; display: block; font-weight: 600;">마감: ${hw.dueDate || '-'}</span>
                                     </div>
                                 </div>
                             </div>`).join('');
                     }
-                    if (completed.length > 0) {
+                    if ((window.myClassHwFilterStatus === 'all' || window.myClassHwFilterStatus === 'completed') && completed.length > 0) {
                         targetHwHtml += completed.map(hw => {
                             const parentChecked = hw.parentConfirmed ? 'checked' : '';
                             const parentDisableAttr = isParentRole ? '' : 'disabled';
@@ -5806,12 +5836,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ? '<span style="font-size: 0.68rem; font-weight: 700; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 2px 6px; border-radius: 6px; display: inline-block;">원장선생님 확인 완료</span>'
                                 : '<span style="font-size: 0.68rem; font-weight: 600; color: var(--text-muted); background: #f1f5f9; border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 6px; display: inline-block;">원장선생님 확인 전</span>';
                             
+                            const isFullyConfirmed = hw.teacherConfirmed;
+                            const mainDisableAttr = isFullyConfirmed ? 'disabled' : '';
+                            const mainCursor = isFullyConfirmed ? 'not-allowed' : 'pointer';
+
                             return `
                             <div class="homework-item completed" style="display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafc; margin-bottom: 8px; opacity: 0.95; box-shadow: 0 1px 3px rgba(0,0,0,0.01);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                                     <div style="flex-grow: 1; padding-right: 12px;">
                                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                            <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" checked style="width: 16px; height: 16px; cursor: pointer;">
+                                            <input type="checkbox" class="homework-checkbox" data-hw-id="${hw.id}" checked ${mainDisableAttr} style="width: 16px; height: 16px; cursor: ${mainCursor};">
                                             <span style="color: var(--text-muted); text-decoration: line-through; font-size: 0.88rem; font-weight: 600;">${hw.title}</span>
                                         </div>
                                         <div style="font-size: 0.8rem; color: var(--text-muted); padding-left: 24px; text-decoration: line-through;">${hw.description || ''}</div>
@@ -5835,8 +5869,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 targetHwHtml += '</div>';
-                homeworkList.innerHTML += targetHwHtml;
+                listHtml += targetHwHtml;
             });
+            
+            homeworkList.innerHTML = filterHtml + listHtml;
+
+            setTimeout(() => {
+                const yf = document.getElementById('myclass-hw-year-filter');
+                const mf = document.getElementById('myclass-hw-month-filter');
+                const sf = document.getElementById('myclass-hw-status-filter');
+                if (yf) { yf.onchange = (e) => { window.myClassHwFilterYear = parseInt(e.target.value); if (typeof renderMyClass === 'function') renderMyClass(); }; }
+                if (mf) { mf.onchange = (e) => { window.myClassHwFilterMonth = parseInt(e.target.value); if (typeof renderMyClass === 'function') renderMyClass(); }; }
+                if (sf) { sf.onchange = (e) => { window.myClassHwFilterStatus = e.target.value; if (typeof renderMyClass === 'function') renderMyClass(); }; }
+            }, 0);
             
             const hwPagination = document.getElementById('myclass-homework-pagination');
             if (hwPagination) hwPagination.style.display = 'none';
