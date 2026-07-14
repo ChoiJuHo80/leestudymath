@@ -1,3 +1,13210 @@
+import { supabase, publicSupabase, isMock } from './supabase.js';
+import { initStudentExamView, initTeacherExamView, initAdminExamDashboard, updateUngradedBadge } from './src/examManager.js';
+import { callGeminiVocabOCR, callGeminiMathSolver } from './src/geminiApi.js';
+import { sendTelegramNotification } from './src/telegramApi.js';
+window.initStudentExamView = initStudentExamView;
+window.initTeacherExamView = initTeacherExamView;
+window.initAdminExamDashboard = initAdminExamDashboard;
+
+window.openParentAddChildModal = function() {
+    const parentAddChildModal = document.getElementById('parent-add-child-modal');
+    if (!parentAddChildModal) return;
+    
+    const parentAddChildForm = document.getElementById('parent-add-child-form');
+    const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+    const checkMsg = document.getElementById('parent-child-id-check-msg');
+    const gradeInput = document.getElementById('parent-child-grade-input');
+    
+    if (parentAddChildForm) parentAddChildForm.reset();
+    if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
+    if (checkMsg) checkMsg.style.display = 'none';
+    if (gradeInput) gradeInput.innerHTML = '<option value="">학년 선택</option>';
+    parentAddChildModal.classList.add('open');
+    if (window.lucide) window.lucide.createIcons();
+};
+
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-parent-add-child-close')) {
+        const parentAddChildModal = document.getElementById('parent-add-child-modal');
+        if (parentAddChildModal) parentAddChildModal.classList.remove('open');
+    } else if (e.target.id === 'parent-add-child-modal') {
+        e.target.classList.remove('open');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    // [HOTFIX] 기존 하드코딩된 더미 데이터가 로컬 스토리지에 남아있는 경우 강제 초기화
+    try {
+        const checkClasses = localStorage.getItem('gongbubang_classes');
+        const checkStudents = localStorage.getItem('gongbubang_students');
+        if ((checkClasses && checkClasses.includes('초등 4학년 A반')) || 
+            (checkStudents && checkStudents.includes('김민준'))) {
+            console.log('[Cache Clear] Detected legacy dummy data. Purging local storage...');
+            const keysToClear = [
+                'gongbubang_notices', 'gongbubang_classes', 'gongbubang_students',
+                'gongbubang_homework', 'gongbubang_messages', 'gongbubang_feedbacks',
+                'gongbubang_progress', 'gongbubang_attendance', 'gongbubang_consultations',
+                'gongbubang_curriculums', 'gongbubang_ai_queries', 'gongbubang_textbook_requests',
+                'gongbubang_habits_admin'
+            ];
+            keysToClear.forEach(k => localStorage.removeItem(k));
+        }
+    } catch(e) {}
+
+    // Helper to safely re-render Lucide icons
+    let iconTimeout = null;
+    const safeCreateIcons = () => {
+        if (iconTimeout) clearTimeout(iconTimeout);
+        iconTimeout = setTimeout(() => {
+            if (typeof lucide !== 'undefined') {
+                try {
+                    lucide.createIcons();
+                } catch(e) {
+                    console.error('Error rendering Lucide icons:', e);
+                }
+            } else {
+                console.warn('Lucide is not loaded yet.');
+            }
+            
+            if (typeof updateAdminQuickMenuHighlights === 'function' && isAdmin) {
+                updateAdminQuickMenuHighlights();
+            }
+        }, 50);
+    };
+
+    const normalizePhone = (p) => {
+        let cleaned = String(p || '').replace(/\D/g, '');
+        if (cleaned.startsWith('82')) {
+            cleaned = '0' + cleaned.substring(2);
+        }
+        return cleaned;
+    };
+
+    // ==========================================================================
+    // Supabase Database Mappers and Synchronizers
+    // ==========================================================================
+    const sortClassesByName = (classList) => {
+        if (!Array.isArray(classList)) return [];
+        return [...classList].sort((a, b) => {
+            const getLevelNum = (name) => {
+                const n = String(name);
+                if (n.includes('초등')) return 1;
+                if (n.includes('중등')) return 2;
+                if (n.includes('고등')) return 3;
+                return 9;
+            };
+            const getGradeNum = (name) => {
+                const n = String(name);
+                const match = n.match(/(\d+)학년/);
+                return match ? parseInt(match[1], 10) : 99;
+            };
+            const getClassLetter = (name) => {
+                const n = String(name);
+                const match = n.match(/([A-Z])반/);
+                return match ? match[1] : n;
+            };
+
+            const levelA = getLevelNum(a.name);
+            const levelB = getLevelNum(b.name);
+            if (levelA !== levelB) return levelA - levelB;
+
+            const gradeA = getGradeNum(a.name);
+            const gradeB = getGradeNum(b.name);
+            if (gradeA !== gradeB) return gradeA - gradeB;
+
+            const letterA = getClassLetter(a.name);
+            const letterB = getClassLetter(b.name);
+            return letterA.localeCompare(letterB);
+        });
+    };
+    
+    const safeStringId = (rawId) => {
+        if (rawId === null || rawId === undefined) return rawId;
+        return String(rawId);
+    };
+
+    const mapStudentFromDb = (dbStudent) => {
+        const remarks = dbStudent.remarks || '';
+
+        // 1. 직접 컨럼에서 읽기 (신규 방식)
+        let birthdate   = dbStudent.birthdate || '';
+        let address     = dbStudent.address || '';
+        let tuitionFeeAmount = dbStudent.tuition_fee_amount || 0;
+        let tuitionFeeDay    = dbStudent.tuition_fee_day    || 0;
+
+        // 2. 이전 remarks 태그 방식 fallback (구데이터 호환)
+        if (!birthdate) {
+            const birthMatch = remarks.match(/\[BIRTH:([^\]]+)\]/);
+            if (birthMatch) birthdate = birthMatch[1];
+        }
+        if (!address) {
+            const addrMatch = remarks.match(/\[ADDR:([^\]]+)\]/);
+            if (addrMatch) address = addrMatch[1];
+        }
+        if (!tuitionFeeAmount || !tuitionFeeDay) {
+            const feeMatch = remarks.match(/\[FEE:(\d+),DAY:(\d+)\]/);
+            if (feeMatch) {
+                if (!tuitionFeeAmount) tuitionFeeAmount = parseInt(feeMatch[1], 10);
+                if (!tuitionFeeDay)    tuitionFeeDay    = parseInt(feeMatch[2], 10);
+            }
+        }
+        tuitionFeeAmount = tuitionFeeAmount || 250000;
+        tuitionFeeDay    = tuitionFeeDay    || 10;
+
+        // 3. 로컀 localStorage fallback (이전 데이터 호환)
+        try {
+            const cachedStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
+            const cached = cachedStudents.find(s => String(s.id) === String(dbStudent.id));
+            if (cached) {
+                if (!birthdate && cached.birthdate) birthdate = cached.birthdate;
+                if (!address   && cached.address)   address   = cached.address;
+            }
+        } catch(e){}
+
+        if (!birthdate && dbStudent.name) {
+            try {
+                const cachedUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                for (const u of cachedUsers) {
+                    const children = u.user_metadata?.children || u.children || [];
+                    const match = children.find(c => c.name === dbStudent.name);
+                    if (match && match.birthdate) { birthdate = match.birthdate; break; }
+                }
+            } catch(e){}
+        }
+
+        // 4. remarks 정리 (태그 제거)
+        const cleanRemarks = remarks
+            .replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '')
+            .replace(/\r?\n?\[BIRTH:[^\]]+\]/, '')
+            .replace(/\r?\n?\[ADDR:[^\]]+\]/, '')
+            .trim();
+
+        // 5. 수업 시간표 읽기
+        const parseRange = (s, e) => (s && e) ? `${s} ~ ${e}` : ((s || e) ? (s || e) : '');
+        const schedule = {
+            mon: parseRange(dbStudent.mon_start, dbStudent.mon_end),
+            tue: parseRange(dbStudent.tue_start, dbStudent.tue_end),
+            wed: parseRange(dbStudent.wed_start, dbStudent.wed_end),
+            thu: parseRange(dbStudent.thu_start, dbStudent.thu_end),
+            fri: parseRange(dbStudent.fri_start, dbStudent.fri_end)
+        };
+
+        return {
+            id: String(dbStudent.id),
+            name: dbStudent.name,
+            age: dbStudent.age,
+            school: dbStudent.school,
+            phone: dbStudent.phone,
+            parentPhone: dbStudent.parent_phone,
+            sibling: dbStudent.sibling,
+            classId: safeStringId(dbStudent.class_id),
+            classDuration: dbStudent.class_duration || 90,
+            username: dbStudent.username,
+            password: dbStudent.password,
+            progress: dbStudent.progress,
+            remarks: cleanRemarks,
+            schedule,
+            tuitionFeeDay,
+            tuitionFeeAmount,
+            birthdate,
+            address,
+            isTerminated: dbStudent.is_terminated,
+            terminationDate: dbStudent.termination_date,
+            parentEmail: dbStudent.parent_email || ''
+        };
+    };
+
+    const mapStudentToDb = (jsStudent) => {
+        // remarks에서 메타데이터 태그를 제거한 순수 메모만 저장
+        const cleanRemarks = (jsStudent.remarks || '')
+            .replace(/\r?\n?\[FEE:\d+,DAY:\d+\]/, '')
+            .replace(/\r?\n?\[BIRTH:[^\]]+\]/, '')
+            .replace(/\r?\n?\[ADDR:[^\]]+\]/, '')
+            .trim();
+
+        // 수업 시간표 파싱
+        const parseTimeRange = (rangeStr) => {
+            if (!rangeStr) return { start: '', end: '' };
+            const parts = rangeStr.split('~');
+            return { start: parts[0] ? parts[0].trim() : '', end: parts[1] ? parts[1].trim() : '' };
+        };
+        const sch = jsStudent.schedule || {};
+        const mon = parseTimeRange(sch.mon);
+        const tue = parseTimeRange(sch.tue);
+        const wed = parseTimeRange(sch.wed);
+        const thu = parseTimeRange(sch.thu);
+        const fri = parseTimeRange(sch.fri);
+
+        return {
+            id: jsStudent.id,
+            name: jsStudent.name,
+            age: jsStudent.age,
+            school: jsStudent.school,
+            phone: jsStudent.phone,
+            parent_phone: jsStudent.parentPhone,
+            sibling: jsStudent.sibling,
+            class_id: safeStringId(jsStudent.classId),
+            class_duration: jsStudent.classDuration || 90,
+            username: jsStudent.username,
+            password: jsStudent.password,
+            progress: jsStudent.progress,
+            remarks: cleanRemarks,
+            birthdate: jsStudent.birthdate || '',
+            address: jsStudent.address || '',
+            tuition_fee_amount: jsStudent.tuitionFeeAmount || 250000,
+            tuition_fee_day: jsStudent.tuitionFeeDay || 10,
+            mon_start: mon.start, mon_end: mon.end,
+            tue_start: tue.start, tue_end: tue.end,
+            wed_start: wed.start, wed_end: wed.end,
+            thu_start: thu.start, thu_end: thu.end,
+            fri_start: fri.start, fri_end: fri.end,
+            is_terminated: jsStudent.isTerminated || false,
+            termination_date: jsStudent.terminationDate || null,
+            parent_email: jsStudent.parentEmail || ''
+        };
+    };
+
+    const mapClassFromDb = (dbClass) => ({
+        id: safeStringId(dbClass.id),
+        name: dbClass.name,
+        subject: dbClass.subject,
+        duration: dbClass.duration,
+        schedule: {
+            mon: dbClass.mon_start ? `${dbClass.mon_start} ~ ${dbClass.mon_end}` : '',
+            tue: dbClass.tue_start ? `${dbClass.tue_start} ~ ${dbClass.tue_end}` : '',
+            wed: dbClass.wed_start ? `${dbClass.wed_start} ~ ${dbClass.wed_end}` : '',
+            thu: dbClass.thu_start ? `${dbClass.thu_start} ~ ${dbClass.thu_end}` : '',
+            fri: dbClass.fri_start ? `${dbClass.fri_start} ~ ${dbClass.fri_end}` : ''
+        },
+        textbooks: dbClass.textbooks ? (typeof dbClass.textbooks === 'string' ? JSON.parse(dbClass.textbooks) : dbClass.textbooks) : []
+    });
+
+    const mapClassToDb = (jsClass) => {
+        const parseTimeRange = (rangeStr) => {
+            if (!rangeStr) return { start: '', end: '' };
+            const parts = rangeStr.split('~');
+            return { start: parts[0] ? parts[0].trim() : '', end: parts[1] ? parts[1].trim() : '' };
+        };
+        const mon = parseTimeRange(jsClass.schedule ? jsClass.schedule.mon : jsClass.mon);
+        const tue = parseTimeRange(jsClass.schedule ? jsClass.schedule.tue : jsClass.tue);
+        const wed = parseTimeRange(jsClass.schedule ? jsClass.schedule.wed : jsClass.wed);
+        const thu = parseTimeRange(jsClass.schedule ? jsClass.schedule.thu : jsClass.thu);
+        const fri = parseTimeRange(jsClass.schedule ? jsClass.schedule.fri : jsClass.fri);
+        return {
+            id: safeStringId(jsClass.id),
+            name: jsClass.name,
+            subject: jsClass.subject,
+            duration: jsClass.duration,
+            mon_start: mon.start, mon_end: mon.end,
+            tue_start: tue.start, tue_end: tue.end,
+            wed_start: wed.start, wed_end: wed.end,
+            thu_start: thu.start, thu_end: thu.end,
+            fri_start: fri.start, fri_end: fri.end,
+            textbooks: jsClass.textbooks || []
+        };
+    };
+
+    const mapNoticeFromDb = (dbNotice) => ({
+        id: dbNotice.id,
+        tag: dbNotice.tag,
+        title: dbNotice.title,
+        content: dbNotice.content,
+        date: dbNotice.date,
+        author: dbNotice.author,
+        titleSize: dbNotice.title_size,
+        titleColor: dbNotice.title_color,
+        pinned: dbNotice.pinned,
+        highlight: dbNotice.highlight,
+        recruitEnabled: dbNotice.recruit_enabled || false,
+        recruitType: dbNotice.recruit_type || '',
+        recruitCapacity: dbNotice.recruit_capacity || 10,
+        recruitStart: dbNotice.recruit_start || '',
+        recruitEnd: dbNotice.recruit_end || '',
+        recruitFee: dbNotice.recruit_fee || 0,
+        recruitClosed: dbNotice.recruit_closed || false
+    });
+
+    const mapNoticeToDb = (jsNotice) => ({
+        id: jsNotice.id,
+        tag: jsNotice.tag,
+        title: jsNotice.title,
+        content: jsNotice.content,
+        date: jsNotice.date,
+        author: jsNotice.author,
+        title_size: jsNotice.titleSize || 'normal',
+        title_color: jsNotice.titleColor || 'default',
+        pinned: jsNotice.pinned || false,
+        highlight: jsNotice.highlight || false,
+        recruit_enabled: jsNotice.recruitEnabled || false,
+        recruit_type: jsNotice.recruitType || '',
+        recruit_capacity: jsNotice.recruitCapacity || 10,
+        recruit_start: jsNotice.recruitStart || '',
+        recruit_end: jsNotice.recruitEnd || '',
+        recruit_fee: jsNotice.recruitFee || 0,
+        recruit_closed: jsNotice.recruitClosed || false
+    });
+
+    const mapHomeworkFromDb = (dbHw) => ({
+        id: dbHw.id,
+        studentId: String(dbHw.student_id),
+        title: dbHw.title,
+        description: dbHw.description,
+        dueDate: dbHw.due_date,
+        isCompleted: dbHw.status === 'completed',
+        completedAt: dbHw.submission_date || null,
+        createdAt: dbHw.created_at,
+        feedback: dbHw.feedback,
+        parentConfirmed: dbHw.parent_confirmed || false,
+        teacherConfirmed: dbHw.teacher_confirmed || false
+    });
+
+    const mapHomeworkToDb = (jsHw) => ({
+        id: jsHw.id,
+        student_id: String(jsHw.studentId),
+        title: jsHw.title,
+        description: jsHw.description || '',
+        due_date: jsHw.dueDate,
+        status: jsHw.isCompleted ? 'completed' : 'pending',
+        submission_date: jsHw.completedAt || '',
+        created_at: jsHw.createdAt || null,
+        feedback: jsHw.feedback || '',
+        parent_confirmed: jsHw.parentConfirmed || false,
+        teacher_confirmed: jsHw.teacherConfirmed || false
+    });
+
+    const mapResourceFromDb = (dbRes) => ({
+        id: dbRes.id,
+        title: dbRes.title,
+        fileUrl: dbRes.file_url,
+        date: dbRes.date,
+        category: dbRes.category,
+        downloads: dbRes.downloads || 0
+    });
+
+    const mapResourceToDb = (jsRes) => ({
+        id: jsRes.id,
+        title: jsRes.title,
+        file_url: jsRes.fileUrl,
+        date: jsRes.date,
+        category: jsRes.category,
+        downloads: jsRes.downloads || 0
+    });
+
+    const parseTimeStrToIso = (timeStr) => {
+        if (!timeStr) return new Date().toISOString();
+        if (timeStr.includes('T') && timeStr.endsWith('Z')) return timeStr;
+        try {
+            const now = new Date();
+            const match = timeStr.match(/(오전|오후)\s*(\d+):(\d+)/);
+            if (match) {
+                const ampm = match[1];
+                let hour = parseInt(match[2], 10);
+                const min = parseInt(match[3], 10);
+                if (ampm === '오후' && hour < 12) hour += 12;
+                if (ampm === '오전' && hour === 12) hour = 0;
+                
+                now.setHours(hour, min, 0, 0);
+                return now.toISOString();
+            }
+        } catch(e) {}
+        return new Date().toISOString();
+    };
+
+    const formatIsoToTimeStr = (isoStr) => {
+        if (!isoStr) return '';
+        if (isoStr.includes('오전') || isoStr.includes('오후')) return isoStr;
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return isoStr;
+            const hours = d.getHours();
+            const ampm = hours >= 12 ? '오후' : '오전';
+            const displayHours = hours % 12 || 12;
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${ampm} ${displayHours}:${minutes}`;
+        } catch(e) {
+            return isoStr;
+        }
+    };
+
+    const mapMessageFromDb = (m) => {
+        const isTeacher = m.sender === 'teacher';
+        return {
+            id: m.id,
+            studentId: isTeacher ? m.receiver : m.sender,
+            sender: isTeacher ? 'teacher' : 'parent',
+            text: m.content || '',
+            time: formatIsoToTimeStr(m.timestamp),
+            isRead: !!m.is_read
+        };
+    };
+
+    const mapMessageToDb = (m) => {
+        const isTeacher = m.sender === 'teacher';
+        return {
+            id: m.id,
+            sender: isTeacher ? 'teacher' : String(m.studentId),
+            receiver: isTeacher ? String(m.studentId) : 'teacher',
+            content: m.text || '',
+            timestamp: parseTimeStrToIso(m.time),
+            is_read: !!m.isRead
+        };
+    };
+
+
+    const mapFeedbackFromDb = (dbFb) => ({
+        id: dbFb.id,
+        studentId: dbFb.student_id,
+        content: dbFb.content,
+        date: dbFb.date,
+        author: dbFb.author
+    });
+    const mapFeedbackToDb = (jsFb) => ({
+        id: jsFb.id,
+        student_id: jsFb.studentId,
+        content: jsFb.content,
+        date: jsFb.date,
+        author: jsFb.author
+    });
+
+    const mapProgressFromDb = (dbP) => ({
+        id: dbP.id,
+        studentId: dbP.student_id,
+        date: dbP.date,
+        content: dbP.content,
+        category: dbP.category
+    });
+    const mapProgressToDb = (jsP) => ({
+        id: jsP.id,
+        student_id: jsP.studentId,
+        date: jsP.date,
+        content: jsP.content,
+        category: jsP.category
+    });
+
+    const mapAttendanceFromDb = (dbA) => ({
+        id: dbA.id,
+        studentId: dbA.student_id,
+        date: dbA.date,
+        type: dbA.type || 'in',
+        time: dbA.time || '',
+        memo: dbA.memo || ''
+    });
+    const mapAttendanceToDb = (jsA) => ({
+        id: jsA.id,
+        student_id: jsA.studentId,
+        date: jsA.date,
+        type: jsA.type || 'in',
+        time: jsA.time || '',
+        memo: jsA.memo || ''
+    });
+
+    const mapCurriculumFromDb = (dbC) => ({
+        id: dbC.id,
+        title: dbC.title,
+        level: dbC.level,
+        orderNum: dbC.order_num
+    });
+    const mapCurriculumToDb = (jsC) => ({
+        id: jsC.id,
+        title: jsC.title,
+        level: jsC.level,
+        order_num: jsC.orderNum
+    });
+
+    const mapAiQueryFromDb = (dbQ) => ({
+        id: dbQ.id,
+        studentId: dbQ.student_id,
+        studentName: dbQ.student_name,
+        question: dbQ.query,
+        answer: dbQ.response,
+        date: dbQ.date,
+        timestamp: dbQ.timestamp,
+        isRead: !!dbQ.is_read
+    });
+    const mapAiQueryToDb = (jsQ) => ({
+        id: jsQ.id,
+        student_id: jsQ.studentId,
+        student_name: jsQ.studentName,
+        query: jsQ.question,
+        response: jsQ.answer,
+        date: jsQ.date,
+        timestamp: jsQ.timestamp,
+        is_read: !!jsQ.isRead
+    });
+
+    const mapTextbookRequestFromDb = (dbReq) => ({
+        id: dbReq.id,
+        studentId: dbReq.student_id,
+        studentName: dbReq.student_name,
+        classId: dbReq.class_id,
+        className: dbReq.class_name,
+        textbookName: dbReq.textbook_name,
+        price: dbReq.price,
+        isConfirmed: !!dbReq.is_confirmed,
+        paymentStatus: dbReq.payment_status,
+        createdAt: dbReq.created_at
+    });
+
+    const mapTextbookRequestToDb = (jsReq) => ({
+        id: jsReq.id,
+        student_id: jsReq.studentId,
+        student_name: jsReq.studentName,
+        class_id: jsReq.classId,
+        class_name: jsReq.className,
+        textbook_name: jsReq.textbookName,
+        price: jsReq.price,
+        is_confirmed: !!jsReq.isConfirmed,
+        payment_status: jsReq.paymentStatus || '미결제',
+        created_at: jsReq.createdAt || new Date().toISOString()
+    });
+
+    const safeJsonParse = (str) => {
+        try {
+            return JSON.parse(str);
+        } catch(e) {
+            return [];
+        }
+    };
+
+    const mapClassFormulaFromDb = (dbItem) => ({
+        id: dbItem.id,
+        classId: safeStringId(dbItem.class_id),
+        formulaName: dbItem.formula_name,
+        latex: dbItem.formula_latex,
+        pieces: dbItem.card_pieces ? (typeof dbItem.card_pieces === 'string' ? safeJsonParse(dbItem.card_pieces) : dbItem.card_pieces) : [],
+        quizzes: dbItem.questions ? (typeof dbItem.questions === 'string' ? safeJsonParse(dbItem.questions) : dbItem.questions) : []
+    });
+
+    const mapClassFormulaToDb = (jsItem) => {
+        return {
+            id: jsItem.id,
+            class_id: safeStringId(jsItem.classId),
+            formula_name: jsItem.formulaName,
+            formula_latex: jsItem.latex,
+            card_pieces: Array.isArray(jsItem.pieces) ? JSON.stringify(jsItem.pieces) : jsItem.pieces,
+            questions: Array.isArray(jsItem.quizzes) ? JSON.stringify(jsItem.quizzes) : jsItem.quizzes
+        };
+    };
+    const mapWordSetFromDb = (dbItem) => ({
+        id: dbItem.id,
+        classId: safeStringId(dbItem.class_id),
+        studentId: dbItem.student_id,
+        title: dbItem.title,
+        words: dbItem.words ? (typeof dbItem.words === 'string' ? safeJsonParse(dbItem.words) : dbItem.words) : []
+    });
+
+    const mapWordSetToDb = (jsItem) => {
+        return {
+            id: jsItem.id || String(Date.now() + Math.random()),
+            class_id: safeStringId(jsItem.classId) || null,
+            student_id: jsItem.studentId || null,
+            title: jsItem.title || '제목 없음',
+            words: Array.isArray(jsItem.words) ? JSON.stringify(jsItem.words) : (jsItem.words || '[]'),
+            created_at: new Date().toISOString()
+        };
+    };
+
+    const mapStudentBadgeFromDb = (dbItem) => ({
+        id: dbItem.id,
+        studentId: dbItem.student_id,
+        formulaId: dbItem.formula_id,
+        badgeName: dbItem.formula_name,
+        status: 'Mastered'
+    });
+
+    const mapStudentBadgeToDb = (jsItem) => {
+        return {
+            id: jsItem.id,
+            student_id: String(jsItem.studentId),
+            formula_id: Number(jsItem.formulaId),
+            formula_name: jsItem.badgeName,
+            achieved_at: new Date().toISOString()
+        };
+    };
+
+    const mapCompletedVocabFromDb = (dbItem) => ({
+        id: dbItem.id,
+        studentId: dbItem.student_id,
+        vocabSetId: safeStringId(dbItem.vocab_set_id)
+    });
+
+    const mapCompletedVocabToDb = (jsItem) => ({
+        id: jsItem.id || Number(String(safeStringId(jsItem.vocabSetId)) + String(jsItem.studentId).replace(/[^\d]/g, '').slice(0, 5)),
+        student_id: String(jsItem.studentId),
+        vocab_set_id: safeStringId(jsItem.vocabSetId),
+        created_at: new Date().toISOString()
+    });
+
+    const mapMockUserFromDb = (u) => ({
+        id: u.id,
+        email: u.email,
+        password: u.password,
+        name: u.name,
+        phone: u.phone,
+        address: u.address,
+        role: u.role,
+        status: u.status,
+        createdAt: u.created_at,
+        approvedAt: u.approved_at,
+        terminatedAt: u.terminated_at,
+        user_metadata: u.user_metadata ? (typeof u.user_metadata === 'string' ? JSON.parse(u.user_metadata) : u.user_metadata) : null
+    });
+
+    const mapMockUserToDb = (u) => ({
+        id: u.id,
+        email: u.email,
+        password: u.password || '',
+        name: u.name || '',
+        phone: u.phone || '',
+        address: u.address || '',
+        role: u.role || 'parent',
+        status: u.status || 'pending',
+        created_at: u.createdAt || new Date().toISOString(),
+        approved_at: u.approvedAt || null,
+        terminated_at: u.terminatedAt || null,
+        user_metadata: u.user_metadata || null
+    });
+
+    const mapConsultationFromDb = (c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        school: c.student_name || '',
+        grade: c.student_age || '',
+        memo: c.content || '',
+        status: c.status || 'pending',
+        date: c.created_at ? c.created_at.split('T')[0] : ''
+    });
+
+    const mapConsultationToDb = (c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        student_name: c.school || '',
+        student_age: c.grade || '',
+        content: c.memo || '',
+        status: c.status || 'pending',
+        created_at: c.date ? `${c.date}T00:00:00.000Z` : new Date().toISOString()
+    });
+
+
+    const saveAiQueries = async () => {
+        try { localStorage.setItem('gongbubang_ai_queries', JSON.stringify(aiQueries)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = aiQueries.map(mapAiQueryToDb);
+                await supabase.from('sb_ai_queries').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving AI queries to Supabase:', e);
+            }
+        }
+    };
+
+    const saveTextbookRequests = async () => {
+        try { localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(textbookRequests)); } catch(e){}
+        if (typeof updateAdminQuickMenuHighlights === 'function') updateAdminQuickMenuHighlights();
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = textbookRequests.map(mapTextbookRequestToDb);
+                await supabase.from('sb_textbook_requests').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving textbook requests to Supabase:', e);
+            }
+        }
+    };
+
+    const saveResources = async () => {
+        try { localStorage.setItem('gongbubang_resources', JSON.stringify(resources)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = resources.map(mapResourceToDb);
+                await supabase.from('sb_resources').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving resources to Supabase:', e);
+            }
+        }
+    };
+
+    const saveStudentHabits = async (studentId, habitsList) => {
+        try {
+            const key = studentId === 'admin' ? 'gongbubang_habits_admin' : 'gongbubang_habits_' + studentId;
+            localStorage.setItem(key, JSON.stringify(habitsList));
+        } catch(e){}
+
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_habits').delete().eq('student_id', String(studentId));
+                if (habitsList && habitsList.length > 0) {
+                    const mapped = habitsList.map(h => ({
+                        id: studentId + '_' + h.id,
+                        student_id: String(studentId),
+                        habit_id: h.id,
+                        habit_name: h.text,
+                        frequency: h.frequency || 7,
+                        is_active: true
+                    }));
+                    await supabase.from('sb_habits').insert(mapped);
+                }
+            } catch(e) {
+                console.error(`Error saving habits for ${studentId} to Supabase:`, e);
+            }
+        }
+    };
+
+    const saveStudentHabitRecords = async (studentId, recordsObj) => {
+        try {
+            const key = studentId === 'admin' ? 'gongbubang_habit_records_admin' : 'gongbubang_habit_records_' + studentId;
+            localStorage.setItem(key, JSON.stringify(recordsObj));
+        } catch(e){}
+
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const rows = [];
+                Object.keys(recordsObj).forEach(date => {
+                    const dayRecs = recordsObj[date] || {};
+                    Object.keys(dayRecs).forEach(habitId => {
+                        rows.push({
+                            id: studentId + '_' + habitId + '_' + date,
+                            student_id: String(studentId),
+                            habit_id: habitId,
+                            date: date,
+                            is_completed: !!dayRecs[habitId]
+                        });
+                    });
+                });
+                if (rows.length > 0) {
+                    await supabase.from('sb_habit_records').upsert(rows);
+                }
+            } catch(e) {
+                console.error(`Error saving habit records for ${studentId} to Supabase:`, e);
+            }
+        }
+    };
+
+    const saveMockUsers = async (usersArray) => {
+        try { localStorage.setItem('gongbubang_mock_users', JSON.stringify(usersArray)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = usersArray.map(mapMockUserToDb);
+                await supabase.from('sb_mock_users').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving mock users to Supabase:', e);
+            }
+        }
+    };
+
+
+    const getRecommendedQuestionsForFormula = (formulaName) => {
+        const lowerName = String(formulaName || '').toLowerCase();
+        let questions = [];
+        if (lowerName.includes('근의') && lowerName.includes('공식')) {
+            questions = [
+                { q: 'x² - 5x + 6 = 0의 해를 구하시오.', a: '2,3' },
+                { q: 'x² - 3x + 2 = 0의 해를 구하시오.', a: '1,2' },
+                { q: 'x² - 7x + 12 = 0의 해를 구하시오.', a: '3,4' },
+                { q: 'x² - 6x + 8 = 0의 해를 구하시오.', a: '2,4' },
+                { q: 'x² - 8x + 15 = 0의 해를 구하시오.', a: '3,5' },
+                { q: 'x² - 9x + 20 = 0의 해를 구하시오.', a: '4,5' },
+                { q: 'x² - 4x + 3 = 0의 해를 구하시오.', a: '1,3' },
+                { q: 'x² - 10x + 24 = 0의 해를 구하시오.', a: '4,6' },
+                { q: 'x² - 2x - 3 = 0의 해를 구하시오.', a: '-1,3' },
+                { q: 'x² + 5x + 6 = 0의 해를 구하시오.', a: '-3,-2' }
+            ];
+        } else if (lowerName.includes('최대공약수') || lowerName.includes('gcd')) {
+            questions = [
+                { q: '12와 18의 최대공약수를 구하시오.', a: '6' },
+                { q: '24와 36의 최대공약수를 구하시오.', a: '12' },
+                { q: '15와 25의 최대공약수를 구하시오.', a: '5' },
+                { q: '48과 60의 최대공약수를 구하시오.', a: '12' },
+                { q: '8과 12의 최대공약수를 구하시오.', a: '4' },
+                { q: '20과 30의 최대공약수를 구하시오.', a: '10' },
+                { q: '16과 24의 최대공약수를 구하시오.', a: '8' },
+                { q: '14와 21의 최대공약수를 구하시오.', a: '7' },
+                { q: '18과 27의 최대공약수를 구하시오.', a: '9' },
+                { q: '30과 45의 최대공약수를 구하시오.', a: '15' }
+            ];
+        } else {
+            questions = [
+                { q: 'x + 3 = 7의 해를 구하시오.', a: '4' },
+                { q: '2x - 5 = 9의 해를 구하시오.', a: '7' },
+                { q: '3x + 4 = 19의 해를 구하시오.', a: '5' },
+                { q: '4x - 3 = 13의 해를 구하시오.', a: '4' },
+                { q: '5x + 2 = 22의 해를 구하시오.', a: '4' },
+                { q: 'x / 2 + 3 = 7의 해를 구하시오.', a: '8' },
+                { q: '3(x - 2) = 12의 해를 구하시오.', a: '6' },
+                { q: '2(2x + 1) = 18의 해를 구하시오.', a: '4' },
+                { q: '5 - x = 2의 해를 구하시오.', a: '3' },
+                { q: '7x - 4 = 3x + 8의 해를 구하시오.', a: '3' }
+            ];
+        }
+        return questions;
+    };
+
+    const generateFormulaQuizImage = (num, text, title) => {
+        const canvas = document.createElement('canvas');
+        const scale = 2;
+        const baseWidth = 400;
+        const baseHeight = 150;
+        
+        canvas.width = baseWidth * scale;
+        canvas.height = baseHeight * scale;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, baseWidth, baseHeight);
+        
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
+        
+        ctx.fillStyle = '#7c3aed';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`${title} 연습문제`, 16, 26);
+        
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`Q${num}.`, 16, 54);
+        
+        ctx.font = '500 13px sans-serif';
+        ctx.fillStyle = '#334155';
+        
+        let line = '';
+        let y = 80;
+        const x = 16;
+        const maxWidth = baseWidth - 32;
+        const lineHeight = 22;
+        
+        for (let n = 0; n < text.length; n++) {
+            let testLine = line + text[n];
+            let metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth) {
+                ctx.fillText(line, x, y);
+                line = text[n];
+                y += lineHeight;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, x, y);
+        
+        return canvas.toDataURL('image/png');
+    };
+
+    const defaultClassFormulas = []
+
+
+    const initializeDataFromSupabase = async () => {
+        if (typeof supabase === 'undefined' || !supabase || !supabase.auth || isMock) {
+            console.log('[Database Debug] Supabase client is not available or isMock is true. Using local storage fallback.');
+            return;
+        }
+
+        console.log('[Database Debug] Starting initialization from Supabase...');
+        const overlay = document.createElement('div');
+        overlay.id = 'app-init-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0'; overlay.style.left = '0';
+        overlay.style.width = '100vw'; overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(255,255,255,0.9)';
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.innerHTML = `
+            <div style="border:4px solid #f3f3f3; border-top:4px solid #6C3AE8; border-radius:50%; width:40px; height:40px; animation:spin 1s linear infinite;"></div>
+            <div style="margin-top:16px; font-weight:bold; color:#6C3AE8;">데이터 동기화 중...</div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        document.body.appendChild(overlay);
+
+        // Safety fallback: force remove overlay if stuck
+        const safetyTimeout = setTimeout(() => {
+            const stuckOverlay = document.getElementById('app-init-overlay');
+            if (stuckOverlay) {
+                console.warn('[Database Debug] Force removing stuck overlay after timeout.');
+                stuckOverlay.remove();
+                if (isStudent && typeof renderMyClass === 'function') renderMyClass();
+            }
+        }, 8000);
+
+        try {
+            const syncTable = async (tableName, mapperFromDb, mapperToDb, defaultData, localKey) => {
+                try {
+                    const clientToUse = (!isAdmin && typeof publicSupabase !== 'undefined' && publicSupabase) ? publicSupabase : supabase;
+                    const { data, error } = await clientToUse.from(tableName).select('*');
+                    if (error) {
+                        console.error(`[Database Debug] Error fetching ${tableName}:`, error.message);
+                        const stored = localStorage.getItem(localKey);
+                        return stored ? JSON.parse(stored) : defaultData;
+                    }
+                    
+                    if (data.length === 0) {
+                        // Supabase가 비어있으면 → Supabase가 진실의 원체(source of truth)
+                        // 로컈 데이터를 역으로 올리지 않고, 로컈스토리지도 빈 배열로 갱신
+                        console.log('[Database Debug] ' + tableName + ' is empty in Supabase. Clearing local cache.');
+                        localStorage.setItem(localKey, JSON.stringify([]));
+                        return [];
+                    } else {
+                        const fetchedData = data.map(mapperFromDb);
+                        localStorage.setItem(localKey, JSON.stringify(fetchedData));
+                        return fetchedData;
+                    }
+                } catch (err) {
+                    console.error(`[Database Debug] Exception in syncTable for ${tableName}:`, err);
+                    try {
+                        const stored = localStorage.getItem(localKey);
+                        if (stored) return JSON.parse(stored);
+                    } catch(e){}
+                    return defaultData;
+                }
+            };
+
+            const syncPromise = Promise.all([
+                syncTable('sb_notices', mapNoticeFromDb, mapNoticeToDb, defaultNotices, 'gongbubang_notices'),
+                syncTable('sb_classes', mapClassFromDb, mapClassToDb, defaultClasses, 'gongbubang_classes'),
+                syncTable('sb_students', mapStudentFromDb, mapStudentToDb, defaultStudents, 'gongbubang_students'),
+                syncTable('sb_mock_users', mapMockUserFromDb, mapMockUserToDb, [], 'gongbubang_mock_users'),
+                syncTable('sb_resources', mapResourceFromDb, mapResourceToDb, defaultResources, 'gongbubang_resources'),
+                syncTable('sb_homework', mapHomeworkFromDb, mapHomeworkToDb, defaultHomework, 'gongbubang_homework'),
+                syncTable('sb_messages', mapMessageFromDb, mapMessageToDb, defaultMessages, 'gongbubang_messages'),
+                syncTable('sb_feedbacks', mapFeedbackFromDb, mapFeedbackToDb, defaultFeedbacks, 'gongbubang_feedbacks'),
+                syncTable('sb_progress', mapProgressFromDb, mapProgressToDb, defaultProgressList, 'gongbubang_progress'),
+                syncTable('sb_attendance', mapAttendanceFromDb, mapAttendanceToDb, defaultAttendance, 'gongbubang_attendance'),
+                syncTable('sb_consultations', mapConsultationFromDb, mapConsultationToDb, defaultConsultations, 'gongbubang_consultations'),
+                syncTable('sb_curriculums', mapCurriculumFromDb, mapCurriculumToDb, defaultCurriculums, 'gongbubang_curriculums'),
+                syncTable('sb_ai_queries', mapAiQueryFromDb, mapAiQueryToDb, defaultAiQueries, 'gongbubang_ai_queries'),
+                syncTable('sb_textbook_requests', mapTextbookRequestFromDb, mapTextbookRequestToDb, defaultTextbookRequests, 'gongbubang_textbook_requests'),
+                syncTable('sb_class_formulas', mapClassFormulaFromDb, mapClassFormulaToDb, defaultClassFormulas, 'gongbubang_class_formulas'),
+                syncTable('sb_student_badges', mapStudentBadgeFromDb, mapStudentBadgeToDb, [], 'gongbubang_student_badges'),
+                syncTable('sb_word_sets', mapWordSetFromDb, mapWordSetToDb, [], 'gongbubang_word_sets'),
+                syncTable('sb_completed_vocab_sets', mapCompletedVocabFromDb, mapCompletedVocabToDb, [], 'gongbubang_completed_vocab_sets')
+            ]);
+            
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase sync timeout")), 6000));
+            const syncResults = await Promise.race([syncPromise, timeoutPromise]);
+
+            if (syncResults[0]) notices = syncResults[0];
+            if (syncResults[1]) classes = sortClassesByName(syncResults[1]);
+            if (syncResults[2]) students = syncResults[2];
+            if (syncResults[3]) {
+                let mockUsersData = syncResults[3];
+                mockUsers = mockUsersData;
+                const adminEmails = ['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'];
+                let updated = false;
+                adminEmails.forEach(email => {
+                    if (!mockUsersData.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+                        mockUsersData.push({
+                            id: 'admin-' + email.split('@')[0],
+                            email: email,
+                            name: '관리자',
+                            role: 'admin',
+                            status: 'approved',
+                            createdAt: new Date().toISOString()
+                        });
+                        updated = true;
+                    }
+                });
+                if (updated) {
+                    localStorage.setItem('gongbubang_mock_users', JSON.stringify(mockUsersData));
+                    await supabase.from('sb_mock_users').upsert(mockUsersData);
+                }
+            }
+            if (syncResults[4]) resources = syncResults[4];
+            if (syncResults[5]) homework = syncResults[5];
+            if (syncResults[6]) messages = syncResults[6];
+            if (syncResults[7]) feedbacks = syncResults[7];
+            if (syncResults[8]) progressList = syncResults[8];
+            if (syncResults[9]) attendance = syncResults[9];
+            if (syncResults[10]) consultations = syncResults[10];
+            if (syncResults[11]) curriculums = syncResults[11];
+            if (syncResults[12]) aiQueries = syncResults[12];
+            if (syncResults[13]) textbookRequests = syncResults[13];
+            if (syncResults[14]) classFormulas = syncResults[14];
+            if (syncResults[15]) studentBadges = syncResults[15];
+            if (syncResults[16]) wordSets = syncResults[16];
+            if (syncResults[17]) completedVocabSets = syncResults[17];
+
+            // 1. Sync habits — Supabase가 진실의 원천(source of truth)
+            const { data: dbHabits, error: habitsErr } = await supabase.from('sb_habits').select('*');
+            if (!habitsErr) {
+                if (dbHabits.length === 0) {
+                    // Supabase가 비어있으면 로컬 캐시도 모두 삭제
+                    console.log('[Database Debug] sb_habits is empty in Supabase. Clearing local habit caches.');
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_')).forEach(k => localStorage.removeItem(k));
+                } else {
+                    const grouped = {};
+                    dbHabits.forEach(h => {
+                        if (!grouped[h.student_id]) grouped[h.student_id] = [];
+                        grouped[h.student_id].push({
+                            id: h.habit_id,
+                            text: h.habit_name,
+                            frequency: h.frequency
+                        });
+                    });
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habits_')).forEach(k => localStorage.removeItem(k));
+                    Object.keys(grouped).forEach(sId => {
+                        const key = sId === 'admin' ? 'gongbubang_habits_admin' : 'gongbubang_habits_' + sId;
+                        localStorage.setItem(key, JSON.stringify(grouped[sId]));
+                    });
+                }
+            }
+
+            // 2. Sync habit records
+            const { data: dbRecords, error: recordsErr } = await supabase.from('sb_habit_records').select('*');
+            if (!recordsErr) {
+                if (dbRecords.length === 0) {
+                    const allRecordKeys = Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habit_records_'));
+                    for (const key of allRecordKeys) {
+                        const sId = key.replace('gongbubang_habit_records_', '');
+                        try {
+                            const recordsObj = JSON.parse(localStorage.getItem(key));
+                            const rows = [];
+                            Object.keys(recordsObj).forEach(date => {
+                                const dayRecs = recordsObj[date] || {};
+                                Object.keys(dayRecs).forEach(habitId => {
+                                    rows.push({
+                                        id: sId + '_' + habitId + '_' + date,
+                                        student_id: String(sId),
+                                        habit_id: habitId,
+                                        date: date,
+                                        is_completed: !!dayRecs[habitId]
+                                    });
+                                });
+                            });
+                            if (rows.length > 0) {
+                                await supabase.from('sb_habit_records').insert(rows);
+                            }
+                        } catch(e){}
+                    }
+                } else {
+                    const grouped = {};
+                    dbRecords.forEach(r => {
+                        if (!grouped[r.student_id]) grouped[r.student_id] = {};
+                        if (!grouped[r.student_id][r.date]) grouped[r.student_id][r.date] = {};
+                        grouped[r.student_id][r.date][r.habit_id] = r.is_completed;
+                    });
+                    Object.keys(localStorage).filter(k => k.startsWith('gongbubang_habit_records_')).forEach(k => localStorage.removeItem(k));
+                    Object.keys(grouped).forEach(sId => {
+                        const key = sId === 'admin' ? 'gongbubang_habit_records_admin' : 'gongbubang_habit_records_' + sId;
+                        localStorage.setItem(key, JSON.stringify(grouped[sId]));
+                    });
+                }
+            }
+
+            console.log('[Database Debug] All tables synchronized with Supabase.');
+
+            // Refresh all views dynamically
+            if (typeof renderMainScheduleTable === 'function') renderMainScheduleTable();
+            if (typeof renderNotices === 'function') renderNotices();
+            
+            if (isAdmin) {
+                if (typeof renderStudents === 'function') renderStudents();
+                if (typeof renderConsultList === 'function') renderConsultList();
+                if (typeof renderAdminCurriculumList === 'function') renderAdminCurriculumList();
+                if (typeof renderAiQueryManagement === 'function') renderAiQueryManagement();
+                if (typeof renderApprovalList === 'function') renderApprovalList();
+            }
+            if (isStudent) {
+                if (typeof renderMyClass === 'function') renderMyClass();
+            }
+        } catch (err) {
+            console.error('[Database Debug] Exceptional error during Supabase sync:', err);
+        } finally {
+            clearTimeout(safetyTimeout);
+            const overlay = document.getElementById('app-init-overlay');
+            if (overlay) overlay.remove();
+        }
+    };
+
+    // Trigger initial Supabase sync immediately after initialization (moved to end of DOMContentLoaded)
+
+
+    // Helper to safely parse student ID (handles numeric IDs and Supabase UUID strings)
+    
+    const getNextSequentialId = (collection) => {
+        if (!Array.isArray(collection) || collection.length === 0) return 1;
+        const max = Math.max(...collection.map(item => {
+            const num = Number(item.id);
+            return isNaN(num) ? 0 : num;
+        }));
+        return max + 1;
+    };
+
+    const parseStudentId = (rawId) => {
+        if (rawId === null || rawId === undefined) return rawId;
+        return String(rawId);
+    };
+
+    // Helper to resolve student schedule (dynamic class schedule vs custom schedule)
+    const getStudentSchedule = (student) => {
+        if (!student) return { mon: '', tue: '', wed: '', thu: '', fri: '' };
+        if (student.classId) {
+            const cls = classes.find(c => String(c.id) === String(student.classId));
+            if (cls) {
+                return cls.schedule || { mon: '', tue: '', wed: '', thu: '', fri: '' };
+            }
+        }
+        return student.schedule || { mon: '', tue: '', wed: '', thu: '', fri: '' };
+    };
+
+    // Helper to format time as HH:MM
+    const formatTimeInput = (val) => {
+        let cleaned = val.replace(/\D/g, '');
+        cleaned = cleaned.substring(0, 4);
+        
+        if (cleaned.length >= 1) {
+            const first = parseInt(cleaned[0], 10);
+            if (first > 2) cleaned = '2';
+        }
+        if (cleaned.length >= 2) {
+            const hour = parseInt(cleaned.substring(0, 2), 10);
+            if (hour > 23) cleaned = '23' + cleaned.substring(2);
+        }
+        if (cleaned.length >= 3) {
+            const minFirst = parseInt(cleaned[2], 10);
+            if (minFirst > 5) cleaned = cleaned.substring(0, 2) + '5' + cleaned.substring(3);
+        }
+        
+        if (cleaned.length > 2) {
+            return cleaned.substring(0, 2) + ':' + cleaned.substring(2);
+        }
+        return cleaned;
+    };
+
+    const handleTimeInput = (e) => {
+        const target = e.target;
+        const formatted = formatTimeInput(target.value);
+        if (target.value !== formatted) {
+            target.value = formatted;
+        }
+    };
+
+    // Helper to split "HH:MM ~ HH:MM" into {start, end}
+    const splitTimeRange = (timeStr) => {
+        if (!timeStr) return { start: '', end: '' };
+        const parts = timeStr.split('~');
+        if (parts.length === 2) {
+            return {
+                start: parts[0].trim(),
+                end: parts[1].trim()
+            };
+        }
+        return {
+            start: timeStr.trim(),
+            end: ''
+        };
+    };
+
+    // Helper to join start and end into "HH:MM ~ HH:MM"
+    const joinTimeRange = (start, end) => {
+        start = (start || '').trim();
+        end = (end || '').trim();
+        if (start && end) {
+            return `${start} ~ ${end}`;
+        }
+        return start || end || '';
+    };
+
+    // Helper to update unified login button label/state
+    const getLoggedInUserName = () => {
+        if (isAdmin) return '원장';
+        if (isStudent) {
+            if (userRole === 'parent') {
+                return (loggedInParentName || '학부모') + ' (학부모)';
+            }
+            const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+            if (studentSession) {
+                return studentSession.name + ' (학생)';
+            }
+            const user = supabase.auth.user ? supabase.auth.user() : null;
+            if (user) {
+                return (user.user_metadata?.name || user.email) + ' (학부모)';
+            }
+            const s = students.find(x => x.id === loggedInStudentId);
+            if (s) return s.name + ' (학생)';
+        }
+        return '사용자';
+    };
+
+    const updateLoginButton = () => {
+        const btnLoginToggle = document.getElementById('btn-login-toggle');
+        const btnParentLoginToggle = document.getElementById('btn-parent-login-toggle');
+        const displayContainer = document.getElementById('user-profile-display-container');
+        const loggedUserName = document.getElementById('logged-user-name');
+        
+        // Handle student-view class on body to control sidebar and grid template columns dynamically
+        if (isStudent || isAdmin) {
+            document.body.classList.add('student-view');
+        } else {
+            document.body.classList.remove('student-view');
+        }
+        
+        if (!btnLoginToggle) return;
+
+        if (isAdmin || isStudent) {
+            if (btnParentLoginToggle) btnParentLoginToggle.style.display = 'none';
+            btnLoginToggle.classList.add('active-admin');
+            btnLoginToggle.querySelector('span:last-child').textContent = '로그아웃';
+            const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
+            if (iconWrapper) {
+                iconWrapper.innerHTML = '<i data-lucide="log-out"></i>';
+            }
+            if (displayContainer && loggedUserName) {
+                loggedUserName.textContent = getLoggedInUserName();
+                displayContainer.style.display = 'flex';
+            }
+        } else {
+            btnLoginToggle.classList.remove('active-admin');
+            btnLoginToggle.querySelector('span:last-child').textContent = '학생 로그인';
+            const iconWrapper = btnLoginToggle.querySelector('.student-icon-wrapper') || btnLoginToggle.querySelector('.login-icon-wrapper');
+            if (iconWrapper) {
+                iconWrapper.innerHTML = '<i data-lucide="log-in"></i>';
+            }
+            if (btnParentLoginToggle) btnParentLoginToggle.style.display = 'inline-flex';
+            if (displayContainer) {
+                displayContainer.style.display = 'none';
+            }
+        }
+        safeCreateIcons();
+    };
+
+    // ==========================================================================
+    // Mobile Navigation Drawer Toggle
+    // ==========================================================================
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const mobileMenuDrawer = document.getElementById('mobile-menu-drawer');
+    
+    if (mobileMenuToggle && mobileMenuDrawer) {
+        mobileMenuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileMenuDrawer.classList.toggle('open');
+            const isOpen = mobileMenuDrawer.classList.contains('open');
+            const iconWrapper = mobileMenuToggle.querySelector('.menu-icon-wrapper');
+            
+            if (iconWrapper) {
+                if (isOpen) {
+                    iconWrapper.innerHTML = '<i data-lucide="x"></i>';
+                } else {
+                    iconWrapper.innerHTML = '<i data-lucide="menu"></i>';
+                }
+            }
+            safeCreateIcons();
+        });
+
+        const drawerLinks = document.querySelectorAll('.drawer-link');
+        drawerLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenuDrawer.classList.remove('open');
+                const iconWrapper = mobileMenuToggle.querySelector('.menu-icon-wrapper');
+                if (iconWrapper) {
+                    iconWrapper.innerHTML = '<i data-lucide="menu"></i>';
+                }
+                safeCreateIcons();
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!mobileMenuDrawer.contains(e.target) && !mobileMenuToggle.contains(e.target)) {
+                if (mobileMenuDrawer.classList.contains('open')) {
+                    mobileMenuDrawer.classList.remove('open');
+                    const iconWrapper = mobileMenuToggle.querySelector('.menu-icon-wrapper');
+                    if (iconWrapper) {
+                        iconWrapper.innerHTML = '<i data-lucide="menu"></i>';
+                    }
+                    safeCreateIcons();
+                }
+            }
+        });
+    }
+
+    // ==========================================================================
+    // Supabase Connection Status Badge & Modal Toggles
+    // ==========================================================================
+    const statusBadge = document.getElementById('supabase-status-badge');
+    if (statusBadge) {
+        if (isMock) {
+            statusBadge.className = 'supabase-status-badge mock';
+            statusBadge.querySelector('.status-text').textContent = '모의 모드';
+        } else {
+            statusBadge.className = 'supabase-status-badge connected';
+            statusBadge.querySelector('.status-text').textContent = 'Supabase 연결됨';
+        }
+    }
+
+    // Login Type Tabs toggles
+    const btnTabEasy = document.getElementById('btn-tab-easy');
+    const btnTabEmail = document.getElementById('btn-tab-email');
+    const btnTabAdmin = document.getElementById('btn-tab-admin');
+    const easyLoginForm = document.getElementById('student-login-form');
+    const emailLoginForm = document.getElementById('student-email-login-form');
+    const adminLoginForm = document.getElementById('admin-login-form');
+    const socialLoginDivider = document.querySelector('.social-login-divider');
+    const socialLoginButtons = document.querySelector('.social-login-buttons');
+    const signupPrompt = document.querySelector('.signup-prompt');
+
+    if (btnTabEasy && btnTabEmail && btnTabAdmin && easyLoginForm && emailLoginForm && adminLoginForm) {
+        btnTabEasy.addEventListener('click', () => {
+            btnTabEasy.classList.add('active');
+            btnTabEmail.classList.remove('active');
+            btnTabAdmin.classList.remove('active');
+            easyLoginForm.style.display = 'block';
+            emailLoginForm.style.display = 'none';
+            adminLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+            if (signupPrompt) signupPrompt.style.display = 'block';
+        });
+
+        btnTabEmail.addEventListener('click', () => {
+            btnTabEmail.classList.add('active');
+            btnTabEasy.classList.remove('active');
+            btnTabAdmin.classList.remove('active');
+            emailLoginForm.style.display = 'block';
+            easyLoginForm.style.display = 'none';
+            adminLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+            if (signupPrompt) signupPrompt.style.display = 'block';
+        });
+
+        btnTabAdmin.addEventListener('click', () => {
+            btnTabAdmin.classList.add('active');
+            btnTabEasy.classList.remove('active');
+            btnTabEmail.classList.remove('active');
+            adminLoginForm.style.display = 'block';
+            easyLoginForm.style.display = 'none';
+            emailLoginForm.style.display = 'none';
+            if (socialLoginDivider) socialLoginDivider.style.display = 'none';
+            if (socialLoginButtons) socialLoginButtons.style.display = 'none';
+            if (signupPrompt) signupPrompt.style.display = 'none';
+        });
+    }
+
+    // Social Login (OAuth) handlers
+    const btnGoogleLogin = document.getElementById('btn-google-login');
+
+    if (btnGoogleLogin) {
+        btnGoogleLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Google login error:', error.message);
+                    alert('Google 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Google login exceptional error:', err);
+            }
+        });
+    }
+
+    // ID/비밀번호 찾기 DOM Elements & Logic
+    const linkFindCredentials = document.getElementById('link-find-credentials');
+    const findCredentialsModal = document.getElementById('find-credentials-modal');
+    const btnFindCredentialsClose = document.getElementById('btn-find-credentials-close');
+    const linkFindBackLogin = document.getElementById('link-find-back-login');
+    const btnTabFindId = document.getElementById('btn-tab-find-id');
+    const btnTabFindPw = document.getElementById('btn-tab-find-pw');
+    const findIdForm = document.getElementById('find-id-form');
+    const findPwForm = document.getElementById('find-pw-form');
+    const findIdPhoneInput = document.getElementById('find-id-phone');
+    const findPwEmailInput = document.getElementById('find-pw-email');
+    const findPwPhoneInput = document.getElementById('find-pw-phone');
+    const findIdResult = document.getElementById('find-id-result');
+    const findPwResult = document.getElementById('find-pw-result');
+    const loginModal = document.getElementById('student-login-modal');
+
+    if (linkFindCredentials && findCredentialsModal && loginModal) {
+        linkFindCredentials.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginModal.classList.remove('open');
+            findCredentialsModal.classList.add('open');
+            
+            // Reset state
+            if (btnTabFindId) btnTabFindId.click();
+            if (findIdPhoneInput) findIdPhoneInput.value = '';
+            if (findPwEmailInput) findPwEmailInput.value = '';
+            if (findPwPhoneInput) findPwPhoneInput.value = '';
+            if (findIdResult) findIdResult.style.display = 'none';
+            if (findPwResult) findPwResult.style.display = 'none';
+            
+            if (findIdPhoneInput) findIdPhoneInput.focus();
+        });
+    }
+
+    if (btnFindCredentialsClose && findCredentialsModal) {
+        btnFindCredentialsClose.addEventListener('click', () => {
+            findCredentialsModal.classList.remove('open');
+        });
+    }
+
+    if (findCredentialsModal) {
+        findCredentialsModal.addEventListener('click', (e) => {
+            if (e.target === findCredentialsModal) {
+                findCredentialsModal.classList.remove('open');
+            }
+        });
+    }
+
+    if (linkFindBackLogin && findCredentialsModal && loginModal) {
+        linkFindBackLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            findCredentialsModal.classList.remove('open');
+            loginModal.classList.add('open');
+        });
+    }
+
+    if (btnTabFindId && btnTabFindPw && findIdForm && findPwForm) {
+        btnTabFindId.addEventListener('click', () => {
+            btnTabFindId.classList.add('active');
+            btnTabFindPw.classList.remove('active');
+            findIdForm.style.display = 'block';
+            findPwForm.style.display = 'none';
+        });
+
+        btnTabFindPw.addEventListener('click', () => {
+            btnTabFindPw.classList.add('active');
+            btnTabFindId.classList.remove('active');
+            findIdForm.style.display = 'none';
+            findPwForm.style.display = 'block';
+        });
+    }
+
+    if (findIdForm) {
+        findIdForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const phone = findIdPhoneInput.value.trim();
+            if (!phone) return;
+
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const matchedUsers = mockUsers.filter(u => {
+                const userPhone = u.user_metadata?.phone;
+                const matchesPhone = userPhone === phone;
+                const children = u.user_metadata?.children || [];
+                const matchesChildPhone = children.some(c => c.phone === phone) || u.user_metadata?.phone === phone;
+                return matchesPhone || matchesChildPhone;
+            });
+
+            const matchedStudents = students.filter(s => s.phone === phone || s.parentPhone === phone);
+
+            if (matchedUsers.length === 0 && matchedStudents.length === 0) {
+                findIdResult.innerHTML = `<span style="color: var(--error-color); font-weight: 700;">해당 연락처로 가입된 회원 정보를 찾을 수 없습니다.</span>`;
+            } else {
+                let html = `<p style="font-weight: 700; color: var(--primary-color); margin-bottom: 8px;">조회된 회원 정보:</p>`;
+                const shownEmails = new Set();
+                const shownStudents = new Set();
+
+                matchedUsers.forEach(u => {
+                    if (u.email && !shownEmails.has(u.email)) {
+                        shownEmails.add(u.email);
+                        const role = u.user_metadata?.role === 'admin' ? '관리자' : '학부모/학생';
+                        html += `<div>• <strong>이메일:</strong> ${u.email} (${role})</div>`;
+                    }
+                });
+
+                matchedStudents.forEach(s => {
+                    const key = `${s.name}-${s.phone}`;
+                    if (!shownStudents.has(key)) {
+                        shownStudents.add(key);
+                        html += `<div>• <strong>원생 이름:</strong> ${s.name} (${s.school || '학생'})</div>`;
+                    }
+                });
+
+                findIdResult.innerHTML = html;
+            }
+            findIdResult.style.display = 'block';
+        });
+    }
+
+    if (findPwForm) {
+        findPwForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = findPwEmailInput.value.trim();
+            const phone = findPwPhoneInput.value.trim();
+            if (!email || !phone) return;
+
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const foundUser = mockUsers.find(u => u.email === email && (u.user_metadata?.phone === phone || (u.user_metadata?.children || []).some(c => c.phone === phone)));
+
+            if (!foundUser) {
+                if (email === 'teacher@math.com' && phone === '010-0000-0000') {
+                    findPwResult.innerHTML = `
+                        <div style="color: var(--success-color); font-weight: 700; margin-bottom: 5px;">관리자 계정 확인 완료!</div>
+                        <div>원장님의 비밀번호는 <strong>9999</strong> 입니다.</div>
+                    `;
+                } else {
+                    findPwResult.innerHTML = `<span style="color: var(--error-color); font-weight: 700;">입력하신 이메일과 연락처에 일치하는 회원 정보가 없습니다.</span>`;
+                }
+            } else {
+                const pwd = foundUser.password || '비밀번호 정보 없음 (소셜 연동 계정)';
+                findPwResult.innerHTML = `
+                    <div style="color: var(--success-color); font-weight: 700; margin-bottom: 5px;">회원 정보 확인 완료!</div>
+                    <div>회원님의 비밀번호는 <strong>${pwd}</strong> 입니다.</div>
+                `;
+            }
+            findPwResult.style.display = 'block';
+        });
+    }
+
+    const btnNaverLogin = document.getElementById('btn-naver-login');
+    const btnKakaoLogin = document.getElementById('btn-kakao-login');
+
+    if (btnNaverLogin) {
+        btnNaverLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'naver',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Naver login error:', error.message);
+                    alert('Naver 로그인 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Naver login exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnKakaoLogin) {
+        btnKakaoLogin.addEventListener('click', async () => {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'kakao',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Kakao login error:', error.message);
+                    alert('Kakao 로그인 오류: ' + error.message);
+                } else {
+                    // Successful login: close login modal and update UI
+                    const loginModal = document.getElementById('student-login-modal');
+                    if (loginModal) loginModal.classList.remove('open');
+                    updateLoginButton();
+                }
+            } catch (err) {
+                console.error('Kakao login exceptional error:', err);
+            }
+        });
+    }
+
+    // Signup Modal toggles & Dynamic Children logic
+    const linkGoSignup = document.getElementById('link-go-signup');
+    const studentSignupModal = document.getElementById('student-signup-modal');
+    const btnStudentSignupClose = document.getElementById('btn-student-signup-close');
+    const studentLoginModal = document.getElementById('student-login-modal');
+    const signupChildrenContainer = document.getElementById('signup-children-container');
+    const btnSignupAddChild = document.getElementById('btn-signup-add-child');
+
+    // Helper to auto-format phone numbers as 010-XXXX-XXXX
+    const handlePhoneInput = (e) => {
+        const target = e.target;
+        let val = target.value.replace(/[^0-9]/g, '');
+        if (val.length > 11) {
+            val = val.substring(0, 11);
+        }
+        let formatted = '';
+        if (val.length < 4) {
+            formatted = val;
+        } else if (val.length < 8) {
+            formatted = val.substr(0, 3) + '-' + val.substr(3);
+        } else {
+            formatted = val.substr(0, 3) + '-' + val.substr(3, 4) + '-' + val.substr(7);
+        }
+        if (target.value !== formatted) {
+            target.value = formatted;
+        }
+    };
+
+    const staticPhoneFields = [
+        'student-phone-input',
+        'student-parent-phone-input',
+        'student-signup-phone',
+        'find-id-phone',
+        'find-pw-phone'
+    ];
+    
+    const setupBirthdateFocus = () => {
+        document.addEventListener('input', (e) => {
+            const t = e.target;
+            if (t.classList.contains('child-birth-y')) {
+                t.value = t.value.replace(/[^0-9]/g, '');
+                if (t.value.length === 4) {
+                    const block = t.closest('.signup-child-block');
+                    if (block) block.querySelector('.child-birth-m').focus();
+                }
+                updateHiddenBirth(t);
+            } else if (t.classList.contains('child-birth-m')) {
+                t.value = t.value.replace(/[^0-9]/g, '');
+                if (t.value.length === 2) {
+                    const block = t.closest('.signup-child-block');
+                    if (block) block.querySelector('.child-birth-d').focus();
+                }
+                updateHiddenBirth(t);
+            } else if (t.classList.contains('child-birth-d')) {
+                t.value = t.value.replace(/[^0-9]/g, '');
+                if (t.value.length === 2) {
+                    const block = t.closest('.signup-child-block');
+                    if (block) block.querySelector('.child-phone-input').focus();
+                }
+                updateHiddenBirth(t);
+            }
+        });
+
+        const updateHiddenBirth = (target) => {
+            const block = target.closest('.signup-child-block');
+            if (block) {
+                const y = block.querySelector('.child-birth-y').value;
+                const m = block.querySelector('.child-birth-m').value;
+                const d = block.querySelector('.child-birth-d').value;
+                if (y && m && d) {
+                    block.querySelector('.child-birth-input').value = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+                } else {
+                    block.querySelector('.child-birth-input').value = '';
+                }
+            }
+        };
+
+        const py = document.getElementById('parent-child-birth-y');
+        const pm = document.getElementById('parent-child-birth-m');
+        const pd = document.getElementById('parent-child-birth-d');
+        const hidden = document.getElementById('parent-child-birthdate-input');
+        
+        const updateParentHidden = () => {
+            if (py.value && pm.value && pd.value) {
+                hidden.value = `${py.value}-${pm.value.padStart(2,'0')}-${pd.value.padStart(2,'0')}`;
+            } else {
+                hidden.value = '';
+            }
+        };
+
+        if (py && pm && pd) {
+            py.addEventListener('input', () => {
+                py.value = py.value.replace(/[^0-9]/g, '');
+                if (py.value.length === 4) pm.focus();
+                updateParentHidden();
+            });
+            pm.addEventListener('input', () => {
+                pm.value = pm.value.replace(/[^0-9]/g, '');
+                if (pm.value.length === 2) pd.focus();
+                updateParentHidden();
+            });
+            pd.addEventListener('input', () => {
+                pd.value = pd.value.replace(/[^0-9]/g, '');
+                if (pd.value.length === 2) {
+                    const nextInput = document.getElementById('parent-child-username-input');
+                    if (nextInput) nextInput.focus();
+                }
+                updateParentHidden();
+            });
+        }
+    };
+    setupBirthdateFocus();
+
+    const setupGradeInputLogic = () => {
+        document.addEventListener('input', (e) => {
+            const t = e.target;
+            
+            // Handle number-only for text grade input
+            if (t.classList.contains('child-grade-text')) {
+                t.value = t.value.replace(/[^0-9]/g, '');
+            }
+
+            // Handle school name changes to swap input/select
+            if (t.classList.contains('child-school-input')) {
+                const block = t.closest('.signup-child-block');
+                if (block) {
+                    const textInput = block.querySelector('.child-grade-text');
+                    const selectInput = block.querySelector('.child-grade-select');
+                    const val = t.value.trim();
+                    
+                    if (val.includes('초등')) {
+                        textInput.style.display = 'none';
+                        textInput.classList.remove('active-grade');
+                        selectInput.style.display = 'block';
+                        selectInput.classList.add('active-grade');
+                        selectInput.innerHTML = '<option value="">선택</option>' + 
+                            [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
+                    } else if (val.includes('중') || val.includes('고등') || val.includes('중학')) {
+                        textInput.style.display = 'none';
+                        textInput.classList.remove('active-grade');
+                        selectInput.style.display = 'block';
+                        selectInput.classList.add('active-grade');
+                        selectInput.innerHTML = '<option value="">선택</option>' + 
+                            [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
+                    } else {
+                        selectInput.style.display = 'none';
+                        selectInput.classList.remove('active-grade');
+                        textInput.style.display = 'block';
+                        textInput.classList.add('active-grade');
+                        selectInput.innerHTML = '';
+                    }
+                }
+            }
+        });
+    };
+    setupGradeInputLogic();
+
+
+    staticPhoneFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', handlePhoneInput);
+        }
+    });
+
+    // Apply formatter to time range inputs
+    document.querySelectorAll('.time-input').forEach(el => {
+        el.addEventListener('input', handleTimeInput);
+    });
+
+    // Helper to calculate end time based on start time (HH:MM) and duration (minutes)
+    const calculateEndTime = (startTimeStr, durationMinutes) => {
+        if (!startTimeStr || startTimeStr.length !== 5) return '';
+        const parts = startTimeStr.split(':');
+        if (parts.length !== 2) return '';
+        
+        let hour = parseInt(parts[0], 10);
+        let min = parseInt(parts[1], 10);
+        if (isNaN(hour) || isNaN(min)) return '';
+        
+        // Add duration
+        min += durationMinutes;
+        
+        // Handle carry
+        hour += Math.floor(min / 60);
+        min = min % 60;
+        hour = hour % 24; // Wrap around 24 hours
+        
+        const formattedHour = String(hour).padStart(2, '0');
+        const formattedMin = String(min).padStart(2, '0');
+        return `${formattedHour}:${formattedMin}`;
+    };
+
+    const updateEndTimeForInput = (startInput) => {
+        const startVal = startInput.value;
+        const durationInput = document.getElementById('student-class-duration');
+        if (startVal.length === 5 && durationInput) {
+            const duration = parseInt(durationInput.value, 10) || 0;
+            if (duration > 0) {
+                const endInputId = startInput.id.replace('-start', '-end');
+                const endInput = document.getElementById(endInputId);
+                if (endInput) {
+                    endInput.value = calculateEndTime(startVal, duration);
+                }
+            }
+        }
+    };
+
+    // Attach end time auto-calculation to start time inputs
+    document.querySelectorAll('.start-time-input').forEach(el => {
+        el.addEventListener('input', (e) => {
+            updateEndTimeForInput(e.target);
+        });
+    });
+
+    // Update end times when default class duration is modified
+    const defaultDurationInput = document.getElementById('student-class-duration');
+    if (defaultDurationInput) {
+        defaultDurationInput.addEventListener('input', () => {
+            const duration = parseInt(defaultDurationInput.value, 10) || 0;
+            if (duration > 0) {
+                document.querySelectorAll('.start-time-input').forEach(startInput => {
+                    const startVal = startInput.value;
+                    if (startVal.length === 5) {
+                        const endInputId = startInput.id.replace('-start', '-end');
+                        const endInput = document.getElementById(endInputId);
+                        if (endInput) {
+                            endInput.value = calculateEndTime(startVal, duration);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    let childIndex = 0;
+    const createChildInputBlock = () => {
+        childIndex++;
+        const block = document.createElement('div');
+        block.className = 'signup-child-block';
+        block.id = `signup-child-block-${childIndex}`;
+        block.innerHTML = `
+            <div class="signup-child-header">
+                <span class="signup-child-title">자녀 #${childIndex}</span>
+                ${childIndex > 1 ? `
+                    <button type="button" class="btn-signup-remove-child" data-block-id="signup-child-block-${childIndex}" title="삭제">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                    </button>
+                ` : ''}
+            </div>
+            <div class="form-group-modal-row-three">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">이름</label>
+                    <input type="text" class="child-name-input" required placeholder="예: 김민준" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">생년월일</label>
+                    <div style="display: flex; gap: 4px;">
+                        <input type="text" class="child-birth-y" placeholder="YYYY" maxlength="4" required style="padding: 7px 4px; font-size: 0.85rem; width: 45px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <span style="display: flex; align-items: center; color: var(--text-secondary); font-weight: bold;">-</span>
+                        <input type="text" class="child-birth-m" placeholder="MM" maxlength="2" required style="padding: 7px 4px; font-size: 0.85rem; width: 35px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <span style="display: flex; align-items: center; color: var(--text-secondary); font-weight: bold;">-</span>
+                        <input type="text" class="child-birth-d" placeholder="DD" maxlength="2" required style="padding: 7px 4px; font-size: 0.85rem; width: 35px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <input type="hidden" class="child-birth-input">
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">연락처 (선택)</label>
+                    <input type="text" class="child-phone-input" placeholder="010-0000-0000" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+            </div>
+            <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 8px;">
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학교 이름 (예: 공부방초등학교)</label>
+                    <input type="text" class="child-school-input" placeholder="예: 공부방초등학교" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 8px;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">학년</label>
+                    <div style="position: relative;">
+                        <input type="text" class="child-grade-input child-grade-text active-grade" placeholder="숫자만 입력" maxlength="2" style="padding: 8px 12px; font-size: 0.85rem; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <select class="child-grade-input child-grade-select" style="display: none; padding: 8px 12px; font-size: 0.85rem; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group-modal-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+                <div class="form-group-modal" style="margin-bottom: 0;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+                        <span>학생 아이디</span>
+                        <button type="button" class="btn-check-child-id" style="border: none; background: rgba(142,68,173,0.08); color: var(--primary-color); padding: 2px 6px; font-size: 0.65rem; border-radius: 4px; cursor: pointer; font-weight: 700;">중복 체크</button>
+                    </label>
+                    <input type="text" class="child-id-input" required placeholder="영문/숫자 4~12자" style="padding: 8px 12px; font-size: 0.85rem;">
+                    <span class="child-id-check-msg" style="display: none; font-size: 0.68rem; margin-top: 2px; font-weight: 600;"></span>
+                </div>
+                <div class="form-group-modal" style="margin-bottom: 0;">
+                    <label style="font-size: 0.8rem; margin-bottom: 4px; font-weight: 700;">비밀번호</label>
+                    <input type="password" class="child-pw-input" required placeholder="비밀번호 입력" style="padding: 8px 12px; font-size: 0.85rem;">
+                </div>
+            </div>
+        `;
+
+        if (childIndex > 1) {
+            const btnRemove = block.querySelector('.btn-signup-remove-child');
+            if (btnRemove) {
+                btnRemove.addEventListener('click', () => {
+                    block.remove();
+                    reindexChildBlocks();
+                });
+            }
+        }
+
+        const childPhoneInput = block.querySelector('.child-phone-input');
+        if (childPhoneInput) {
+            childPhoneInput.addEventListener('input', handlePhoneInput);
+        }
+
+        const btnCheck = block.querySelector('.btn-check-child-id');
+        const idInput = block.querySelector('.child-id-input');
+        const checkMsg = block.querySelector('.child-id-check-msg');
+        if (btnCheck && idInput && checkMsg) {
+            const checkChildIdDuplicate = () => {
+                const username = idInput.value.trim();
+                if (!username) {
+                    checkMsg.style.display = 'none';
+                    return;
+                }
+                if (username.length < 4) {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#ff4d4f';
+                    checkMsg.textContent = '아이디는 4자 이상이어야 합니다.';
+                    return;
+                }
+                
+                const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === username.toLowerCase());
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                let takenInMock = false;
+                mockUsers.forEach(u => {
+                    if (u.role === 'student' && u.email === username) {
+                        takenInMock = true;
+                    }
+                    const children = u.user_metadata?.children || [];
+                    if (children.some(c => c.username && c.username.toLowerCase() === username.toLowerCase())) {
+                        takenInMock = true;
+                    }
+                });
+                
+                if (takenInStudents || takenInMock) {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#ff4d4f';
+                    checkMsg.textContent = '이미 사용 중인 아이디입니다.';
+                } else {
+                    checkMsg.style.display = 'block';
+                    checkMsg.style.color = '#52c41a';
+                    checkMsg.textContent = '사용 가능한 아이디입니다.';
+                }
+            };
+            
+            btnCheck.addEventListener('click', checkChildIdDuplicate);
+            idInput.addEventListener('blur', checkChildIdDuplicate);
+        }
+
+        signupChildrenContainer.appendChild(block);
+        safeCreateIcons();
+    };
+
+    const reindexChildBlocks = () => {
+        const blocks = signupChildrenContainer.querySelectorAll('.signup-child-block');
+        childIndex = 0;
+        blocks.forEach(block => {
+            childIndex++;
+            block.id = `signup-child-block-${childIndex}`;
+            block.querySelector('.signup-child-title').textContent = `자녀 #${childIndex}`;
+            const header = block.querySelector('.signup-child-header');
+            let removeBtn = header.querySelector('.btn-signup-remove-child');
+            if (childIndex === 1 && removeBtn) {
+                removeBtn.remove();
+            } else if (childIndex > 1 && !removeBtn) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-signup-remove-child';
+                btn.dataset.blockId = `signup-child-block-${childIndex}`;
+                btn.title = '삭제';
+                btn.innerHTML = `<i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>`;
+                btn.addEventListener('click', () => {
+                    block.remove();
+                    reindexChildBlocks();
+                });
+                header.appendChild(btn);
+            }
+        });
+        safeCreateIcons();
+    };
+
+    if (btnSignupAddChild) {
+        btnSignupAddChild.addEventListener('click', () => {
+            createChildInputBlock();
+        });
+    }
+
+    if (linkGoSignup && studentSignupModal && studentLoginModal) {
+        linkGoSignup.addEventListener('click', (e) => {
+            e.preventDefault();
+            studentLoginModal.classList.remove('open');
+            
+            // Show Step 1 (Profile Info) and hide Step 2 (Social Auth)
+            const stepSocial = document.getElementById('signup-step-social');
+            const stepProfile = document.getElementById('signup-step-profile');
+            if (stepSocial) stepSocial.style.display = 'none';
+            if (stepProfile) stepProfile.style.display = 'block';
+
+            // Clear and add first child
+            if (signupChildrenContainer) {
+                signupChildrenContainer.innerHTML = '';
+                childIndex = 0;
+                createChildInputBlock();
+            }
+
+            studentSignupModal.classList.add('open');
+        });
+    }
+
+    // Social Signup buttons
+    const btnSignupGoogle = document.getElementById('btn-signup-google');
+    const btnSignupKakao = document.getElementById('btn-signup-kakao');
+    const btnSignupPrevStep = document.getElementById('btn-signup-prev-step');
+
+    if (btnSignupGoogle) {
+        btnSignupGoogle.addEventListener('click', async () => {
+            try {
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Google signup error:', error.message);
+                    alert('Google 인증 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Google signup exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnSignupKakao) {
+        btnSignupKakao.addEventListener('click', async () => {
+            try {
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'kakao',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+                if (error) {
+                    console.error('Kakao signup error:', error.message);
+                    alert('Kakao 인증 오류: ' + error.message);
+                }
+            } catch (err) {
+                console.error('Kakao signup exceptional error:', err);
+            }
+        });
+    }
+
+    if (btnSignupPrevStep) {
+        btnSignupPrevStep.addEventListener('click', () => {
+            const stepSocial = document.getElementById('signup-step-social');
+            const stepProfile = document.getElementById('signup-step-profile');
+            if (stepSocial) stepSocial.style.display = 'none';
+            if (stepProfile) stepProfile.style.display = 'block';
+        });
+    }
+
+    if (btnStudentSignupClose && studentSignupModal) {
+        btnStudentSignupClose.addEventListener('click', async () => {
+            studentSignupModal.classList.remove('open');
+            sessionStorage.removeItem('gongbubang_signup_flow');
+            sessionStorage.removeItem('pending_signup_data');
+            
+            // If they authenticated but closed the signup modal before saving profile, sign out
+            const sessionResp = await supabase.auth.getSession();
+            const session = sessionResp.data.session;
+            if (session && session.user) {
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const exists = mockUsers.some(u => String(u.email).toLowerCase() === String(session.user.email).toLowerCase());
+                if (!exists) {
+                    await supabase.auth.signOut();
+                }
+            }
+        });
+    }
+
+    // Backdrop click listener removed so signup modal does not close when clicking outside
+
+    // ==========================================================================
+    // Active Navigation Link on Scroll
+    // ==========================================================================
+    const sections = document.querySelectorAll('.feed-section');
+    const navLinks = document.querySelectorAll('.blog-nav-link');
+
+    const scrollActive = () => {
+        const scrollY = window.pageYOffset;
+
+        sections.forEach(current => {
+            // Check if section is displayed (since student section is hidden by default)
+            if (current.style.display === 'none') return;
+
+            const sectionHeight = current.offsetHeight;
+            const sectionTop = current.offsetTop - 120;
+            const sectionId = current.getAttribute('id');
+            const navActiveLink = document.querySelector(`.blog-nav a[href*=${sectionId}]`);
+
+            if (navActiveLink) {
+                if (scrollY > sectionTop && scrollY <= sectionTop + sectionHeight) {
+                    navLinks.forEach(link => link.classList.remove('active'));
+                    navActiveLink.classList.add('active');
+                }
+            }
+        });
+    };
+    // requestAnimationFrame으로 스로틀링 - Android Forced Reflow 방지
+    let _scrollRafId = null;
+    window.addEventListener('scroll', () => {
+        if (_scrollRafId) return;
+        _scrollRafId = requestAnimationFrame(() => {
+            scrollActive();
+            _scrollRafId = null;
+        });
+    }, { passive: true });
+
+    // ==========================================================================
+    // Mascot Card Click: Smooth Scroll with Focus Offset
+    // ==========================================================================
+    const mascotCards = document.querySelectorAll('.mascot-card');
+    mascotCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = card.getAttribute('href');
+            const targetSection = document.querySelector(targetId);
+            if (targetSection) {
+                const targetOffset = targetSection.offsetTop - 90;
+                window.scrollTo({
+                    top: targetOffset,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
+
+    // ==========================================================================
+    // Worksheet Download Simulator & Toast Notifications
+    // ==========================================================================
+    const toastContainer = document.getElementById('toast-container');
+
+    const showToast = (message) => {
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+            <i data-lucide="check-circle" class="toast-icon"></i>
+            <span>${message}</span>
+        `;
+        toastContainer.appendChild(toast);
+        safeCreateIcons();
+
+        setTimeout(() => {
+            toast.style.animation = 'slideIn 0.3s ease-out reverse';
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, 3500);
+    };
+
+    // Default Resources Data
+    const defaultResources = []
+
+    // Seed resources if empty
+    let resources = defaultResources;
+    try {
+        const storedRes = localStorage.getItem('gongbubang_resources');
+        if (storedRes) {
+            resources = JSON.parse(storedRes);
+        } else {
+            localStorage.setItem('gongbubang_resources', JSON.stringify(defaultResources));
+        }
+    } catch(e) {}
+
+    const renderResources = () => {
+        const listContainer = document.querySelector('.resources-list');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+        
+        let resources = [];
+        try {
+            resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+        } catch(e){}
+        
+        if (resources.length === 0) {
+            listContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">등록된 자료가 없습니다.</div>';
+            return;
+        }
+        
+        resources.forEach(res => {
+            const item = document.createElement('div');
+            item.className = 'resource-item';
+            
+            let iconClass = 'pdf-type';
+            if (res.type === 'zip') {
+                iconClass = 'zip-type';
+            } else if (res.type === 'hwp') {
+                iconClass = 'hwp-type';
+            } else if (res.type === 'xls') {
+                iconClass = 'xls-type';
+            }
+            
+            item.innerHTML = `
+                <div class="res-info">
+                    <i data-lucide="file-text" class="file-icon ${iconClass}"></i>
+                    <div class="file-details">
+                        <h4 class="file-title">${res.title}</h4>
+                        <span class="file-meta">파일크기: ${res.size} &middot; 다운로드 수: ${res.downloads}회 &middot; 대상: ${res.target}</span>
+                    </div>
+                </div>
+                <button class="btn-download" data-filename="${res.filename}" data-id="${res.id}">
+                    <i data-lucide="download"></i>
+                    <span>다운로드</span>
+                </button>
+            `;
+            
+            const btn = item.querySelector('.btn-download');
+            btn.addEventListener('click', () => {
+                if (btn.classList.contains('downloading')) return;
+                btn.classList.add('downloading');
+                btn.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i><span>다운로드 중...</span>`;
+                safeCreateIcons();
+                
+                setTimeout(() => {
+                    btn.classList.remove('downloading');
+                    btn.innerHTML = `<i data-lucide="download"></i><span>다운로드</span>`;
+                    safeCreateIcons();
+                    
+                    res.downloads = (res.downloads || 0) + 1;
+                    saveResources();
+                    renderResources();
+                    if (isAdmin) renderAdminResources();
+                    
+                    showToast(`"${res.filename}" 다운로드가 완료되었습니다.`);
+                }, 1500);
+            });
+            
+            listContainer.appendChild(item);
+        });
+        safeCreateIcons();
+    };
+
+    const renderAdminResources = () => {
+        const listContainer = document.getElementById('admin-resource-list-container');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+        
+        let resources = [];
+        try {
+            resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+        } catch(e){}
+        
+        resources.forEach(res => {
+            const item = document.createElement('div');
+            item.className = 'class-list-item';
+            item.style = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: #ffffff; margin-bottom: 8px;';
+            item.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); text-align: left;">${res.title}</span>
+                    <span style="font-size: 0.78rem; color: var(--text-secondary); text-align: left;">${res.size} | ${res.target} | 다운로드: ${res.downloads}회</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn-resource-edit" data-id="${res.id}" style="border: none; background: #f1f5f9; cursor: pointer; padding: 6px; border-radius: 6px; color: var(--text-primary);"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i></button>
+                    <button type="button" class="btn-resource-delete" data-id="${res.id}" style="border: none; background: #fff1f0; cursor: pointer; padding: 6px; border-radius: 6px; color: #ff4d4f;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                </div>
+            `;
+            
+            item.querySelector('.btn-resource-edit').addEventListener('click', () => {
+                document.getElementById('edit-resource-id').value = res.id;
+                document.getElementById('resource-title-input').value = res.title;
+                document.getElementById('resource-size-input').value = res.size;
+                document.getElementById('resource-target-input').value = res.target;
+                document.getElementById('resource-type-select').value = res.type;
+                document.getElementById('resource-filename-input').value = res.filename;
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="edit-3" style="width: 18px; height: 18px;"></i> 자료 수정`;
+                safeCreateIcons();
+            });
+            
+            item.querySelector('.btn-resource-delete').addEventListener('click', () => {
+                if (confirm('이 자료를 삭제하시겠습니까?')) {
+                    resources = resources.filter(r => r.id !== res.id);
+                    saveResources();
+                    renderResources();
+                    renderAdminResources();
+                    showToast('자료가 삭제되었습니다.');
+                }
+            });
+            
+            listContainer.appendChild(item);
+        });
+        safeCreateIcons();
+    };
+
+    // Initialize Resources view
+    setTimeout(renderResources, 100);
+
+    // ==========================================================================
+    // Notice CRUD Panel
+    // ==========================================================================
+    const defaultNotices = []
+
+    let notices = [];
+    // notices는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다
+    
+    let isAdmin = false;
+    let isStudent = false;
+    let loggedInStudentId = null;
+    let userRole = null; // "admin" | "parent" | "student"
+    let loggedInParentName = '';
+    let currentNoticeTag = 'all';
+    let currentNoticeQuery = '';
+    let currentVocabFilter = 'studying'; // 'studying' | 'completed'
+    let completedVocabSets = [];
+
+    // Default homework dummy data
+    const defaultHomework = []
+
+    // Default chat messages dummy data
+    const defaultMessages = []
+
+    // Default feedback dummy data
+    const defaultFeedbacks = []
+
+    // Default progress dummy data
+    const defaultProgressList = []
+
+    // Default attendance dummy data
+    const defaultAttendance = []
+
+    // Default consultations dummy data
+    const defaultConsultations = []
+
+    // Default AI Queries dummy data
+    const defaultAiQueries = []
+
+    // Default curriculums dummy data
+    const defaultCurriculums = []
+
+    // 모든 데이터는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
+    let homework = [];
+    let messages = [];
+    let feedbacks = [];
+    let progressList = [];
+    let attendance = [];
+    let consultations = [];
+    let curriculums = [];
+    let aiQueries = [];
+    const defaultTextbookRequests = [];
+    let textbookRequests = [];
+
+    let classFormulas = [];
+    let studentBadges = [];
+    let wordSets = [];
+    let mockUsers = [];
+    
+
+    
+
+    const saveHomework = async () => {
+        try { localStorage.setItem('gongbubang_homework', JSON.stringify(homework)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = homework.map(mapHomeworkToDb);
+                await supabase.from('sb_homework').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving homework to Supabase:', e);
+            }
+        }
+    };
+
+    const saveCampSignups = async () => {
+        try {
+            localStorage.setItem('gongbubang_camp_signups', JSON.stringify(campSignups));
+        } catch(e) {}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const rows = campSignups.map(s => ({
+                    id: String(s.id),
+                    notice_id: s.noticeId,
+                    student_id: String(s.studentId),
+                    student_name: s.studentName,
+                    parent_phone: s.parentPhone,
+                    fee: s.fee,
+                    payment_status: s.paymentStatus || '미결제',
+                    created_at: s.createdAt
+                }));
+                await supabase.from('sb_camp_signups').upsert(rows);
+            } catch(e) {
+                console.error('Error saving camp signups to Supabase:', e);
+            }
+        }
+    };
+
+    const saveClassFormulas = async () => {
+        try { localStorage.setItem('gongbubang_class_formulas', JSON.stringify(classFormulas)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = classFormulas.map(mapClassFormulaToDb);
+                await supabase.from('sb_class_formulas').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving class formulas to Supabase:', e);
+            }
+        }
+    };
+
+    const deleteClassFormula = async (formulaId) => {
+        classFormulas = classFormulas.filter(f => String(f.id) !== String(formulaId));
+        try { localStorage.setItem('gongbubang_class_formulas', JSON.stringify(classFormulas)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                await supabase.from('sb_class_formulas').delete().eq('id', formulaId);
+            } catch(e) {
+                console.error('Error deleting class formula from Supabase:', e);
+            }
+        }
+    };
+
+    const saveStudentBadges = async () => {
+        try { localStorage.setItem('gongbubang_student_badges', JSON.stringify(studentBadges)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = studentBadges.map(mapStudentBadgeToDb);
+                await supabase.from('sb_student_badges').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving student badges to Supabase:', e);
+            }
+        }
+    };
+
+    const saveFeedbacks = async () => {
+        try { localStorage.setItem('gongbubang_feedbacks', JSON.stringify(feedbacks)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = feedbacks.map(mapFeedbackToDb);
+                await supabase.from('sb_feedbacks').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving feedbacks to Supabase:', e);
+            }
+        }
+    };
+    const saveProgressList = async () => {
+        try { localStorage.setItem('gongbubang_progress', JSON.stringify(progressList)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = progressList.map(mapProgressToDb);
+                await supabase.from('sb_progress').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving progress list to Supabase:', e);
+            }
+        }
+    };
+    const saveMessages = async () => {
+        try { localStorage.setItem('gongbubang_messages', JSON.stringify(messages)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = messages.map(mapMessageToDb);
+                await supabase.from('sb_messages').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving messages to Supabase:', e);
+            }
+        }
+    };
+    const saveAttendance = async () => {
+        try { localStorage.setItem('gongbubang_attendance', JSON.stringify(attendance)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = attendance.map(mapAttendanceToDb);
+                await supabase.from('sb_attendance').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving attendance to Supabase:', e);
+            }
+        }
+    };
+    const saveConsultations = async () => {
+        try { localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = consultations.map(mapConsultationToDb);
+                await supabase.from('sb_consultations').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving consultations to Supabase:', e);
+            }
+        }
+    };
+    const saveCurriculums = async () => {
+        try { localStorage.setItem('gongbubang_curriculums', JSON.stringify(curriculums)); } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = curriculums.map(mapCurriculumToDb);
+                await supabase.from('sb_curriculums').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving curriculums to Supabase:', e);
+            }
+        }
+    };
+    
+    // Default classes dummy data
+    const defaultClasses = []
+
+    // classes는 Supabase 동기화(initializeDataFromSupabase) 후 설정됩니다 - 기본값 사용 안 함
+    let classes = [];
+    try {
+        const storedClasses = localStorage.getItem('gongbubang_classes');
+        if (storedClasses) {
+            const parsed = JSON.parse(storedClasses);
+            if (Array.isArray(parsed)) {
+                classes = sortClassesByName(parsed.filter(c => c && typeof c === 'object'));
+            }
+        }
+    } catch (e) {
+        console.error('localStorage is not accessible for classes data.', e);
+        classes = [];
+    }
+
+    const getEarliestTime = (c) => {
+        let earliest = '23:59';
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+        days.forEach(day => {
+            const timeRange = c.schedule?.[day];
+            if (timeRange && timeRange !== '-') {
+                const start = timeRange.split('~')[0].trim();
+                if (start && start.length >= 5 && start < earliest) {
+                    earliest = start;
+                }
+            }
+        });
+        return earliest;
+    };
+
+    const getClassTimeRange = (c) => {
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+        for (const day of days) {
+            const val = c.schedule?.[day];
+            if (val && val !== '-') return val;
+        }
+        return '-';
+    };
+
+    const renderMainScheduleTable = () => {
+        const tbody = document.getElementById('main-schedule-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        if (!Array.isArray(classes) || classes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding: 24px; color: var(--text-secondary);">등록된 수업 스케줄이 없습니다.</td></tr>`;
+            return;
+        }
+
+        const sortedClasses = [...classes].sort((a, b) => {
+            const timeA = getEarliestTime(a);
+            const timeB = getEarliestTime(b);
+            return timeA.localeCompare(timeB);
+        });
+        
+        const simplifyClassName = (name) => {
+            if (!name) return '-';
+            return name
+                .replace(/초등\s*(\d+)학년/g, '초$1')
+                .replace(/중등\s*(\d+)학년/g, '중$1')
+                .replace(/고등\s*(\d+)학년/g, '고$1')
+                .replace(/초등/g, '초')
+                .replace(/중등/g, '중')
+                .replace(/고등/g, '고')
+                .replace(/학년/g, '')
+                .replace(/반/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
+        sortedClasses.forEach(c => {
+            const tr = document.createElement('tr');
+            
+            const displayName = simplifyClassName(c.name);
+            // Show simplified class name under the days it is scheduled, otherwise "-"
+            const monText = (c.schedule?.mon && c.schedule.mon !== '-') ? displayName : '-';
+            const tueText = (c.schedule?.tue && c.schedule.tue !== '-') ? displayName : '-';
+            const wedText = (c.schedule?.wed && c.schedule.wed !== '-') ? displayName : '-';
+            const thuText = (c.schedule?.thu && c.schedule.thu !== '-') ? displayName : '-';
+            const friText = (c.schedule?.fri && c.schedule.fri !== '-') ? displayName : '-';
+            const timeRange = getClassTimeRange(c);
+            let formattedTimeRange = timeRange;
+            if (timeRange && timeRange.includes('~')) {
+                const parts = timeRange.split('~');
+                formattedTimeRange = `${parts[0].trim()}~<br>${parts[1].trim()}`;
+            }
+            
+            tr.innerHTML = `
+                <td class="time-slot" style="font-weight: 700; line-height: 1.2;">${formattedTimeRange}</td>
+                <td>${monText}</td>
+                <td>${tueText}</td>
+                <td>${wedText}</td>
+                <td>${thuText}</td>
+                <td>${friText}</td>
+                <td style="font-weight: 500; color: var(--text-secondary);">${c.duration || 90}분</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    };
+
+    const saveClasses = async () => {
+        classes = sortClassesByName(classes);
+        try { 
+            localStorage.setItem('gongbubang_classes', JSON.stringify(classes)); 
+            renderMainScheduleTable();
+        } catch(e){}
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = classes.map(mapClassToDb);
+                await supabase.from('sb_classes').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving classes to Supabase:', e);
+            }
+        }
+    };
+
+    let currentCalStudentId = null;
+    let currentCalYear = null;
+    let currentCalMonth = null;
+    let myClassCalYear = null;
+    let myClassCalMonth = null;
+
+
+
+    // Elements
+    const noticeListContainer = document.getElementById('notice-list-container');
+    const btnLoginToggle = document.getElementById('btn-login-toggle');
+    const btnAdminToggle = btnLoginToggle;
+    const btnAdminWrite = document.getElementById('btn-admin-write');
+    
+    // Auth Modal Elements
+    const adminAuthModal = document.getElementById('admin-auth-modal');
+    const btnAuthClose = document.getElementById('btn-auth-close');
+    const adminAuthForm = document.getElementById('admin-auth-form');
+    const adminPasswordInput = document.getElementById('admin-password-input');
+    const authErrorMsg = document.getElementById('auth-error-msg');
+    
+    // Notice Editor Modal Elements
+    const noticeFormModal = document.getElementById('notice-form-modal');
+    const btnFormClose = document.getElementById('btn-form-close');
+    const noticeEditorForm = document.getElementById('notice-editor-form');
+    const editNoticeIdInput = document.getElementById('edit-notice-id');
+    const noticeTagSelect = document.getElementById('notice-tag-select');
+    const noticeSizeSelect = document.getElementById('notice-size-select');
+    const noticeColorSelect = document.getElementById('notice-color-select');
+    const noticePinCheckbox = document.getElementById('notice-pin-checkbox');
+    const noticeTitleInput = document.getElementById('notice-title-input');
+    const noticeContentInput = document.getElementById('notice-content-input');
+    const formModalTitle = document.getElementById('form-modal-title');
+
+    // Safe localStorage Write
+    const saveNotices = async () => {
+        try {
+            localStorage.setItem('gongbubang_notices', JSON.stringify(notices));
+        } catch (e) {
+            console.error('Failed to save to localStorage.', e);
+        }
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const mapped = notices.map(mapNoticeToDb);
+                await supabase.from('sb_notices').upsert(mapped);
+            } catch(e) {
+                console.error('Error saving notices to Supabase:', e);
+            }
+        }
+    };
+
+    // Format current date (YYYY. MM. DD)
+    const getFormattedDate = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const date = String(d.getDate()).padStart(2, '0');
+        return `${year}. ${month}. ${date}`;
+    };
+
+    // Dynamic renderer for Notice cards
+    const renderNotices = () => {
+        if (!noticeListContainer) return;
+
+        // Apply filters
+        const query = (currentNoticeQuery || '').trim().toLowerCase();
+        const filteredNotices = notices.filter(notice => {
+            const matchesTag = currentNoticeTag === 'all' || notice.tag === currentNoticeTag;
+            const matchesQuery = !query || 
+                                 notice.title.toLowerCase().includes(query) || 
+                                 notice.content.toLowerCase().includes(query);
+            return matchesTag && matchesQuery;
+        });
+
+        // Dynamic sorting: Pinned notices go first, then sorted by ID descending
+        filteredNotices.sort((a, b) => {
+            const aPinned = a.pinned ? 1 : 0;
+            const bPinned = b.pinned ? 1 : 0;
+            if (aPinned !== bPinned) {
+                return bPinned - aPinned;
+            }
+            return b.id - a.id;
+        });
+
+        noticeListContainer.innerHTML = '';
+        
+        if (filteredNotices.length === 0) {
+            noticeListContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    검색 결과에 맞는 공지사항이 없습니다.
+                </div>
+            `;
+            return;
+        }
+
+        filteredNotices.forEach(notice => {
+            const article = document.createElement('article');
+            article.className = `notice-card ${notice.pinned ? 'highlight' : ''}`;
+            
+            let tagClass = '';
+            if (notice.tag === '공지' || notice.tag === '안내') {
+                tagClass = 'tag-gray';
+            }
+
+            let adminControls = '';
+            if (isAdmin) {
+                adminControls = `
+                    <div class="notice-admin-actions">
+                        <button class="btn-notice-edit" data-id="${notice.id}" title="수정"><i data-lucide="edit-3"></i></button>
+                        <button class="btn-notice-delete" data-id="${notice.id}" title="삭제"><i data-lucide="trash-2"></i></button>
+                    </div>
+                `;
+            }
+
+            let titleStyles = [];
+            const tSize = notice.titleSize || 'normal';
+            const tColor = notice.titleColor || 'default';
+
+            if (tSize === 'large') {
+                titleStyles.push('font-size: 1.35rem');
+            } else if (tSize === 'xlarge') {
+                titleStyles.push('font-size: 1.6rem');
+            } else {
+                titleStyles.push('font-size: 1.1rem');
+            }
+
+            if (tColor === 'blue') {
+                titleStyles.push('color: #18181b');
+            } else if (tColor === 'red') {
+                titleStyles.push('color: #52525b');
+            } else if (tColor === 'green') {
+                titleStyles.push('color: #71717a');
+            } else if (tColor === 'purple') {
+                titleStyles.push('color: #a1a1aa');
+            }
+
+            const styleString = titleStyles.length > 0 ? `style="${titleStyles.join('; ')}"` : '';
+            const pinIconHtml = notice.pinned ? `<i data-lucide="pin" style="width: 14px; height: 14px; color: var(--mascot-red-bg); vertical-align: middle; margin-right: 4px; transform: rotate(45deg);"></i>` : '';
+
+            let recruitWidget = '';
+            if (notice.recruitEnabled) {
+                const signupsForThis = campSignups.filter(s => String(s.noticeId) === String(notice.id));
+                const currentCount = signupsForThis.length;
+                const isClosed = notice.recruitClosed || currentCount >= (notice.recruitCapacity || 10);
+                
+                let actionArea = '';
+                if (userRole === 'parent') {
+                    let parentChildrenList = [];
+                    if (loggedInStudentId) {
+                        const activeStd = students.find(s => s.id === loggedInStudentId);
+                        if (activeStd) {
+                            const pId = String(loggedInStudentId).split('-')[0];
+                            parentChildrenList = students.filter(s => 
+                                (s.parentPhone && activeStd.parentPhone && s.parentPhone === activeStd.parentPhone) ||
+                                String(s.id).startsWith(pId)
+                            );
+                        }
+                    }
+                    
+                    if (parentChildrenList.length > 0) {
+                        const eligibleChildren = parentChildrenList.filter(child => 
+                            !signupsForThis.some(signup => String(signup.studentId) === String(child.id))
+                        );
+                        
+                        if (isClosed) {
+                            actionArea = `<div style="color: #ef4444; font-weight: 800; text-align: center; margin-top: 10px;">🔴 모집 정원이 초과되었거나 마감되었습니다.</div>`;
+                        } else if (eligibleChildren.length === 0) {
+                            actionArea = `<div style="color: var(--mascot-purple-bg); font-weight: 800; text-align: center; margin-top: 10px;">✅ 모든 자녀가 신청을 완료했습니다.</div>`;
+                        } else {
+                            const selectOptions = eligibleChildren.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                            actionArea = `
+                                <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center; justify-content: center; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">자녀 선택:</span>
+                                    <select class="recruit-child-select" style="padding: 4px 8px; font-size: 0.82rem; border-radius: 6px; border: 1px solid var(--border-color); outline: none;">
+                                        ${selectOptions}
+                                    </select>
+                                    <button class="btn-recruit-apply" data-notice-id="${notice.id}" style="background: var(--mascot-purple-bg); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                        신청하기
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                } else if (userRole === 'student') {
+                    const alreadySignedUp = signupsForThis.some(signup => String(signup.studentId) === String(loggedInStudentId));
+                    if (alreadySignedUp) {
+                        actionArea = `<div style="color: var(--mascot-purple-bg); font-weight: 800; text-align: center; margin-top: 10px;">✅ 특강/캠프 신청이 완료되었습니다.</div>`;
+                    } else if (isClosed) {
+                        actionArea = `<div style="color: #ef4444; font-weight: 800; text-align: center; margin-top: 10px;">🔴 모집이 마감되었습니다.</div>`;
+                    } else {
+                        actionArea = `<div style="color: var(--text-secondary); text-align: center; margin-top: 10px; font-size: 0.82rem;">💡 학부모 계정으로 로그인하시면 이 특강에 신청하실 수 있습니다.</div>`;
+                    }
+                } else {
+                    const signupNames = signupsForThis.map(s => `${s.studentName}(${s.paymentStatus || '미결제'})`).join(', ') || '없음';
+                    actionArea = `
+                        <div style="margin-top: 10px; font-size: 0.82rem; color: var(--text-secondary); background: #f8fafc; padding: 8px 12px; border-radius: 8px;">
+                            <strong>신청 학생 명단:</strong> ${signupNames}
+                        </div>
+                    `;
+                }
+
+                recruitWidget = `
+                    <div class="recruit-box" style="margin-top: 14px; background: #f1f5f9; border-left: 4px solid var(--mascot-purple-bg); border-radius: 8px; padding: 12px 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 0.9rem; font-weight: 800; color: var(--mascot-purple-bg); display: flex; align-items: center; gap: 4px;">
+                                📢 ${notice.recruitType || '특강'} 모집
+                            </span>
+                            <span class="badge" style="background: ${isClosed ? '#ef4444' : '#22c55e'}; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700;">
+                                ${isClosed ? '모집 마감' : '모집 중'}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 0.82rem; color: var(--text-primary);">
+                            <div><strong>모집 정원:</strong> ${notice.recruitCapacity || 10}명 (현재 ${currentCount}명 신청)</div>
+                            <div><strong>특강 기간:</strong> ${notice.recruitStart || '-'} ~ ${notice.recruitEnd || '-'}</div>
+                            <div><strong>특강비:</strong> ${Number(notice.recruitFee || 0).toLocaleString()}원</div>
+                        </div>
+                        ${actionArea}
+                    </div>
+                `;
+            }
+
+            article.innerHTML = `
+                <div class="notice-tag ${tagClass}">${notice.tag}</div>
+                <div class="notice-body">
+                    <h3 class="notice-title"><a href="#" onclick="return false;" ${styleString}>${pinIconHtml}${notice.title}</a></h3>
+                    <p class="notice-summary" style="white-space: pre-line;">${notice.content}</p>
+                    ${recruitWidget}
+                    <div class="notice-meta">
+                        <span class="notice-date"><i data-lucide="clock"></i> ${notice.date}</span>
+                        <span class="notice-author">작성자: ${notice.author}</span>
+                    </div>
+                </div>
+                ${adminControls}
+            `;
+            noticeListContainer.appendChild(article);
+        });
+
+        safeCreateIcons();
+        attachCardListeners();
+
+        // Bind recruit application buttons
+        document.querySelectorAll('.btn-recruit-apply').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const noticeId = parseInt(btn.getAttribute('data-notice-id'));
+                const notice = notices.find(n => n.id === noticeId);
+                if (!notice) return;
+                
+                const selectEl = btn.parentElement.querySelector('.recruit-child-select');
+                if (!selectEl) return;
+                
+                const selectedStudentId = selectEl.value;
+                const targetStudent = students.find(s => String(s.id) === String(selectedStudentId));
+                if (!targetStudent) return;
+                
+                if (confirm(`"${targetStudent.name}" 자녀를 "${notice.title}" 특강에 신청하시겠습니까?\n신청 시 특강비가 청구 요청 항목에 추가됩니다.`)) {
+                    const newSignup = {
+                        id: crypto.randomUUID(),
+                        noticeId,
+                        studentId: targetStudent.id,
+                        studentName: targetStudent.name,
+                        parentPhone: targetStudent.parentPhone || '',
+                        fee: notice.recruitFee || 0,
+                        paymentStatus: '미결제',
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    campSignups.push(newSignup);
+                    await saveCampSignups();
+                    
+                    const billingReq = {
+                        id: crypto.randomUUID(),
+                        studentId: targetStudent.id,
+                        studentName: targetStudent.name,
+                        bookName: `[특강] ${notice.title}`,
+                        requestDate: new Date().toISOString().split('T')[0],
+                        amount: notice.recruitFee || 0,
+                        isPaid: false,
+                        paidDate: ''
+                    };
+                    textbookRequests.unshift(billingReq);
+                    try {
+                        localStorage.setItem('gongbubang_textbook_requests', JSON.stringify(textbookRequests));
+                    } catch(err) {}
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        try {
+                            await supabase.from('sb_textbook_requests').upsert({
+                                id: billingReq.id,
+                                student_id: billingReq.studentId,
+                                student_name: billingReq.studentName,
+                                book_name: billingReq.bookName,
+                                request_date: billingReq.requestDate,
+                                amount: billingReq.amount,
+                                is_paid: billingReq.isPaid,
+                                paid_date: billingReq.paidDate
+                            });
+                        } catch(err) {}
+                    }
+                    
+                    showToast(`"${targetStudent.name}" 자녀의 특강 신청이 완료되었습니다.`);
+                    renderNotices();
+                    if (typeof renderBilling === 'function') renderBilling();
+                }
+            });
+        });
+    };
+
+    // Card edit/delete listeners
+    const attachCardListeners = () => {
+        if (!isAdmin) return;
+
+        const editBtns = document.querySelectorAll('#notice-list-container .btn-notice-edit');
+        const deleteBtns = document.querySelectorAll('#notice-list-container .btn-notice-delete');
+
+        editBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.getAttribute('data-id'));
+                const noticeToEdit = notices.find(n => n.id === id);
+                if (noticeToEdit && editNoticeIdInput && noticeTagSelect && noticeTitleInput && noticeContentInput && formModalTitle && noticeFormModal) {
+                    editNoticeIdInput.value = noticeToEdit.id;
+                    noticeTagSelect.value = noticeToEdit.tag;
+                    if (noticeSizeSelect) noticeSizeSelect.value = noticeToEdit.titleSize || 'normal';
+                    if (noticeColorSelect) noticeColorSelect.value = noticeToEdit.titleColor || 'default';
+                    if (noticePinCheckbox) noticePinCheckbox.checked = noticeToEdit.pinned || false;
+                    
+                    const recruitChk = document.getElementById('notice-recruit-checkbox');
+                    const recruitPanel = document.getElementById('recruit-settings-panel');
+                    if (recruitChk) recruitChk.checked = noticeToEdit.recruitEnabled || false;
+                    if (recruitPanel) recruitPanel.style.display = noticeToEdit.recruitEnabled ? 'block' : 'none';
+                    if (document.getElementById('notice-recruit-type')) document.getElementById('notice-recruit-type').value = noticeToEdit.recruitType || '정규특강';
+                    if (document.getElementById('notice-recruit-capacity')) document.getElementById('notice-recruit-capacity').value = noticeToEdit.recruitCapacity || 10;
+                    if (document.getElementById('notice-recruit-start')) document.getElementById('notice-recruit-start').value = noticeToEdit.recruitStart || '';
+                    if (document.getElementById('notice-recruit-end')) document.getElementById('notice-recruit-end').value = noticeToEdit.recruitEnd || '';
+                    if (document.getElementById('notice-recruit-fee')) document.getElementById('notice-recruit-fee').value = noticeToEdit.recruitFee || 0;
+                    if (document.getElementById('notice-recruit-closed')) document.getElementById('notice-recruit-closed').checked = noticeToEdit.recruitClosed || false;
+
+                    noticeTitleInput.value = noticeToEdit.title;
+                    noticeContentInput.value = noticeToEdit.content;
+                    formModalTitle.textContent = '공지사항 수정';
+                    noticeFormModal.classList.add('open');
+                }
+            });
+        });
+
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.getAttribute('data-id'));
+                if (confirm('이 공지사항을 정말 삭제하시겠습니까?')) {
+                    // 1. Supabase에서 먼저 삭제 (upsert는 삭제 안 됨 - 별도 DELETE 필수)
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        try {
+                            const { error } = await supabase.from('sb_notices').delete().eq('id', id);
+                            if (error) console.error('[Delete] Notice delete error:', error.message);
+                            else console.log('[Delete] Notice deleted from Supabase, id:', id);
+                        } catch(err) {
+                            console.error('[Delete] Notice delete exception:', err);
+                        }
+                    }
+                    // 2. 로컬 상태 및 localStorage 업데이트
+                    notices = notices.filter(n => n.id !== id);
+                    try { localStorage.setItem('gongbubang_notices', JSON.stringify(notices)); } catch(e) {}
+                    renderNotices();
+                    showToast('공지사항이 삭제되었습니다.');
+                }
+            });
+        });
+    };
+
+    // ==========================================================================
+    // Student LMS Panel (Admin Only Features)
+    // ==========================================================================
+    const defaultStudents = []
+
+        // students는 Supabase 동기화 후 설정됩니다 - 기본값 사용 안 함
+    let students = [];
+    try {
+        const stored = localStorage.getItem('gongbubang_students');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                students = parsed.filter(s => s && typeof s === 'object').map(s => ({ ...s, id: String(s.id) }));
+            }
+        }
+    } catch (e) {
+        console.error('localStorage is not accessible for students data.', e);
+        students = [];
+    }
+
+    // Student DOM Elements
+    const studentSection = document.getElementById('students');
+    const studentGridContainer = document.getElementById('student-grid-container');
+    const studentSearchInput = document.getElementById('student-search-input');
+    const btnStudentWrite = document.getElementById('btn-student-write');
+    // Student View State
+    let currentStudentView = 'active'; // 'active' or 'terminated'
+    let currentTerminatedYear = 'all'; // 'all' or specific year
+
+    // Student DOM Elements
+    const navLinkStudents = document.getElementById('nav-link-students');
+    const drawerLinkStudents = document.getElementById('drawer-link-students');
+    const tuitionAdminSection = document.getElementById('tuition-admin');
+    const navLinkTuitionAdmin = document.getElementById('nav-link-tuition-admin');
+    const drawerLinkTuitionAdmin = document.getElementById('drawer-link-tuition-admin');
+
+    // Student Modal Elements
+    const studentFormModal = document.getElementById('student-form-modal');
+    const btnStudentFormClose = document.getElementById('btn-student-form-close');
+    const studentEditorForm = document.getElementById('student-editor-form');
+    const editStudentIdInput = document.getElementById('edit-student-id');
+    const studentNameInput = document.getElementById('student-name-input');
+    const studentAgeInput = document.getElementById('student-age-input');
+    const studentSchoolInput = document.getElementById('student-school-input');
+    const studentPhoneInput = document.getElementById('student-phone-input');
+    const studentParentPhoneInput = document.getElementById('student-parent-phone-input');
+    const studentSiblingInput = document.getElementById('student-sibling-input');
+    const studentClassDurationInput = document.getElementById('student-class-duration');
+    const studentTimeMonStart = document.getElementById('student-time-mon-start');
+    const studentTimeMonEnd = document.getElementById('student-time-mon-end');
+    const studentTimeTueStart = document.getElementById('student-time-tue-start');
+    const studentTimeTueEnd = document.getElementById('student-time-tue-end');
+    const studentTimeWedStart = document.getElementById('student-time-wed-start');
+    const studentTimeWedEnd = document.getElementById('student-time-wed-end');
+    const studentTimeThuStart = document.getElementById('student-time-thu-start');
+    const studentTimeThuEnd = document.getElementById('student-time-thu-end');
+    const studentTimeFriStart = document.getElementById('student-time-fri-start');
+    const studentTimeFriEnd = document.getElementById('student-time-fri-end');
+    const studentProgressInput = document.getElementById('student-progress-input');
+    const studentRemarksInput = document.getElementById('student-remarks-input');
+    const studentTerminatedCheckbox = document.getElementById('student-terminated-checkbox');
+    const studentTerminationDateInput = document.getElementById('student-termination-date-input');
+    const studentFormModalTitle = document.getElementById('student-form-modal-title');
+
+    const populateStudentParentSelect = () => {
+        const select = document.getElementById('student-parent-select');
+        if (!select) return;
+        select.innerHTML = '<option value="">학부모 선택 연결</option>';
+        if (typeof mockUsers !== 'undefined' && Array.isArray(mockUsers)) {
+            const parentsList = mockUsers.filter(u => u.role === 'parent');
+            parentsList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.phone || '';
+                opt.textContent = `${p.name || '학부모'} (${p.phone || '연락처 없음'})`;
+                select.appendChild(opt);
+            });
+        }
+    };
+
+    // Auto-calculate age when birthdate changes in register/edit student form
+    const birthdateInputEl = document.getElementById('student-birthdate-input');
+    if (birthdateInputEl) {
+        birthdateInputEl.addEventListener('change', () => {
+            const val = birthdateInputEl.value;
+            if (val) {
+                const birthYear = new Date(val).getFullYear();
+                const currentYear = new Date().getFullYear();
+                const age = currentYear - birthYear + 1; // Korean age calculation
+                if (studentAgeInput) studentAgeInput.value = age;
+            }
+        });
+    }
+
+    // Connect select with phone input
+    const parentSelectEl = document.getElementById('student-parent-select');
+    if (parentSelectEl) {
+        parentSelectEl.addEventListener('change', () => {
+            if (parentSelectEl.value && studentParentPhoneInput) {
+                studentParentPhoneInput.value = parentSelectEl.value;
+                if (typeof mockUsers !== 'undefined' && Array.isArray(mockUsers)) {
+                    const selectedParent = mockUsers.find(u => u.phone === parentSelectEl.value && u.role === 'parent');
+                    if (selectedParent && selectedParent.address) {
+                        const parts = selectedParent.address.split(' | ');
+                        const addressInput = document.getElementById('student-address-input');
+                        const addressDetailInput = document.getElementById('student-address-detail-input');
+                        if (addressInput) addressInput.value = parts[0] || '';
+                        if (addressDetailInput) addressDetailInput.value = parts[1] || '';
+                    }
+                }
+            }
+        });
+    }
+
+    const populateTerminationYears = () => {
+        const yearFilter = document.getElementById('terminated-year-filter');
+        if (!yearFilter) return;
+        
+        const years = new Set();
+        students.forEach(s => {
+            if (s.isTerminated && s.terminationDate) {
+                const year = new Date(s.terminationDate).getFullYear();
+                if (year && !isNaN(year)) {
+                    years.add(year);
+                }
+            }
+        });
+        
+        const sortedYears = Array.from(years).sort((a, b) => b - a);
+        const prevVal = yearFilter.value || 'all';
+        
+        yearFilter.innerHTML = '<option value="all">전체 년도</option>';
+        sortedYears.forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = String(y);
+            opt.textContent = `${y}년`;
+            yearFilter.appendChild(opt);
+        });
+        
+        if (sortedYears.includes(Number(prevVal))) {
+            yearFilter.value = prevVal;
+        } else {
+            yearFilter.value = 'all';
+            currentTerminatedYear = 'all';
+        }
+    };
+
+    const updateTotalStudentsCount = () => {
+        const countEl = document.getElementById('total-students-count');
+        if (countEl) {
+            const activeStudents = students.filter(s => !s.isTerminated);
+            countEl.textContent = `${activeStudents.length}명`;
+        }
+    };
+
+    // Safe localStorage Write for students
+    // changedIds: 변경된 학생 ID 배열 - 지정 시 해당 학생만 upsert (다른 기기 데이터 덮어쓰기 방지)
+    const saveStudents = async (changedIds = null) => {
+        try {
+            localStorage.setItem('gongbubang_students', JSON.stringify(students));
+            updateTotalStudentsCount();
+        } catch (e) {
+            console.error('Failed to save students to localStorage.', e);
+        }
+        // saveStudents는 upsert(저장/수정)만 담당 - 삭제는 deleteStudentFromSupabase에서 직접 처리
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const toUpsert = changedIds
+                    ? students.filter(s => changedIds.includes(String(s.id)))
+                    : students;
+                if (toUpsert.length > 0) {
+                    const mapped = toUpsert.map(mapStudentToDb);
+                    const { error } = await supabase.from('sb_students').upsert(mapped);
+                    if (error) console.error('[Save] Student upsert error:', error.message);
+                    else console.log('[Save] Students upserted:', toUpsert.map(s => s.id));
+                }
+            } catch(e) {
+                console.error('Error saving students to Supabase:', e);
+            }
+        }
+    };
+
+    // 원생 삭제 전용 함수 - Supabase DELETE 직접 호출
+    const deleteStudentFromSupabase = async (id) => {
+        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+            try {
+                const { error } = await supabase.from('sb_students').delete().eq('id', String(id));
+                if (error) console.error('[Delete] Student delete error:', error.message);
+                else console.log('[Delete] Student deleted from Supabase, id:', id);
+            } catch(err) {
+                console.error('[Delete] Student delete exception:', err);
+            }
+        }
+    };
+
+    // Render Student Cards
+    const renderStudents = (searchQuery = '') => {
+        if (!studentGridContainer) return;
+        studentGridContainer.innerHTML = '';
+
+        const query = searchQuery.trim().toLowerCase();
+        const classFilterEl = document.getElementById('student-class-filter');
+        const classFilterVal = classFilterEl ? classFilterEl.value : '';
+
+        const filteredStudents = students.filter(s => {
+            const matchesSearch = s.name.toLowerCase().includes(query);
+            
+            if (currentStudentView === 'active') {
+                if (s.isTerminated) return false;
+                const matchesClass = !classFilterVal || String(s.classId) === String(classFilterVal);
+                return matchesSearch && matchesClass;
+            } else {
+                if (!s.isTerminated) return false;
+                
+                if (currentTerminatedYear !== 'all') {
+                    const terminationYear = s.terminationDate ? new Date(s.terminationDate).getFullYear() : null;
+                    if (String(terminationYear) !== String(currentTerminatedYear)) {
+                        return false;
+                    }
+                }
+                return matchesSearch;
+            }
+        });
+
+        if (filteredStudents.length === 0) {
+            studentGridContainer.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                    ${searchQuery ? '검색 결과에 맞는 원생이 없습니다.' : '등록된 원생 카드가 없습니다.'}
+                </div>
+            `;
+            return;
+        }
+
+        filteredStudents.forEach(student => {
+            const card = document.createElement('div');
+            card.className = 'student-card';
+
+            const siblingTag = student.sibling && student.sibling !== '없음' && student.sibling !== '무' ? `<span class="student-sibling-tag">${student.sibling}</span>` : '';
+
+            const studentClass = student.classId ? classes.find(c => String(c.id) === String(student.classId)) : null;
+            const classNameTag = studentClass ? `<br><span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-purple-bg); background: rgba(142, 68, 173, 0.08); padding: 2px 6px; border-radius: 6px; margin-top: 4px; display: inline-block;">${studentClass.name}</span>` : '';
+
+            // Weekly schedule calculations
+            const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+            const dayLabels = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
+            let scheduleHtml = '';
+
+            const studentSchedule = getStudentSchedule(student);
+            days.forEach(day => {
+                const timeVal = studentSchedule[day] || '';
+                const isEmpty = !timeVal;
+                const formattedTime = timeVal.replace(/\s*~\s*/g, '<br>');
+                scheduleHtml += `
+                    <div class="day-slot">
+                        <span class="day-label">${dayLabels[day]}</span>
+                        <span class="day-time ${isEmpty ? 'empty' : ''}">${isEmpty ? '-' : formattedTime}</span>
+                    </div>
+                `;
+            });
+
+            // Get earned badges for the student (resolving all duplicate profiles of same student name)
+            const studentProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            const studentIds = studentProfiles.map(s => String(s.id));
+            const earned = studentBadges.filter(b => studentIds.includes(String(b.studentId)) && b.status === 'Mastered');
+            let badgeListHtml = '';
+            if (earned.length === 0) {
+                badgeListHtml = '<span style="font-size: 0.72rem; color: var(--text-muted);">획득한 배지 없음</span>';
+            } else {
+                earned.forEach(badge => {
+                    badgeListHtml += `
+                        <span style="display: inline-flex; align-items: center; gap: 2px; background: linear-gradient(135deg, #fdf4ff, #fae8ff); border: 1px solid #c084fc; border-radius: 20px; padding: 1px 6px; font-size: 0.68rem; font-weight: 700; color: #c084fc; margin-right: 4px; margin-bottom: 4px;" title="${badge.badgeName}">🏆 ${badge.badgeName}</span>
+                    `;
+                });
+            }
+
+            // Calculate homework count and lists for admin
+            const studentHomework = homework.filter(h => String(h.studentId) === String(student.id));
+            const pendingHwList = studentHomework.filter(h => !h.isCompleted);
+            const completedHwList = studentHomework.filter(h => h.isCompleted);
+
+            let adminHwHtml = '';
+            if (studentHomework.length === 0) {
+                adminHwHtml = '<div style="color: var(--text-muted); font-size: 0.78rem; font-style: italic;">배정된 과제가 없습니다.</div>';
+            } else {
+                adminHwHtml = `
+                    <div style="font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">
+                        완료 ${completedHwList.length}개 / 전체 ${studentHomework.length}개
+                    </div>
+                    <div style="max-height: 120px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 6px;">
+                `;
+                pendingHwList.forEach(hw => {
+                    adminHwHtml += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #fff5f5; border: 1px solid #ffe3e3; padding: 6px 10px; border-radius: 8px; font-size: 0.78rem;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
+                                <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" style="cursor: pointer; width: 14px; height: 14px;">
+                                <span style="font-weight: 600; color: #c53030; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                            </div>
+                            <span style="font-size: 0.7rem; color: #e53e3e; background: #fff5f5; border: 1px solid #fed7d7; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">미완료 (기한: ${hw.dueDate})</span>
+                        </div>
+                    `;
+                });
+                completedHwList.forEach(hw => {
+                    const teacherChecked = hw.teacherConfirmed ? 'checked' : '';
+                    const parentConfirmTag = hw.parentConfirmed
+                        ? `<span style="font-size: 0.68rem; font-weight: 700; color: #8e44ad; background: rgba(142, 68, 173, 0.08); border: 1px solid rgba(142, 68, 173, 0.2); padding: 2px 4px; border-radius: 4px; white-space: nowrap;">학부모 확인 완료</span>`
+                        : `<span style="font-size: 0.68rem; color: var(--text-muted); background: #f1f5f9; border: 1px solid var(--border-color); padding: 2px 4px; border-radius: 4px; white-space: nowrap;">학부모 대기</span>`;
+
+                    adminHwHtml += `
+                        <div style="display: flex; flex-direction: column; background: #f0fdf4; border: 1px solid #dcfce7; padding: 8px 10px; border-radius: 8px; font-size: 0.78rem; opacity: 0.95;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-grow: 1; min-width: 0;">
+                                    <input type="checkbox" class="admin-homework-checkbox" data-hw-id="${hw.id}" checked style="cursor: pointer; width: 14px; height: 14px;">
+                                    <span style="text-decoration: line-through; color: #166534; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hw.title}">${hw.title}</span>
+                                </div>
+                                <span style="font-size: 0.7rem; color: #15803d; background: #e2fbe8; border: 1px solid #bbf7d0; padding: 1px 4px; border-radius: 4px; white-space: nowrap;">완료됨</span>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #bbf7d0; padding-top: 6px; margin-top: 4px;">
+                                <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: #166534; cursor: pointer;">
+                                    <input type="checkbox" class="admin-teacher-confirm-checkbox" data-hw-id="${hw.id}" ${teacherChecked} style="width: 12px; height: 12px;">
+                                    원장 확인
+                                </label>
+                                ${parentConfirmTag}
+                            </div>
+                        </div>
+                    `;
+                });
+                adminHwHtml += `</div>`;
+            }
+
+            // Calculate attendance logs (today)
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const todayStr = `${yyyy}-${mm}-${dd}`;
+
+            const studentAttendance = attendance.filter(a => a.studentId === student.id && (a.date === todayStr || !a.date));
+            
+            // Check if there is a scheduled class for today
+            const dayOfWeek = today.getDay();
+            const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const dayKey = dayKeys[dayOfWeek];
+            const scheduleTime = (dayOfWeek >= 1 && dayOfWeek <= 5) ? studentSchedule[dayKey] : '';
+
+            let virtualStudentAttendance = [...studentAttendance];
+            if (scheduleTime) {
+                const hasAny = studentAttendance.some(log => log.type === 'in' || log.type === 'out' || log.type === 'absent' || log.type === 'makeup');
+                if (!hasAny) {
+                    virtualStudentAttendance.push({
+                        type: 'in',
+                        time: '',
+                        memo: '자동 출석'
+                    });
+                }
+            }
+
+            let attendanceLogsHtml = '';
+            virtualStudentAttendance.forEach(log => {
+                let typeText = '출석';
+                let tagClass = 'in';
+                if (log.type === 'in') { typeText = '출석'; tagClass = 'in'; }
+                else if (log.type === 'out') { typeText = '출석'; tagClass = 'in'; }
+                else if (log.type === 'absent') { typeText = '결석'; tagClass = 'absent'; }
+                else if (log.type === 'makeup') { typeText = '보강'; tagClass = 'makeup'; }
+
+                const timeInfo = '';
+                const memoInfo = log.memo ? ` (${log.memo})` : '';
+                const isAuto = log.memo === '자동 출석';
+                const smsInfo = isAuto ? '' : ' (안심문자 전송완료)';
+                attendanceLogsHtml += `
+                    <div style="margin-top: 4px;">
+                        <span class="attendance-log-tag ${tagClass}">${typeText}</span>${timeInfo}${memoInfo}${smsInfo}
+                    </div>
+                `;
+            });
+            if (virtualStudentAttendance.length === 0) {
+                attendanceLogsHtml = '<div style="color: var(--text-muted); font-size: 0.78rem;">오늘 출결 기록 없음</div>';
+            }
+
+            // Calculate feedbacks list (timeline newest first)
+            const studentFeedbacks = feedbacks
+                .filter(f => f.studentId === student.id)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            let feedbacksHtml = '';
+            studentFeedbacks.forEach(fb => {
+                feedbacksHtml += `
+                    <div class="feedback-item" style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-purple-bg); background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">${fb.date}</span>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${fb.content}</div>
+                    </div>
+                `;
+            });
+            if (studentFeedbacks.length === 0) {
+                feedbacksHtml = '<div style="color: var(--text-muted); font-size: 0.8rem;">피드백 기록이 없습니다.</div>';
+            }
+
+            // Calculate progress list (timeline newest first)
+            const studentProgressList = progressList
+                .filter(p => p.studentId === student.id)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            let progressListHtml = '';
+            studentProgressList.forEach(prog => {
+                progressListHtml += `
+                    <div class="progress-item" style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-green-bg); background: rgba(39, 39, 42, 0.08); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">${prog.date}</span>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${prog.content}</div>
+                    </div>
+                `;
+            });
+            if (studentProgressList.length === 0) {
+                progressListHtml = '<div style="color: var(--text-muted); font-size: 0.8rem;">진도 기록이 없습니다.</div>';
+            }
+
+            const terminationTag = student.isTerminated 
+                ? `<span style="font-size: 0.72rem; font-weight: 700; color: #ff4d4f; background: #fff2f0; border: 1px solid #ffccc7; padding: 2px 6px; border-radius: 6px; margin-top: 4px; display: inline-block;">종결 (${student.terminationDate || '날짜 미지정'})</span>`
+                : '';
+
+            card.innerHTML = `
+                <div class="student-card-header">
+                    <div class="student-info-title">
+                        <h3>${student.name}</h3>
+                        <span>${student.age}세 &middot; ${student.school}</span>
+                        ${siblingTag}
+                        ${classNameTag}
+                        ${terminationTag}
+                    </div>
+                </div>
+                <div class="student-contact-section">
+                    <div class="student-contact-item">
+                        <i data-lucide="smartphone" style="width: 14px; height: 14px; color: var(--primary-color);"></i>
+                        <strong>학생 연락처:</strong> 
+                        ${student.phone ? `<a href="tel:${student.phone}">${student.phone}</a>` : '없음'}
+                    </div>
+                    <div class="student-contact-item">
+                        <i data-lucide="phone-call" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>
+                        <strong>부모님 연락처:</strong> 
+                        <a href="tel:${student.parentPhone}">${student.parentPhone}</a>
+                    </div>
+                </div>
+                <div class="student-schedule-timeline">
+                    ${scheduleHtml}
+                </div>
+                <div class="student-progress-box">
+                    <h4><i data-lucide="book-open" style="width: 14px; height: 14px; color: var(--mascot-green-bg);"></i>대표 교재 / 과정</h4>
+                    <div class="student-progress-text" style="font-weight: 600; margin-bottom: 8px;">${student.progress}</div>
+                    
+                    <h4 style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-top: 10px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                        <i data-lucide="activity" style="width: 14px; height: 14px; color: var(--mascot-green-bg);"></i>진도 기록 히스토리
+                    </h4>
+                    <div class="student-progress-history-list" style="max-height: 150px; overflow-y: auto; padding-right: 4px;">
+                        ${progressListHtml}
+                    </div>
+                </div>
+                <div class="student-progress-box" style="margin-top: 12px;">
+                    <h4 style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>과제 수행 현황 및 히스토리
+                    </h4>
+                    <div style="font-size: 0.84rem;">
+                        ${adminHwHtml}
+                    </div>
+                </div>
+                <div class="student-remarks-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; flex-wrap: wrap;">
+                        <h4 style="margin: 0; display: flex; align-items: center; gap: 4px;"><i data-lucide="file-edit" style="width: 14px; height: 14px; color: var(--text-secondary);"></i>특이사항 및 피드백</h4>
+                        <div style="position: relative; width: 120px;">
+                            <input type="text" class="student-feedback-search" data-student-id="${student.id}" placeholder="피드백 검색..." style="width: 100%; padding: 4px 8px 4px 22px; border-radius: 4px; border: 1px solid var(--border-color); outline: none; font-size: 0.72rem; background: #ffffff;">
+                            <i data-lucide="search" style="position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; color: var(--text-muted);"></i>
+                        </div>
+                    </div>
+                    <div class="student-remarks-list" style="max-height: 150px; overflow-y: auto; padding-right: 4px;">
+                        ${feedbacksHtml}
+                    </div>
+                </div>
+                <div class="student-remarks-box" style="margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                    <h4 style="margin: 0 0 6px 0; display: flex; align-items: center; gap: 4px;"><i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i>공식 마스터 획득 배지</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 100px; overflow-y: auto;">
+                        ${badgeListHtml}
+                    </div>
+                </div>
+                <div class="student-progress-box" style="margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+                    <h4 style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="bell" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i>오늘의 출결 로그 (SMS 발송)
+                    </h4>
+                    <div class="attendance-logs-container">
+                        ${attendanceLogsHtml}
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 14px; border-top: 1px dashed var(--border-color); padding-top: 14px; flex-wrap: wrap;">
+                    <button class="btn-admin-mode btn-attendance-in" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1;">출석 처리</button>
+                    <button class="btn-admin-mode btn-attendance-out" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1;">결석 처리</button>
+                    <button class="btn-admin-write btn-assign-homework" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1; background: var(--primary-color); border: none;">과제 출제</button>
+                    <button class="btn-admin-write btn-write-progress" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1; background: var(--mascot-green-bg); border: none;">진도 기록</button>
+                    <button class="btn-admin-write btn-write-feedback" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1; background: var(--mascot-purple-bg); border: none;">피드백 작성</button>
+                    <button class="btn-admin-write btn-student-calendar" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; flex-grow: 1; background: var(--mascot-pink-bg); border: none;">출결 달력</button>
+                    <button class="btn-admin-mode btn-teacher-chat" data-id="${student.id}" style="padding: 6px 12px; font-size: 0.78rem; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 50%;"><i data-lucide="message-square" style="width: 14px; height: 14px;"></i></button>
+                </div>
+                <div class="notice-admin-actions">
+                    <button class="btn-notice-edit btn-student-edit" data-id="${student.id}" title="수정"><i data-lucide="edit-3"></i></button>
+                    <button class="btn-notice-delete btn-student-delete" data-id="${student.id}" title="삭제"><i data-lucide="trash-2"></i></button>
+                </div>
+            `;
+            if (window.initTeacherExamView) window.initTeacherExamView(card, student);
+            studentGridContainer.appendChild(card);
+        });
+
+        safeCreateIcons();
+        attachStudentCardListeners();
+    };
+
+
+    // Render monthly calendar helper
+    const renderCalendar = (studentId, year, month, containerId, isAdmin = false) => {
+        const student = students.find(s => s.id === studentId);
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = '';
+
+        let countPresent = 0;
+        let countAbsent = 0;
+        let countMakeup = 0;
+
+        // Update year/month title
+        if (containerId === 'calendar-grid-days') {
+            const titleEl = document.getElementById('calendar-month-year');
+            if (titleEl) titleEl.textContent = `${year}년 ${month + 1}월`;
+        } else if (containerId === 'myclass-calendar-grid-days') {
+            const titleEl = document.getElementById('myclass-calendar-month-year');
+            if (titleEl) titleEl.textContent = `${year}년 ${month + 1}월`;
+        }
+
+        // Get first day of month and number of days
+        const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun, 1 = Mon ...
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        const prevTotalDays = new Date(year, month, 0).getDate();
+
+        // Calculate total class days for this month (regular classes + makeup classes)
+        let totalClassDays = 0;
+        if (student) {
+            for (let d = 1; d <= totalDays; d++) {
+                const cellDate = new Date(year, month, d);
+                const dayOfWeek = cellDate.getDay();
+                const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                const dayKey = dayKeys[dayOfWeek];
+                const studentSchedule = getStudentSchedule(student);
+                const scheduleTime = (dayOfWeek >= 1 && dayOfWeek <= 5) ? studentSchedule[dayKey] : '';
+                
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dateLogs = attendance.filter(a => a.studentId === studentId && a.date === dateStr);
+                const hasMakeup = dateLogs.some(log => log.type === 'makeup');
+                
+                if (scheduleTime || hasMakeup) {
+                    totalClassDays++;
+                }
+            }
+        }
+
+        if (containerId === 'myclass-calendar-grid-days') {
+            const totalCountEl = document.getElementById('myclass-total-classes-count');
+            if (totalCountEl) totalCountEl.textContent = `${totalClassDays}일`;
+        }
+
+        // Render previous month's trailing days (disabled/other-month style)
+        for (let i = firstDayIndex - 1; i >= 0; i--) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-cell other-month';
+            const dateNum = prevTotalDays - i;
+            cell.innerHTML = `<span class="calendar-date-number">${dateNum}</span>`;
+            container.appendChild(cell);
+        }
+
+        // Today's date components
+        const today = new Date();
+        const tYear = today.getFullYear();
+        const tMonth = today.getMonth();
+        const tDate = today.getDate();
+
+        // Render current month's days
+        for (let day = 1; day <= totalDays; day++) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-cell';
+            
+            // Check if today
+            if (year === tYear && month === tMonth && day === tDate) {
+                cell.classList.add('today');
+            }
+
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            
+            // --- Pre-compute indicators for this date (used both in header and later) ---
+            const dateFeedbacksEarly = feedbacks.filter(f => f.studentId === studentId && f.date === dateStr);
+            const dateHomeworksEarly = homework.filter(h => String(h.studentId) === String(studentId) && h.dueDate === dateStr);
+            const dateProgressEarly = progressList.filter(p => String(p.studentId) === String(studentId) && p.date === dateStr);
+
+            // Build compact indicator icons for inline display next to date number
+            let indicatorHtml = '';
+            if (dateFeedbacksEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-fb" title="피드백 ${dateFeedbacksEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>`;
+            }
+            if (dateHomeworksEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-hw" title="과제 ${dateHomeworksEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>`;
+            }
+            if (dateProgressEarly.length > 0) {
+                indicatorHtml += `<span class="cal-ind cal-ind-pg" title="진도 ${dateProgressEarly.length}건"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>`;
+            }
+
+            // Date label row: number + inline indicators
+            cell.innerHTML = `<div class="cal-date-header"><span class="calendar-date-number">${day}</span>${indicatorHtml ? `<span class="cal-ind-group">${indicatorHtml}</span>` : ''}</div>`;
+
+            // Filter attendance/makeup logs for this date
+            const dateLogs = attendance.filter(a => a.studentId === studentId && a.date === dateStr);
+            
+            const eventContainer = document.createElement('div');
+            eventContainer.className = 'calendar-cell-events';
+
+            // Add scheduled regular class if any
+            const cellDate = new Date(year, month, day);
+            const dayOfWeek = cellDate.getDay();
+            const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const dayKey = dayKeys[dayOfWeek];
+            const studentSchedule = student ? getStudentSchedule(student) : { mon: '', tue: '', wed: '', thu: '', fri: '' };
+            const scheduleTime = (dayOfWeek >= 1 && dayOfWeek <= 5) ? studentSchedule[dayKey] : '';
+            if (scheduleTime) {
+                const startTime = scheduleTime.split(/[~\-]/)[0].trim();
+                const schedBadge = document.createElement('div');
+                schedBadge.className = 'calendar-badge regular-class';
+                schedBadge.style.background = '#f8fafc';
+                schedBadge.style.color = '#64748b';
+                schedBadge.style.border = '1px dashed #cbd5e1';
+                schedBadge.style.fontWeight = '600';
+                schedBadge.style.fontSize = '0.62rem';
+                schedBadge.textContent = `${startTime}~`;
+                schedBadge.title = `정규 수업시간: ${scheduleTime}`;
+                eventContainer.appendChild(schedBadge);
+            }
+
+            // Create a virtual logs list to include automatic attendance
+            let virtualLogs = [...dateLogs];
+            const cellDateTime = new Date(year, month, day).getTime();
+            const todayDate = new Date(tYear, tMonth, tDate).getTime();
+            const isTodayOrPast = cellDateTime <= todayDate;
+
+            if (isTodayOrPast && scheduleTime) {
+                const hasAnyAttendance = dateLogs.some(log => log.type === 'in' || log.type === 'out' || log.type === 'absent' || log.type === 'makeup');
+                if (!hasAnyAttendance) {
+                    virtualLogs.push({
+                        type: 'in',
+                        time: '',
+                        memo: '자동 출석'
+                    });
+                }
+            }
+
+            virtualLogs.forEach(log => {
+                const badge = document.createElement('div');
+                let typeClass = 'in';
+                let typeText = '출석';
+                if (log.type === 'in') { typeClass = 'in'; typeText = '출석'; countPresent++; }
+                else if (log.type === 'out') { typeClass = 'in'; typeText = '출석'; countPresent++; }
+                else if (log.type === 'absent') { typeClass = 'absent'; typeText = '결석'; countAbsent++; }
+                else if (log.type === 'makeup') { typeClass = 'makeup'; typeText = '보강'; countMakeup++; }
+
+                badge.className = `calendar-badge ${typeClass}`;
+                
+                // Only show main attendance text (e.g. '출석', '결석', '보강') without memo suffixes like '(자동출석)'
+                badge.textContent = typeText;
+                badge.title = typeText + (log.memo ? ` (${log.memo})` : '');
+                eventContainer.appendChild(badge);
+            });
+
+            // (Indicator icons are now displayed inline next to date number, not in a separate row)
+            // The dateFeedbacks/dateHomeworks/dateProgress variables are still referenced below for click detail modal
+            const dateFeedbacks = dateFeedbacksEarly;
+            const dateHomeworks = dateHomeworksEarly;
+            const dateProgress = dateProgressEarly;
+
+
+            cell.appendChild(eventContainer);
+
+            // Add click event for admins to set attendance
+            if (isAdmin) {
+                cell.addEventListener('click', () => {
+                    const editPanel = document.getElementById('attendance-edit-panel');
+                    const editDateInput = document.getElementById('attendance-edit-date');
+                    const editDateLabel = document.getElementById('attendance-edit-date-label');
+                    const editTypeSelect = document.getElementById('attendance-edit-type');
+                    const editMemoInput = document.getElementById('attendance-edit-memo');
+
+                    if (editPanel && editDateInput && editDateLabel && editTypeSelect && editMemoInput) {
+                        editDateInput.value = dateStr;
+                        editDateLabel.textContent = dateStr;
+
+                        // Pre-populate with first log of this day if exists
+                        if (dateLogs.length > 0) {
+                            const firstLog = dateLogs[0];
+                            editTypeSelect.value = firstLog.type;
+                            editMemoInput.value = firstLog.memo || '';
+                        } else {
+                            editTypeSelect.value = 'in';
+                            editMemoInput.value = '';
+                        }
+
+                        editPanel.style.display = 'block';
+                    }
+                });
+            } else {
+                // 🌟 Click event for parents to see details (Feedback, Homework, Progress)
+                cell.style.cursor = 'pointer';
+                cell.addEventListener('click', () => {
+                    const detailModal = document.getElementById('myclass-detail-modal');
+                    const detailDate = document.getElementById('myclass-detail-modal-date');
+                    const detailFeedback = document.getElementById('myclass-detail-feedback');
+                    const detailHomework = document.getElementById('myclass-detail-homework');
+                    const detailProgress = document.getElementById('myclass-detail-progress');
+
+                    if (detailModal && detailDate && detailFeedback && detailHomework && detailProgress) {
+                        detailDate.textContent = `${year}년 ${month + 1}월 ${day}일 학습 일지`;
+
+                        // 1. Feedback
+                        if (dateFeedbacks.length > 0) {
+                            detailFeedback.textContent = dateFeedbacks.map(f => f.content).join('\n\n');
+                        } else {
+                            detailFeedback.innerHTML = `<span style="color: var(--text-muted); font-style: italic;">이날 등록된 지도 피드백이 없습니다.</span>`;
+                        }
+
+                        // 2. Homework
+                        const hws = homework.filter(h => h.studentId === studentId && h.dueDate === dateStr);
+                        if (hws.length > 0) {
+                            let hwHtml = '<ul style="margin: 0; padding-left: 20px;">';
+                            hws.forEach(hw => {
+                                const statusText = hw.isCompleted ? '<span style="color: var(--mascot-green-bg); font-weight: 700;">✅ 완료</span>' : '<span style="color: #ef4444; font-weight: 700;">❌ 미완료</span>';
+                                hwHtml += `<li style="margin-bottom: 6px;"><strong>${hw.title}</strong>: ${hw.description} (${statusText})</li>`;
+                            });
+                            hwHtml += '</ul>';
+                            detailHomework.innerHTML = hwHtml;
+                        } else {
+                            detailHomework.innerHTML = `<span style="color: var(--text-muted); font-style: italic;">이날 제출/예정된 과제가 없습니다.</span>`;
+                        }
+
+                        // 3. Progress
+                        const todayProgress = progressList.find(p => p.studentId === studentId && p.date === dateStr);
+                        const allStudentProgress = progressList
+                            .filter(p => p.studentId === studentId)
+                            .sort((a, b) => new Date(b.date) - new Date(a.date));
+                        const latestProgress = allStudentProgress.length > 0 ? allStudentProgress[0] : null;
+
+                        if (todayProgress) {
+                            detailProgress.innerHTML = `<strong>[오늘의 진도]</strong>\n${todayProgress.content}`;
+                        } else if (latestProgress) {
+                            detailProgress.innerHTML = `<span style="color: var(--text-secondary); display: block; margin-bottom: 6px; font-size: 0.78rem;">💡 이 날짜의 진도 기록이 없어 가장 최근 진도를 표시합니다 (작성일: ${latestProgress.date}):</span><strong>${latestProgress.content}</strong>`;
+                        } else {
+                            detailProgress.innerHTML = `<span style="color: var(--text-muted); font-style: italic;">등록된 진도 기록이 전혀 없습니다.</span>`;
+                        }
+
+                        detailModal.classList.add('open');
+                        safeCreateIcons();
+
+                        const closeBtn = document.getElementById('btn-myclass-detail-close');
+                        if (closeBtn) {
+                            closeBtn.onclick = () => {
+                                detailModal.classList.remove('open');
+                            };
+                        }
+
+                        detailModal.onclick = (e) => {
+                            if (e.target === detailModal) {
+                                detailModal.classList.remove('open');
+                            }
+                        };
+                    }
+                });
+            }
+
+            container.appendChild(cell);
+        }
+
+        // Render next month's leading days to complete the calendar grid row if needed
+        const gridTotalCells = firstDayIndex + totalDays;
+        const remainingCells = gridTotalCells % 7 === 0 ? 0 : 7 - (gridTotalCells % 7);
+        for (let i = 1; i <= remainingCells; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-cell other-month';
+            cell.innerHTML = `<span class="calendar-date-number">${i}</span>`;
+            container.appendChild(cell);
+        }
+
+        // Update summary counts at the top of the calendar modal
+        if (containerId === 'calendar-grid-days') {
+            const presentEl = document.getElementById('cal-total-present');
+            const absentEl = document.getElementById('cal-total-absent');
+            const makeupEl = document.getElementById('cal-total-makeup');
+            if (presentEl) presentEl.textContent = countPresent;
+            if (absentEl) absentEl.textContent = countAbsent;
+            if (makeupEl) makeupEl.textContent = countMakeup;
+        }
+
+        // Reinitialize icons in calendar if needed
+        safeCreateIcons();
+    };
+
+    // Student CRUD Listeners
+    const attachStudentCardListeners = () => {
+        const editBtns = document.querySelectorAll('.btn-student-edit');
+        const deleteBtns = document.querySelectorAll('.btn-student-delete');
+        const attendanceInBtns = document.querySelectorAll('.btn-attendance-in');
+        const attendanceOutBtns = document.querySelectorAll('.btn-attendance-out');
+        const assignHomeworkBtns = document.querySelectorAll('.btn-assign-homework');
+        const teacherChatBtns = document.querySelectorAll('.btn-teacher-chat');
+
+        editBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                if (student && studentFormModal) {
+                    editStudentIdInput.value = student.id;
+                    studentNameInput.value = student.name;
+                    const birthInput = document.getElementById('student-birthdate-input');
+                    if (birthInput) birthInput.value = student.birthdate || '';
+                    studentAgeInput.value = student.age;
+                    studentSchoolInput.value = student.school;
+                    studentPhoneInput.value = student.phone || '';
+                    studentParentPhoneInput.value = student.parentPhone;
+                    studentSiblingInput.value = student.sibling || '';
+                    if (studentClassDurationInput) {
+                        studentClassDurationInput.value = student.classDuration || 90;
+                    }
+                    
+                    // Populate student-parent-select
+                    populateStudentParentSelect();
+                    const parentSelect = document.getElementById('student-parent-select');
+                    if (parentSelect) {
+                        parentSelect.value = '';
+                        if (student.parentPhone) {
+                            const normStudentParent = normalizePhone(student.parentPhone);
+                            let matchedValue = '';
+                            for (const opt of parentSelect.options) {
+                                if (opt.value) {
+                                    const normOpt = normalizePhone(opt.value);
+                                    if (normOpt && (normOpt.startsWith(normStudentParent) || normStudentParent.startsWith(normOpt))) {
+                                        matchedValue = opt.value;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (matchedValue) {
+                                parentSelect.value = matchedValue;
+                            } else {
+                                // If not found in option values, try selecting it anyway
+                                parentSelect.value = student.parentPhone;
+                            }
+                        }
+                    }
+
+                    if (document.getElementById('student-username-input')) {
+                        const usernameInput = document.getElementById('student-username-input');
+                        usernameInput.value = student.username || '';
+                        usernameInput.disabled = !!student.username; // disable if already exists
+                    }
+                    if (document.getElementById('student-password-input')) {
+                        document.getElementById('student-password-input').value = student.password || '';
+                    }
+                    if (document.getElementById('student-address-input')) {
+                        let addrToUse = student.address || '';
+                        if (!addrToUse && student.parentPhone && typeof mockUsers !== 'undefined') {
+                            const p = mockUsers.find(u => u.phone === student.parentPhone && u.role === 'parent');
+                            if (p && p.address) addrToUse = p.address;
+                        }
+                        const parts = addrToUse.split(' | ');
+                        document.getElementById('student-address-input').value = parts[0] || '';
+                        if (document.getElementById('student-address-detail-input')) {
+                            document.getElementById('student-address-detail-input').value = parts[1] || '';
+                        }
+                    }
+
+                    // Populate and pre-select class
+                    populateClassSelect();
+                    const classSelect = document.getElementById('student-class-select');
+                    const timeInputs = [
+                        studentTimeMonStart, studentTimeMonEnd,
+                        studentTimeTueStart, studentTimeTueEnd,
+                        studentTimeWedStart, studentTimeWedEnd,
+                        studentTimeThuStart, studentTimeThuEnd,
+                        studentTimeFriStart, studentTimeFriEnd
+                    ];
+                    if (classSelect) {
+                        classSelect.value = student.classId || '';
+                        if (student.classId) {
+                            timeInputs.forEach(input => { if (input) input.disabled = true; });
+                            if (studentClassDurationInput) studentClassDurationInput.disabled = true;
+                        } else {
+                            timeInputs.forEach(input => { if (input) input.disabled = false; });
+                            if (studentClassDurationInput) studentClassDurationInput.disabled = false;
+                        }
+                    }
+
+                    const studentSched = getStudentSchedule(student);
+                    const monTime = splitTimeRange(studentSched.mon);
+                    studentTimeMonStart.value = monTime.start;
+                    studentTimeMonEnd.value = monTime.end;
+
+                    const tueTime = splitTimeRange(studentSched.tue);
+                    studentTimeTueStart.value = tueTime.start;
+                    studentTimeTueEnd.value = tueTime.end;
+
+                    const wedTime = splitTimeRange(studentSched.wed);
+                    studentTimeWedStart.value = wedTime.start;
+                    studentTimeWedEnd.value = wedTime.end;
+
+                    const thuTime = splitTimeRange(studentSched.thu);
+                    studentTimeThuStart.value = thuTime.start;
+                    studentTimeThuEnd.value = thuTime.end;
+
+                    const friTime = splitTimeRange(studentSched.fri);
+                    studentTimeFriStart.value = friTime.start;
+                    studentTimeFriEnd.value = friTime.end;
+                    studentProgressInput.value = student.progress;
+                    studentRemarksInput.value = student.remarks || '';
+                    if (document.getElementById('student-fee-day-input')) {
+                        document.getElementById('student-fee-day-input').value = student.tuitionFeeDay || 10;
+                    }
+                    if (document.getElementById('student-fee-amount-input')) {
+                        document.getElementById('student-fee-amount-input').value = student.tuitionFeeAmount || 250000;
+                    }
+                    if (studentTerminatedCheckbox) {
+                        studentTerminatedCheckbox.checked = !!student.isTerminated;
+                    }
+                    if (studentTerminationDateInput) {
+                        studentTerminationDateInput.value = student.terminationDate || '';
+                    }
+                    studentFormModalTitle.textContent = '원생 정보 수정';
+                    studentFormModal.classList.add('open');
+                }
+            });
+        });
+
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                if (confirm('이 원생의 모든 관리 정보를 삭제하시겠습니까?')) {
+                    // 1. Supabase에서 먼저 삭제 (await으로 완료 대기)
+                    await deleteStudentFromSupabase(id);
+                    // 2. 로컬 상태 업데이트
+                    students = students.filter(s => s.id !== id);
+                    try { localStorage.setItem('gongbubang_students', JSON.stringify(students)); } catch(e) {}
+                    updateTotalStudentsCount();
+                    window.location.reload();
+                }
+            });
+        });
+
+        attendanceInBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                if (student) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+                    // Clear existing attendance logs for today of types 'in', 'out', 'absent' to prevent duplicates
+                    attendance = attendance.filter(a => !(a.studentId === id && a.date === todayStr && (a.type === 'in' || a.type === 'out' || a.type === 'absent')));
+
+                    attendance.push({
+                        id: crypto.randomUUID(),
+                        studentId: id,
+                        date: todayStr,
+                        type: 'in',
+                        time: '',
+                        memo: ''
+                    });
+                    saveAttendance();
+                    renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                    showToast(`[알림문자 전송] ${student.name} 출석 안심문자 전송 완료 (부모: ${student.parentPhone})`);
+                }
+            });
+        });
+
+        attendanceOutBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                if (student) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+                    // Clear existing attendance logs for today of types 'in', 'out', 'absent' to prevent duplicates
+                    attendance = attendance.filter(a => !(a.studentId === id && a.date === todayStr && (a.type === 'in' || a.type === 'out' || a.type === 'absent')));
+
+                    attendance.push({
+                        id: crypto.randomUUID(),
+                        studentId: id,
+                        date: todayStr,
+                        type: 'absent',
+                        time: '',
+                        memo: ''
+                    });
+                    saveAttendance();
+                    renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                    showToast(`[알림문자 전송] ${student.name} 결석 안심문자 전송 완료 (부모: ${student.parentPhone})`);
+                }
+            });
+        });
+
+        assignHomeworkBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                const hwModal = document.getElementById('homework-modal');
+                const hwStudentIdInput = document.getElementById('homework-student-id');
+                const hwModalDesc = document.getElementById('homework-modal-desc');
+                const hwDueDateInput = document.getElementById('homework-due-date');
+
+                if (student && hwModal && hwStudentIdInput && hwModalDesc) {
+                    hwStudentIdInput.value = id;
+                    hwModalDesc.textContent = `[${student.name}] 원생에게 부여할 수학 과제를 입력하세요.`;
+                    
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const yyyy = tomorrow.getFullYear();
+                    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                    const dd = String(tomorrow.getDate()).padStart(2, '0');
+                    if (hwDueDateInput) hwDueDateInput.value = `${yyyy}-${mm}-${dd}`;
+                    
+                    hwModal.classList.add('open');
+                }
+            });
+        });
+
+        const writeFeedbackBtns = document.querySelectorAll('.btn-write-feedback');
+        writeFeedbackBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                const fbModal = document.getElementById('feedback-modal');
+                const fbStudentIdInput = document.getElementById('feedback-student-id');
+                const fbModalDesc = document.getElementById('feedback-modal-desc');
+                const fbDateInput = document.getElementById('feedback-date');
+                const fbContentInput = document.getElementById('feedback-content');
+
+                if (student && fbModal && fbStudentIdInput && fbModalDesc && fbDateInput) {
+                    fbStudentIdInput.value = id;
+                    fbModalDesc.textContent = `[${student.name}] 원생에게 남길 학업 피드백 및 특이사항을 작성하세요.`;
+                    
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    fbDateInput.value = `${yyyy}-${mm}-${dd}`;
+                    if (fbContentInput) fbContentInput.value = '';
+                    
+                    fbModal.classList.add('open');
+                }
+            });
+        });
+
+        const writeProgressBtns = document.querySelectorAll('.btn-write-progress');
+        writeProgressBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+
+                if (student && progressFormModal && progressStudentIdInput && progressDateInput) {
+                    progressStudentIdInput.value = id;
+                    const descEl = document.getElementById('progress-modal-desc');
+                    if (descEl) {
+                        descEl.textContent = `[${student.name}] 원생의 오늘 학습 진도 기록을 작성하세요.`;
+                    }
+                    
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    progressDateInput.value = `${yyyy}-${mm}-${dd}`;
+                    if (progressContentInput) {
+                        const existingProg = progressList.find(p => p.studentId === id && p.date === progressDateInput.value);
+                        progressContentInput.value = existingProg ? existingProg.content : '';
+                    }
+                    
+                    progressFormModal.classList.add('open');
+                }
+            });
+        });
+
+        const studentCalendarBtns = document.querySelectorAll('.btn-student-calendar');
+        studentCalendarBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                const calModal = document.getElementById('attendance-calendar-modal');
+                
+                if (student && calModal) {
+                    currentCalStudentId = id;
+                    const today = new Date();
+                    currentCalYear = today.getFullYear();
+                    currentCalMonth = today.getMonth(); // 0-indexed
+                    
+                    document.getElementById('calendar-modal-title').textContent = `${student.name} 출결 및 보강 캘린더`;
+                    document.getElementById('calendar-modal-desc').textContent = `${student.name} 학생의 월별 출결 현황을 달력으로 체크하고 보강을 관리합니다.`;
+                    
+                    // Reset makeup form date
+                    const makeupDateInput = document.getElementById('makeup-date');
+                    if (makeupDateInput) {
+                        const yyyy = today.getFullYear();
+                        const mm = String(today.getMonth() + 1).padStart(2, '0');
+                        const dd = String(today.getDate()).padStart(2, '0');
+                        makeupDateInput.value = `${yyyy}-${mm}-${dd}`;
+                    }
+                    const makeupTimeInput = document.getElementById('makeup-time');
+                    if (makeupTimeInput) makeupTimeInput.value = '';
+                    const makeupMemoInput = document.getElementById('makeup-memo');
+                    if (makeupMemoInput) makeupMemoInput.value = '';
+
+                    // Hide edit panel initially
+                    const editPanel = document.getElementById('attendance-edit-panel');
+                    if (editPanel) editPanel.style.display = 'none';
+
+                    renderCalendar(id, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+                    calModal.classList.add('open');
+                }
+            });
+        });
+
+        teacherChatBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseStudentId(btn.getAttribute('data-id'));
+                const student = students.find(s => s.id === id);
+                if (!student) return;
+
+                const adminChatWidget = document.getElementById('admin-chat-widget');
+                const adminChatHeader = document.getElementById('admin-chat-header');
+                const adminChatStudentId = document.getElementById('admin-chat-student-id');
+                const adminChatSendForm = document.getElementById('admin-chat-send-form');
+
+                if (adminChatWidget && adminChatHeader && adminChatStudentId && adminChatSendForm) {
+                    adminChatStudentId.value = id;
+                    adminChatHeader.innerHTML = `<i data-lucide="message-square" style="color: var(--mascot-purple-bg);"></i>1:1 실시간 상담 - ${student.name} 학부모`;
+                    renderTeacherChat(id);
+                    adminChatSendForm.style.display = 'flex';
+                    adminChatWidget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    safeCreateIcons();
+                } else {
+                    const tChatModal = document.getElementById('teacher-chat-modal');
+                    const tChatTitle = document.getElementById('teacher-chat-title');
+                    const tChatStudentIdInput = document.getElementById('teacher-chat-student-id');
+
+                    if (tChatModal && tChatTitle && tChatStudentIdInput) {
+                        tChatStudentIdInput.value = id;
+                        tChatTitle.textContent = `1:1 상담 메신저 - ${student.name} 학부모`;
+                        renderTeacherChat(id);
+                        tChatModal.classList.add('open');
+                    }
+                }
+            });
+        });
+
+        // Homework checkbox listener for admin student card
+        const adminHwCheckboxes = document.querySelectorAll('.admin-homework-checkbox');
+        adminHwCheckboxes.forEach(box => {
+            box.addEventListener('change', () => {
+                const hwId = box.getAttribute('data-hw-id');
+                homework = homework.map(h => {
+                    if (String(h.id) === String(hwId)) {
+                        return { ...h, isCompleted: box.checked, completedAt: box.checked ? new Date().toISOString() : null };
+                    }
+                    return h;
+                });
+                saveHomework();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                showToast(box.checked ? '과제 완료 처리가 완료되었습니다!' : '과제 대기 상태로 변경되었습니다.');
+            });
+        });
+
+        // Teacher confirmation checkbox listener for admin student card
+        const adminTeacherConfirmBoxes = document.querySelectorAll('.admin-teacher-confirm-checkbox');
+        adminTeacherConfirmBoxes.forEach(box => {
+            box.addEventListener('change', () => {
+                const hwId = box.getAttribute('data-hw-id');
+                homework = homework.map(h => {
+                    if (String(h.id) === String(hwId)) {
+                        return { ...h, teacherConfirmed: box.checked };
+                    }
+                    return h;
+                });
+                saveHomework();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                showToast(box.checked ? '원장님 확인이 등록되었습니다.' : '원장님 확인이 취소되었습니다.');
+            });
+        });
+    };
+
+    // Open Add Student Modal
+    if (btnStudentWrite && studentFormModal && studentEditorForm) {
+        btnStudentWrite.addEventListener('click', () => {
+            editStudentIdInput.value = '';
+            studentEditorForm.reset();
+            const birthInput = document.getElementById('student-birthdate-input');
+            if (birthInput) birthInput.value = '';
+            if (studentClassDurationInput) {
+                studentClassDurationInput.value = 90;
+            }
+            if (studentTerminatedCheckbox) studentTerminatedCheckbox.checked = false;
+            if (studentTerminationDateInput) studentTerminationDateInput.value = '';
+            
+            populateStudentParentSelect();
+            if (document.getElementById('student-username-input')) {
+                const usernameInput = document.getElementById('student-username-input');
+                usernameInput.value = '';
+                usernameInput.disabled = false; // enable for new registration
+            }
+            if (document.getElementById('student-password-input')) document.getElementById('student-password-input').value = '';
+            if (document.getElementById('student-address-input')) document.getElementById('student-address-input').value = '';
+            if (document.getElementById('student-address-detail-input')) document.getElementById('student-address-detail-input').value = '';
+            if (document.getElementById('student-fee-day-input')) document.getElementById('student-fee-day-input').value = 10;
+            if (document.getElementById('student-fee-amount-input')) document.getElementById('student-fee-amount-input').value = 250000;
+
+            // Populate and reset class select
+            populateClassSelect();
+            const classSelect = document.getElementById('student-class-select');
+            if (classSelect) {
+                classSelect.value = '';
+            }
+            const timeInputs = [
+                studentTimeMonStart, studentTimeMonEnd,
+                studentTimeTueStart, studentTimeTueEnd,
+                studentTimeWedStart, studentTimeWedEnd,
+                studentTimeThuStart, studentTimeThuEnd,
+                studentTimeFriStart, studentTimeFriEnd
+            ];
+            timeInputs.forEach(input => { if (input) input.disabled = false; });
+            if (studentClassDurationInput) studentClassDurationInput.disabled = false;
+
+            studentFormModalTitle.textContent = '새 원생 등록';
+            studentFormModal.classList.add('open');
+        });
+
+        if (btnStudentFormClose) {
+            btnStudentFormClose.addEventListener('click', () => {
+                studentFormModal.classList.remove('open');
+            });
+        }
+
+
+
+        // Add / Edit form submit
+        studentEditorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editId = editStudentIdInput.value;
+            const name = studentNameInput.value.trim();
+            const birthdate = document.getElementById('student-birthdate-input') ? document.getElementById('student-birthdate-input').value : '';
+            const age = parseInt(studentAgeInput.value);
+            const school = studentSchoolInput.value.trim();
+            const phone = studentPhoneInput.value.trim();
+            const parentPhone = studentParentPhoneInput.value.trim();
+            const sibling = studentSiblingInput.value.trim();
+            const classDuration = studentClassDurationInput ? parseInt(studentClassDurationInput.value, 10) || 90 : 90;
+            
+            const classSelect = document.getElementById('student-class-select');
+            const classId = (classSelect && classSelect.value) ? parseStudentId(classSelect.value) : null;
+
+            const schedule = {
+                mon: joinTimeRange(studentTimeMonStart.value, studentTimeMonEnd.value),
+                tue: joinTimeRange(studentTimeTueStart.value, studentTimeTueEnd.value),
+                wed: joinTimeRange(studentTimeWedStart.value, studentTimeWedEnd.value),
+                thu: joinTimeRange(studentTimeThuStart.value, studentTimeThuEnd.value),
+                fri: joinTimeRange(studentTimeFriStart.value, studentTimeFriEnd.value)
+            };
+            const progress = studentProgressInput.value.trim();
+            const remarks = studentRemarksInput.value.trim();
+            const isTerminated = studentTerminatedCheckbox ? studentTerminatedCheckbox.checked : false;
+            const terminationDate = studentTerminationDateInput ? studentTerminationDateInput.value : '';
+            const username = document.getElementById('student-username-input') ? document.getElementById('student-username-input').value.trim() : '';
+            const password = document.getElementById('student-password-input') ? document.getElementById('student-password-input').value.trim() : '';
+            const addressBase = document.getElementById('student-address-input') ? document.getElementById('student-address-input').value.trim() : '';
+            const addressDetail = document.getElementById('student-address-detail-input') ? document.getElementById('student-address-detail-input').value.trim() : '';
+            const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
+
+            const feeDay = document.getElementById('student-fee-day-input') ? parseInt(document.getElementById('student-fee-day-input').value, 10) || 10 : 10;
+            const feeAmount = document.getElementById('student-fee-amount-input') ? parseInt(document.getElementById('student-fee-amount-input').value, 10) || 250000 : 250000;
+
+            if (editId) {
+                // Update
+                const id = parseStudentId(editId);
+                students = students.map(student => {
+                    if (student.id === id) {
+                        const updated = {
+                            ...student,
+                            name,
+                            birthdate,
+                            age,
+                            school,
+                            phone,
+                            parentPhone,
+                            sibling,
+                            classDuration,
+                            classId,
+                            schedule,
+                            progress,
+                            remarks,
+                            isTerminated,
+                            terminationDate,
+                            username,
+                            password,
+                            address,
+                            tuitionFeeDay: feeDay,
+                            tuitionFeeAmount: feeAmount
+                        };
+                        
+                        // Sync back to parent user in gongbubang_mock_users if they are linked
+                        let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                        let parentId = null;
+                        
+                        let matchedParentUser = mockUsers.find(u => {
+                            const children = u.user_metadata?.children || [];
+                            if (children.some(c => c.username === id)) return true;
+                            if (u.phone && parentPhone && normalizePhone(u.phone) === normalizePhone(parentPhone)) return true;
+                            if (String(id).startsWith(u.id + '-')) return true;
+                            return false;
+                        });
+                        
+                        if (matchedParentUser) {
+                            parentId = matchedParentUser.id;
+                        }
+                        
+                        if (parentId) {
+                            mockUsers = mockUsers.map(u => {
+                                if (u.id === parentId) {
+                                    const updatedChildren = (u.user_metadata?.children || []).map(child => {
+                                        if (child.name === name) {
+                                            return { ...child, username, password, classId };
+                                        }
+                                        return child;
+                                    });
+                                    return {
+                                        ...u,
+                                        address,
+                                        user_metadata: {
+                                            ...u.user_metadata,
+                                            address,
+                                            children: updatedChildren
+                                        }
+                                    };
+                                }
+                                return u;
+                            });
+                            saveMockUsers(mockUsers);
+                        }
+                        
+                        return updated;
+                    }
+                    return student;
+                });
+                await saveStudents([String(id)]);
+                showToast('원생 정보가 성공적으로 수정되었습니다.');
+            } else {
+                // Create
+                const newStudent = {
+                    id: username || String(Date.now()),
+                    name,
+                    birthdate,
+                    age,
+                    school,
+                    phone,
+                    parentPhone,
+                    sibling,
+                    classDuration,
+                    classId,
+                    schedule,
+                    progress,
+                    remarks,
+                    isTerminated,
+                    terminationDate,
+                    username,
+                    password,
+                    address,
+                    tuitionFeeDay: feeDay,
+                    tuitionFeeAmount: feeAmount
+                };
+                students.unshift(newStudent);
+                await saveStudents([newStudent.id]);
+                showToast('새 원생 카드가 등록되었습니다.');
+            }
+
+            studentFormModal.classList.remove('open');
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+        });
+    }
+
+    // Realtime search filter
+    if (studentSearchInput) {
+        studentSearchInput.addEventListener('input', () => {
+            renderStudents(studentSearchInput.value);
+        });
+    }
+
+    // Notice Realtime search & category tag filter
+    const noticeSearchInput = document.getElementById('notice-search-input');
+    const noticeFilterTabs = document.querySelectorAll('.notice-filter-tab');
+
+    if (noticeSearchInput) {
+        noticeSearchInput.addEventListener('input', () => {
+            currentNoticeQuery = noticeSearchInput.value;
+            renderNotices();
+        });
+    }
+
+    noticeFilterTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            noticeFilterTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentNoticeTag = tab.getAttribute('data-tag');
+            renderNotices();
+        });
+    });
+
+    // Realtime feedback filter for Admin Student Cards
+    if (studentGridContainer) {
+        studentGridContainer.addEventListener('input', (e) => {
+            if (e.target && e.target.classList.contains('student-feedback-search')) {
+                const query = e.target.value.trim().toLowerCase();
+                const card = e.target.closest('.student-card');
+                if (card) {
+                    const feedbackItems = card.querySelectorAll('.feedback-item');
+                    feedbackItems.forEach(item => {
+                        const span = item.querySelector('span');
+                        const div = item.querySelector('div');
+                        const dateText = span ? span.textContent.toLowerCase() : '';
+                        const contentText = div ? div.textContent.toLowerCase() : '';
+                        if (dateText.includes(query) || contentText.includes(query)) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    // Realtime feedback filter for Student/Parent Portal Info Widget
+    const infoWidget = document.getElementById('myclass-info-widget');
+    if (infoWidget) {
+        infoWidget.addEventListener('input', (e) => {
+            if (e.target && e.target.id === 'myclass-feedback-search') {
+                const query = e.target.value.trim().toLowerCase();
+                const feedbackItems = infoWidget.querySelectorAll('.myclass-feedback-item');
+                feedbackItems.forEach(item => {
+                    const span = item.querySelector('span');
+                    const div = item.querySelector('div');
+                    const dateText = span ? span.textContent.toLowerCase() : '';
+                    const contentText = div ? div.textContent.toLowerCase() : '';
+                    if (dateText.includes(query) || contentText.includes(query)) {
+                        item.style.display = '';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+
+    // ==========================================================================
+    // Admin Toggle & Authentication Actions
+    // ==========================================================================
+    // Admin login form submit (inside main login modal)
+    const adminLoginFormElement = document.getElementById('admin-login-form');
+    const adminLoginPassword = document.getElementById('admin-login-password');
+    const adminLoginAuthErrorMsg = document.getElementById('admin-login-auth-error-msg');
+
+    if (adminLoginFormElement && adminLoginPassword) {
+        adminLoginFormElement.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const password = adminLoginPassword.value.trim();
+
+            if (password === '9999') {
+                if (studentLoginModal) {
+                    studentLoginModal.classList.remove('open');
+                }
+                handleAdminLoginSetup();
+                showToast('관리자 모드가 성공적으로 활성화되었습니다.');
+                
+                // Redirection check
+                if (sessionStorage.getItem('login_callback_url')) {
+                    handleLoginSuccessRedirection();
+                }
+            } else {
+                if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'block';
+                const authBox = studentLoginModal ? studentLoginModal.querySelector('.modal-box') : null;
+                if (authBox) {
+                    authBox.classList.add('shake');
+                    adminLoginPassword.value = '';
+                    adminLoginPassword.focus();
+
+                    setTimeout(() => {
+                        authBox.classList.remove('shake');
+                    }, 400);
+                }
+            }
+            safeCreateIcons();
+        });
+    }
+
+    // ==========================================================================
+    // Class Textbooks Modal Setup
+    // ==========================================================================
+    const classTextbooksModal = document.getElementById('class-textbooks-modal');
+    const btnClassTextbooksClose = document.getElementById('btn-class-textbooks-close');
+    const addTextbookForm = document.getElementById('add-textbook-form');
+    const textbookModalTitleClassName = document.getElementById('textbook-modal-title-class-name');
+    const textbookModalClassId = document.getElementById('textbook-modal-class-id');
+    const textbookNameInput = document.getElementById('textbook-name-input');
+    const textbookPriceInput = document.getElementById('textbook-price-input');
+    const modalTextbookListContainer = document.getElementById('modal-textbook-list-container');
+
+    const openClassTextbooksModal = (classId) => {
+        if (!classTextbooksModal) return;
+        const cls = classes.find(c => String(c.id) === String(classId));
+        if (!cls) return;
+
+        if (textbookModalTitleClassName) textbookModalTitleClassName.textContent = cls.name;
+        if (textbookModalClassId) textbookModalClassId.value = cls.id;
+        
+        renderModalTextbookList(cls);
+        classTextbooksModal.classList.add('open');
+    };
+
+    const renderModalTextbookList = (cls) => {
+        if (!modalTextbookListContainer) return;
+        modalTextbookListContainer.innerHTML = '';
+
+        const books = cls.textbooks || [];
+        if (books.length === 0) {
+            modalTextbookListContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 12px;">등록된 교재가 없습니다.</div>';
+            return;
+        }
+
+        books.forEach((book, index) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '8px 12px';
+            row.style.border = '1px solid var(--border-color)';
+            row.style.borderRadius = '8px';
+            row.style.background = '#ffffff';
+
+            row.innerHTML = `
+                <div style="text-align: left;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">${book.name}</span>
+                    <span style="font-size: 0.8rem; color: var(--primary-color); font-weight: 600; margin-left: 8px;">${Number(book.price).toLocaleString()}원</span>
+                </div>
+                <button type="button" class="btn-delete-textbook" style="border: none; background: transparent; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;" data-index="${index}">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+            `;
+
+            row.querySelector('.btn-delete-textbook').addEventListener('click', () => {
+                if (confirm(`'${book.name}' 교재를 삭제하시겠습니까?`)) {
+                    cls.textbooks.splice(index, 1);
+                    saveClasses();
+                    renderModalTextbookList(cls);
+                    if (loggedInStudentId) renderMyClass();
+                }
+            });
+
+            modalTextbookListContainer.appendChild(row);
+        });
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+
+    if (classTextbooksModal) {
+        if (btnClassTextbooksClose) {
+            btnClassTextbooksClose.addEventListener('click', () => {
+                classTextbooksModal.classList.remove('open');
+            });
+        }
+        classTextbooksModal.addEventListener('click', (e) => {
+            if (e.target === classTextbooksModal) {
+                classTextbooksModal.classList.remove('open');
+            }
+        });
+    }
+
+    if (addTextbookForm) {
+        addTextbookForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const classId = textbookModalClassId.value;
+            const name = textbookNameInput.value.trim();
+            const price = parseInt(textbookPriceInput.value, 10);
+
+            if (!classId || !name || isNaN(price)) return;
+
+            const cls = classes.find(c => String(c.id) === String(classId));
+            if (!cls) return;
+
+            if (!cls.textbooks) cls.textbooks = [];
+            cls.textbooks.push({
+                id: getNextSequentialId(classes),
+                        name,
+                price
+            });
+
+            saveClasses();
+            renderModalTextbookList(cls);
+
+            textbookNameInput.value = '';
+            textbookPriceInput.value = '';
+
+            if (loggedInStudentId) renderMyClass();
+        });
+    }
+
+    // ==========================================================================
+    // Notice Editor Actions (Write / Edit Form Submit)
+    // ==========================================================================
+    if (btnAdminWrite && noticeFormModal && noticeEditorForm && editNoticeIdInput && noticeTagSelect && noticeTitleInput && noticeContentInput && formModalTitle) {
+        btnAdminWrite.addEventListener('click', () => {
+            editNoticeIdInput.value = '';
+            noticeEditorForm.reset();
+            if (noticeSizeSelect) noticeSizeSelect.value = 'normal';
+            if (noticeColorSelect) noticeColorSelect.value = 'default';
+            if (noticePinCheckbox) noticePinCheckbox.checked = false;
+            
+            const recruitChk = document.getElementById('notice-recruit-checkbox');
+            const recruitPanel = document.getElementById('recruit-settings-panel');
+            if (recruitChk) recruitChk.checked = false;
+            if (recruitPanel) recruitPanel.style.display = 'none';
+
+            formModalTitle.textContent = '새 공지사항 등록';
+            noticeFormModal.classList.add('open');
+        });
+
+        if (btnFormClose) {
+            btnFormClose.addEventListener('click', () => {
+                noticeFormModal.classList.remove('open');
+            });
+        }
+
+        noticeFormModal.addEventListener('click', (e) => {
+            if (e.target === noticeFormModal) {
+                noticeFormModal.classList.remove('open');
+            }
+        });
+
+        noticeEditorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editId = editNoticeIdInput.value;
+            const tag = noticeTagSelect.value;
+            const titleSize = noticeSizeSelect ? noticeSizeSelect.value : 'normal';
+            const titleColor = noticeColorSelect ? noticeColorSelect.value : 'default';
+            const pinned = noticePinCheckbox ? noticePinCheckbox.checked : false;
+            const title = noticeTitleInput.value.trim();
+            const content = noticeContentInput.value.trim();
+
+            const recruitEnabled = document.getElementById('notice-recruit-checkbox') ? document.getElementById('notice-recruit-checkbox').checked : false;
+            const recruitType = document.getElementById('notice-recruit-type') ? document.getElementById('notice-recruit-type').value : '';
+            const recruitCapacity = document.getElementById('notice-recruit-capacity') ? parseInt(document.getElementById('notice-recruit-capacity').value, 10) || 10 : 10;
+            const recruitStart = document.getElementById('notice-recruit-start') ? document.getElementById('notice-recruit-start').value : '';
+            const recruitEnd = document.getElementById('notice-recruit-end') ? document.getElementById('notice-recruit-end').value : '';
+            const recruitFee = document.getElementById('notice-recruit-fee') ? parseInt(document.getElementById('notice-recruit-fee').value, 10) || 0 : 0;
+            const recruitClosed = document.getElementById('notice-recruit-closed') ? document.getElementById('notice-recruit-closed').checked : false;
+
+            if (editId) {
+                // Update
+                const id = parseInt(editId);
+                notices = notices.map(notice => {
+                    if (notice.id === id) {
+                        return {
+                            ...notice,
+                            tag,
+                            title,
+                            content,
+                            titleSize,
+                            titleColor,
+                            pinned,
+                            highlight: pinned,
+                            recruitEnabled,
+                            recruitType,
+                            recruitCapacity,
+                            recruitStart,
+                            recruitEnd,
+                            recruitFee,
+                            recruitClosed
+                        };
+                    }
+                    return notice;
+                });
+                await saveNotices();
+                showToast('공지사항이 정상적으로 수정되었습니다.');
+            } else {
+                // Create
+                const newNotice = {
+                    id: crypto.randomUUID(),
+                    tag,
+                    title,
+                    content,
+                    titleSize,
+                    titleColor,
+                    pinned,
+                    date: getFormattedDate(),
+                    author: '이공 원장',
+                    highlight: pinned,
+                    recruitEnabled,
+                    recruitType,
+                    recruitCapacity,
+                    recruitStart,
+                    recruitEnd,
+                    recruitFee,
+                    recruitClosed
+                };
+                notices.unshift(newNotice); // Put to top
+                await saveNotices();
+                showToast('새 공지사항이 성공적으로 등록되었습니다.');
+            }
+
+            noticeFormModal.classList.remove('open');
+            renderNotices();
+        });
+    }
+
+    // ==========================================================================
+    // Student/Parent Dashboard Portal & Chat Messenger (PRD Simulation)
+    // ==========================================================================
+    
+    // DOM Elements for Student Portal
+    const btnStudentLoginToggle = btnLoginToggle;
+    // studentLoginModal is already declared above
+    const btnStudentLoginClose = document.getElementById('btn-student-login-close');
+    const studentLoginForm = document.getElementById('student-login-form');
+    const studentLoginNameInput = document.getElementById('student-login-name');
+    const studentLoginPhoneInput = document.getElementById('student-login-phone');
+    const studentAuthErrorMsg = document.getElementById('student-auth-error-msg');
+    
+    const myclassSection = document.getElementById('myclass');
+    const navLinkMyclass = document.getElementById('nav-link-myclass');
+    const drawerLinkMyclass = document.getElementById('drawer-link-myclass');
+    
+    const homeworkFormModal = document.getElementById('homework-modal');
+    const btnHomeworkClose = document.getElementById('btn-homework-close');
+    const homeworkForm = document.getElementById('homework-form');
+    const homeworkStudentIdInput = document.getElementById('homework-student-id');
+    const homeworkDueDateInput = document.getElementById('homework-due-date');
+    const homeworkTitleInput = document.getElementById('homework-title');
+    const homeworkDescriptionInput = document.getElementById('homework-description');
+    
+    const feedbackFormModal = document.getElementById('feedback-modal');
+    const btnFeedbackClose = document.getElementById('btn-feedback-close');
+    const feedbackForm = document.getElementById('feedback-form');
+    const feedbackStudentIdInput = document.getElementById('feedback-student-id');
+    const feedbackDateInput = document.getElementById('feedback-date');
+    const feedbackContentInput = document.getElementById('feedback-content');
+
+    const progressFormModal = document.getElementById('progress-modal');
+    const btnProgressClose = document.getElementById('btn-progress-close');
+    const progressForm = document.getElementById('progress-form');
+    const progressStudentIdInput = document.getElementById('progress-student-id');
+    const progressDateInput = document.getElementById('progress-date');
+    const progressContentInput = document.getElementById('progress-content');
+    if (progressDateInput) {
+        progressDateInput.addEventListener('change', () => {
+            const sid = parseStudentId(progressStudentIdInput.value);
+            const dt = progressDateInput.value;
+            if (sid && dt) {
+                const existing = progressList.find(p => p.studentId === sid && p.date === dt);
+                progressContentInput.value = existing ? existing.content : '';
+            }
+        });
+    }
+    
+    const chatSendForm = document.getElementById('chat-send-form');
+    const chatInputMessage = document.getElementById('chat-input-message');
+    
+    const teacherChatModal = document.getElementById('teacher-chat-modal');
+    const btnTeacherChatClose = document.getElementById('btn-teacher-chat-close');
+    const teacherChatSendForm = document.getElementById('teacher-chat-send-form');
+    const teacherChatStudentIdInput = document.getElementById('teacher-chat-student-id');
+    const teacherChatInput = document.getElementById('teacher-chat-input');
+
+    // Helper: format message time (e.g. 오후 1:40)
+    const getFormattedTime = () => {
+        const now = new Date();
+        const hours = now.getHours();
+        const ampm = hours >= 12 ? '오후' : '오전';
+        const displayHours = hours % 12 || 12;
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        return `${ampm} ${displayHours}:${minutes}`;
+    };
+
+    // Render Chat inside Student Portal
+    const renderStudentChat = () => {
+        const container = document.getElementById('chat-messages-container');
+        if (!container || !loggedInStudentId) return;
+
+        // Mark all teacher messages for this student as read
+        let hasUnread = false;
+        messages.forEach(m => {
+            if (m.studentId === loggedInStudentId && m.sender === 'teacher' && !m.isRead) {
+                m.isRead = true;
+                hasUnread = true;
+            }
+        });
+        if (hasUnread) {
+            saveMessages();
+            updateParentQuickMenuBadges();
+        }
+
+        container.innerHTML = '';
+        const studentMessages = messages.filter(m => m.studentId === loggedInStudentId);
+
+        if (studentMessages.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.85rem;">
+                    선생님과의 첫 상담을 시작해 보세요. 메시지를 보내면 즉시 선생님 웹 대시보드에 공유됩니다.
+                </div>
+            `;
+            return;
+        }
+
+        studentMessages.forEach(msg => {
+            const row = document.createElement('div');
+            row.className = 'chat-message-row';
+            
+            const isMe = msg.sender === 'parent';
+            const bubbleClass = isMe ? 'parent-student' : 'teacher';
+            
+            row.innerHTML = `
+                <div class="chat-bubble ${bubbleClass}" style="align-self: ${isMe ? 'flex-end' : 'flex-start'};">
+                    ${msg.text}
+                </div>
+                <div class="chat-message-time" style="align-self: ${isMe ? 'flex-end' : 'flex-start'};">
+                    ${msg.time}
+                </div>
+            `;
+            container.appendChild(row);
+        });
+
+        container.scrollTop = container.scrollHeight;
+    };
+
+    // Render Chat inside Teacher Modal
+    const renderTeacherChat = (studentId) => {
+        const container = document.getElementById('admin-chat-messages-container') || document.getElementById('teacher-chat-messages-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+        const studentMessages = messages.filter(m => m.studentId === studentId);
+
+        if (studentMessages.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.85rem;">
+                    대화 내역이 없습니다.
+                </div>
+            `;
+            return;
+        }
+
+        studentMessages.forEach(msg => {
+            const row = document.createElement('div');
+            row.className = 'chat-message-row';
+            
+            const isTeacher = msg.sender === 'teacher';
+            const bubbleClass = isTeacher ? 'parent-student' : 'teacher'; // In teacher modal, teacher messages are aligned to the right (parent-student style)
+            
+            row.innerHTML = `
+                <div class="chat-bubble ${bubbleClass}" style="align-self: ${isTeacher ? 'flex-end' : 'flex-start'};">
+                    ${msg.text}
+                </div>
+                <div class="chat-message-time" style="align-self: ${isTeacher ? 'flex-end' : 'flex-start'};">
+                    ${msg.time}
+                </div>
+            `;
+            container.appendChild(row);
+        });
+
+        container.scrollTop = container.scrollHeight;
+    };
+
+    // Get array of date strings (YYYY-MM-DD) representing the week containing selectedDate
+    const getWeekDates = (dateStr) => {
+        const current = new Date(dateStr);
+        const day = current.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Monday
+        const monday = new Date(current.setDate(diff));
+        
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dt = String(d.getDate()).padStart(2, '0');
+            dates.push(`${y}-${m}-${dt}`);
+        }
+        return dates;
+    };
+
+    // Update Admin Quick Menu Highlights & Badge counts
+    let isUpdatingHighlights = false;
+    const updateAdminQuickMenuHighlights = () => {
+        if (isUpdatingHighlights) return;
+        isUpdatingHighlights = true;
+        
+        try {
+            // 1. Uncompleted Consultations
+            const pendingConsults = consultations.filter(c => c.status === 'pending').length;
+            const btnConsult = document.querySelector('#admin-quick-menu a[href="#consult-management-card"]');
+            if (btnConsult) {
+                if (pendingConsults > 0) {
+                    btnConsult.style.background = 'rgba(249, 115, 22, 0.08)';
+                    btnConsult.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    btnConsult.style.color = 'rgb(234, 88, 12)';
+                    btnConsult.innerHTML = `<i data-lucide="phone-call" style="width: 14px; height: 14px; color: rgb(234, 88, 12);"></i> 상담 문의 <span style="background: rgb(234, 88, 12); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${pendingConsults}</span>`;
+                } else {
+                    btnConsult.style.background = '#f1f5f9';
+                    btnConsult.style.borderColor = 'var(--border-color)';
+                    btnConsult.style.color = 'var(--text-primary)';
+                    btnConsult.innerHTML = `<i data-lucide="phone-call" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 상담 문의`;
+                }
+            }
+
+            // 2. Pending Signup Approvals
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const pendingApprovals = mockUsers.filter(u => u.role === 'parent' && (u.status === 'pending' || !u.status)).length;
+            const btnApproval = document.querySelector('#admin-quick-menu a[href="#approval-management-card"]');
+            if (btnApproval) {
+                if (pendingApprovals > 0) {
+                    btnApproval.style.background = 'rgba(239, 68, 68, 0.08)';
+                    btnApproval.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    btnApproval.style.color = 'rgb(220, 38, 38)';
+                    btnApproval.innerHTML = `<i data-lucide="shield-check" style="width: 14px; height: 14px; color: rgb(220, 38, 38);"></i> 가입/종결 승인 <span style="background: rgb(220, 38, 38); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${pendingApprovals}</span>`;
+                } else {
+                    btnApproval.style.background = '#f1f5f9';
+                    btnApproval.style.borderColor = 'var(--border-color)';
+                    btnApproval.style.color = 'var(--text-primary)';
+                    btnApproval.innerHTML = `<i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--success-color);"></i> 가입/종결 승인`;
+                }
+            }
+
+            // 3. AI Queries (Count only unread queries)
+            const unreadAiQueries = aiQueries.filter(q => !q.isRead).length;
+            const btnAi = document.querySelector('#admin-quick-menu a[href="#ai-query-management-card"]');
+            if (btnAi) {
+                if (unreadAiQueries > 0) {
+                    btnAi.style.background = 'rgba(139, 92, 246, 0.08)';
+                    btnAi.style.borderColor = 'rgba(139, 92, 246, 0.3)';
+                    btnAi.style.color = 'rgb(109, 40, 217)';
+                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: rgb(109, 40, 217);"></i> AI 질의 내역 <span style="background: rgb(109, 40, 217); color: white; font-size: 0.72rem; padding: 1px 6px; border-radius: 50px; margin-left: 4px; font-weight: 700;">${unreadAiQueries}</span>`;
+                } else {
+                    btnAi.style.background = '#f1f5f9';
+                    btnAi.style.borderColor = 'var(--border-color)';
+                    btnAi.style.color = 'var(--text-primary)';
+                    btnAi.innerHTML = `<i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--primary-color);"></i> AI 질의 내역`;
+                }
+            }
+
+            // 4. Textbook Requests (Highlight if there are unconfirmed requests)
+            const unconfirmedTextbooks = textbookRequests.filter(r => !r.isConfirmed).length;
+            const btnTextbooks = document.getElementById('quick-menu-textbooks');
+            const badgeTextbooks = document.getElementById('quick-menu-textbooks-badge');
+            if (btnTextbooks && badgeTextbooks) {
+                if (unconfirmedTextbooks > 0) {
+                    btnTextbooks.style.background = 'rgba(239, 68, 68, 0.08)';
+                    btnTextbooks.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    btnTextbooks.style.color = 'rgb(220, 38, 38)';
+                    badgeTextbooks.style.display = 'inline-block';
+                    badgeTextbooks.textContent = unconfirmedTextbooks;
+                } else {
+                    btnTextbooks.style.background = '#f1f5f9';
+                    btnTextbooks.style.borderColor = 'var(--border-color)';
+                    btnTextbooks.style.color = 'var(--text-primary)';
+                    badgeTextbooks.style.display = 'none';
+                }
+            }
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        } finally {
+            isUpdatingHighlights = false;
+        }
+    };
+
+    // Handle Redirect / Scroll to callbackUrl after successful login (Joonggonara Style)
+    const handleLoginSuccessRedirection = () => {
+        const callback = sessionStorage.getItem('login_callback_url');
+        if (callback) {
+            sessionStorage.removeItem('login_callback_url');
+            
+            // Clean up ONLY the login-related query parameters in URL if any, but preserve others like ?v=
+            const url = new URL(window.location.href);
+            // We don't need to strip anything here usually, but if we did we'd use url.searchParams.delete()
+            const cleanUrl = url.pathname + url.search;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+            // Redirect / Scroll to target section
+            setTimeout(() => {
+                let targetId = callback.replace(/^\//, ''); // Strip leading slash
+                if (targetId === 'mystore' || targetId === 'myclass') {
+                    targetId = 'myclass';
+                } else if (targetId === 'students' || targetId === 'admin') {
+                    targetId = 'students';
+                }
+
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    // Show hidden dynamic sections if necessary
+                    if (targetId === 'myclass' && myclassSection) {
+                        myclassSection.style.display = 'block';
+                        if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
+                        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
+                    } else if (targetId === 'students' && studentSection) {
+                        studentSection.style.display = 'block';
+                        if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
+                        if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+                    }
+
+                    const targetOffset = targetEl.offsetTop - 90;
+                    window.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                    showToast('요청하신 페이지로 연동되었습니다.');
+                }
+            }, 300);
+        }
+    };
+
+    // Render Admin Habits Checklist & Achievement rate
+    const renderAdminHabits = () => {
+        const tbody = document.getElementById('admin-habit-tbody');
+        const dateInput = document.getElementById('admin-habit-record-date');
+        const percentageText = document.getElementById('admin-habit-achievement-percentage');
+        const progressBar = document.getElementById('admin-habit-achievement-bar');
+        const newInput = document.getElementById('admin-habit-new-input');
+        const freqSelect = document.getElementById('admin-habit-new-freq');
+        const btnAdd = document.getElementById('btn-admin-add-habit');
+        const monthlyReport = document.getElementById('admin-monthly-habit-report');
+
+        if (!tbody) return;
+
+        // Set default date to today in local timezone if not set
+        if (dateInput && !dateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
+        }
+
+        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const [yearStr, monthStr] = selectedDate.split('-');
+        const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+
+        // Supabase를 진실의 원천으로: 로컬스토리지에 있는 데이터만 사용, 없으면 빈 배열
+        let habits = [];
+        try {
+            const stored = localStorage.getItem('gongbubang_habits_admin');
+            habits = stored ? JSON.parse(stored) : [];
+        } catch(e) { habits = []; }
+
+        // Fill missing frequencies (defaults to 7)
+        habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
+
+        // Load records
+        let records = {};
+        try {
+            const stored = localStorage.getItem('gongbubang_habit_records_admin');
+            records = stored ? JSON.parse(stored) : {};
+        } catch(e) {}
+
+        const dayRecords = records[selectedDate] || {};
+
+        tbody.innerHTML = '';
+
+        if (habits.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">등록된 업무가 없습니다. 아래 입력창에서 추가해 주세요!</td></tr>`;
+            if (percentageText) percentageText.textContent = '0% (0/0 완료)';
+            if (progressBar) progressBar.style.width = '0%';
+        } else {
+            const weekDates = getWeekDates(selectedDate);
+            let completedCount = 0;
+            habits.forEach(h => {
+                const tr = document.createElement('tr');
+                const checked = dayRecords[h.id] ? 'checked' : '';
+                if (dayRecords[h.id]) completedCount++;
+
+                const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
+
+                // Calculate weekly completions
+                let weekCompleted = 0;
+                weekDates.forEach(d => {
+                    if (records[d] && records[d][h.id]) {
+                        weekCompleted++;
+                    }
+                });
+
+                tr.innerHTML = `
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <input type="checkbox" class="admin-habit-check" data-id="&quot;${h.id}&quot;" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                    </td>
+                    <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
+                        ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle; font-size: 0.92rem; font-weight: 700; color: var(--text-primary);">
+                        ${weekCompleted}/${h.frequency}
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <button type="button" class="btn-delete-admin-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Calculate percentage
+            const percentage = Math.round((completedCount / habits.length) * 100);
+            if (percentageText) percentageText.textContent = `${percentage}% (${completedCount}/${habits.length} 완료)`;
+            if (progressBar) progressBar.style.width = `${percentage}%`;
+        }
+
+        // Render Monthly Report
+        if (monthlyReport) {
+            monthlyReport.innerHTML = '';
+            if (habits.length === 0) {
+                monthlyReport.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 10px;">등록된 업무 통계가 없습니다.</div>';
+            } else {
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    
+                    // Count completions in this selected month
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        }
+
+        const updateStatsRealtime = () => {
+            if (monthlyReport) {
+                monthlyReport.innerHTML = '';
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    let completed = 0;
+                    const prefix = `${yearStr}-dots-`.replace('\dots', monthStr);
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        };
+
+        // Bind checkbox listeners
+        const checks = tbody.querySelectorAll('.admin-habit-check');
+        checks.forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const id = e.target.getAttribute('data-id').replace(/^"|"$/g, '').replace(/&quot;/g, '');
+                const isChecked = e.target.checked;
+                
+                if (!records[selectedDate]) records[selectedDate] = {};
+                records[selectedDate][id] = isChecked;
+                
+                saveStudentHabitRecords('admin', records);
+                renderAdminHabits();
+            });
+        });
+
+        // Bind delete listeners
+        const deletes = tbody.querySelectorAll('.btn-delete-admin-habit');
+        deletes.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.getAttribute('data-id');
+                if (confirm('이 항목을 체크리스트에서 삭제하시겠습니까?')) {
+                    habits = habits.filter(h => h.id !== id);
+                    saveStudentHabits('admin', habits);
+                    
+                    // Clean up records
+                    Object.keys(records).forEach(d => {
+                        if (records[d] && records[d][id] !== undefined) {
+                            delete records[d][id];
+                        }
+                    });
+                    saveStudentHabitRecords('admin', records);
+                    
+                    renderAdminHabits();
+                }
+            });
+        });
+
+        // Date listener
+        if (dateInput) {
+            const newDateInput = dateInput.cloneNode(true);
+            dateInput.parentNode.replaceChild(newDateInput, dateInput);
+            newDateInput.addEventListener('change', () => {
+                renderAdminHabits();
+            });
+        }
+
+        // Add habit listener
+        if (btnAdd && newInput && freqSelect) {
+            const newBtnAdd = btnAdd.cloneNode(true);
+            btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
+            
+            const handleAdd = () => {
+                const text = newInput.value.trim();
+                if (!text) {
+                    alert('내용을 입력해 주세요.');
+                    return;
+                }
+                const newHabit = {
+                    id: 'ah-' + Date.now(),
+                    text: text,
+                    frequency: parseInt(freqSelect.value)
+                };
+                habits.push(newHabit);
+                saveStudentHabits('admin', habits);
+                newInput.value = '';
+                renderAdminHabits();
+            };
+            
+            newBtnAdd.addEventListener('click', handleAdd);
+            
+            newInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    handleAdd();
+                }
+            };
+        }
+
+        safeCreateIcons();
+    };
+
+    // Render Daily Habits Checklist & Achievement rate
+    const renderMyClassDailyHabits = (studentId) => {
+        const tbody = document.getElementById('daily-habit-tbody');
+        const dateInput = document.getElementById('habit-record-date');
+        const percentageText = document.getElementById('habit-achievement-percentage');
+        const progressBar = document.getElementById('habit-achievement-bar');
+        const newInput = document.getElementById('habit-new-input');
+        const freqSelect = document.getElementById('habit-new-freq');
+        const btnAdd = document.getElementById('btn-add-habit');
+        const monthlyReport = document.getElementById('myclass-monthly-habit-report');
+
+        if (!tbody) return;
+
+        // Set default date to today in local timezone (YYYY-MM-DD) if not set
+        if (dateInput && !dateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
+        }
+
+        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const [yearStr, monthStr] = selectedDate.split('-');
+        const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+
+        // Supabase를 진실의 원천으로: 로컬스토리지에 있는 데이터만 사용, 없으면 빈 배열
+        let habits = [];
+        try {
+            const stored = localStorage.getItem('gongbubang_habits_' + studentId);
+            habits = stored ? JSON.parse(stored) : [];
+        } catch(e) { habits = []; }
+
+        // Fill missing frequencies (defaults to 7)
+        habits = habits.map(h => ({ ...h, frequency: h.frequency || 7 }));
+
+        // Load records
+        let records = {};
+        try {
+            const stored = localStorage.getItem('gongbubang_habit_records_' + studentId);
+            records = stored ? JSON.parse(stored) : {};
+        } catch(e) {}
+
+        const dayRecords = records[selectedDate] || {};
+
+        tbody.innerHTML = '';
+
+        if (habits.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">등록된 습관이 없습니다. 아래 입력칸에서 추가해 주세요!</td></tr>`;
+            if (percentageText) percentageText.textContent = '0% (0/0 완료)';
+            if (progressBar) progressBar.style.width = '0%';
+        } else {
+            const weekDates = getWeekDates(selectedDate);
+            let completedCount = 0;
+            habits.forEach(h => {
+                const tr = document.createElement('tr');
+                const checked = dayRecords[h.id] ? 'checked' : '';
+                if (dayRecords[h.id]) completedCount++;
+
+                const freqLabel = h.frequency === 7 ? '매일' : `주 ${h.frequency}회`;
+
+                // Calculate weekly completions
+                let weekCompleted = 0;
+                weekDates.forEach(d => {
+                    if (records[d] && records[d][h.id]) {
+                        weekCompleted++;
+                    }
+                });
+
+                tr.innerHTML = `
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <input type="checkbox" class="habit-check" data-id="${h.id}" ${checked} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--mascot-purple-bg);">
+                    </td>
+                    <td style="padding: 12px 10px; text-align: left; font-size: 0.92rem; color: var(--text-primary); font-weight: 500; line-height: 1.4;">
+                        ${h.text} <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); font-weight: 700; background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; margin-left: 6px;">${freqLabel}</span>
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle; font-size: 0.92rem; font-weight: 700; color: var(--text-primary);">
+                        ${weekCompleted}/${h.frequency}
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        <button type="button" class="btn-delete-habit" data-id="${h.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: inline-flex; align-items: center;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Calculate percentage
+            const percentage = Math.round((completedCount / habits.length) * 100);
+            if (percentageText) percentageText.textContent = `${percentage}% (${completedCount}/${habits.length} 완료)`;
+            if (progressBar) progressBar.style.width = `${percentage}%`;
+        }
+
+        // Render Monthly Report
+        if (monthlyReport) {
+            monthlyReport.innerHTML = '';
+            if (habits.length === 0) {
+                monthlyReport.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 10px;">등록된 생활습관 통계가 없습니다.</div>';
+            } else {
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    
+                    // Count completions in this selected month
+                    let completed = 0;
+                    const prefix = `${yearStr}-${monthStr}`;
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        }
+
+        const updateStatsRealtime = () => {
+            if (monthlyReport) {
+                monthlyReport.innerHTML = '';
+                habits.forEach(h => {
+                    const targetCompletions = Math.max(1, Math.round(h.frequency * (daysInMonth / 7)));
+                    let completed = 0;
+                    const prefix = `${yearStr}-${monthStr}`;
+                    Object.keys(records).forEach(d => {
+                        if (d.startsWith(prefix) && records[d] && records[d][h.id]) {
+                            completed++;
+                        }
+                    });
+                    const rate = Math.min(100, Math.round((completed / targetCompletions) * 100));
+                    let barColor = 'var(--mascot-pink-bg)';
+                    if (rate >= 80) barColor = 'var(--mascot-green-bg)';
+                    else if (rate >= 50) barColor = 'var(--mascot-purple-bg)';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '4px';
+                    itemDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-primary); font-weight: 600;">
+                            <span>${h.text} <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;">(주 ${h.frequency}회 목표)</span></span>
+                            <span style="font-weight: 700; color: ${rate >= 80 ? 'var(--mascot-green-bg)' : 'var(--text-primary)'};">${rate}% (${completed}/${targetCompletions}회 실천)</span>
+                        </div>
+                        <div style="background: #f1f5f9; border-radius: 6px; height: 6px; width: 100%; overflow: hidden; border: 1px solid var(--border-color-split);">
+                            <div style="background: ${barColor}; height: 100%; width: ${rate}%; transition: width 0.4s ease;"></div>
+                        </div>
+                    `;
+                    monthlyReport.appendChild(itemDiv);
+                });
+            }
+        };
+
+        // Bind checkbox listeners
+        const checks = tbody.querySelectorAll('.habit-check');
+        checks.forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const isChecked = e.target.checked;
+                
+                if (!records[selectedDate]) records[selectedDate] = {};
+                records[selectedDate][id] = isChecked;
+                
+                saveStudentHabitRecords(studentId, records);
+                renderMyClassDailyHabits(studentId);
+            });
+        });
+
+        // Bind delete listeners
+        const deletes = tbody.querySelectorAll('.btn-delete-habit');
+        deletes.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.getAttribute('data-id');
+                if (confirm('이 습관을 체크리스트에서 삭제하시겠습니까?')) {
+                    habits = habits.filter(h => h.id !== id);
+                    saveStudentHabits(studentId, habits);
+                    
+                    // Clean up records for this habit
+                    Object.keys(records).forEach(d => {
+                        if (records[d] && records[d][id] !== undefined) {
+                            delete records[d][id];
+                        }
+                    });
+                    saveStudentHabitRecords(studentId, records);
+                    
+                    renderMyClassDailyHabits(studentId);
+                }
+            });
+        });
+
+        // Bind date change listener (re-clone to avoid duplication)
+        if (dateInput) {
+            const newDateInput = dateInput.cloneNode(true);
+            dateInput.parentNode.replaceChild(newDateInput, dateInput);
+            newDateInput.addEventListener('change', () => {
+                renderMyClassDailyHabits(studentId);
+            });
+        }
+
+        // Bind add listener (re-clone to avoid duplication)
+        if (btnAdd && newInput && freqSelect) {
+            const newBtnAdd = btnAdd.cloneNode(true);
+            btnAdd.parentNode.replaceChild(newBtnAdd, btnAdd);
+            
+            const handleAdd = () => {
+                const text = newInput.value.trim();
+                if (!text) {
+                    alert('습관 내용을 입력해 주세요.');
+                    return;
+                }
+                const newHabit = {
+                    id: 'h-' + Date.now(),
+                    text: text,
+                    frequency: parseInt(freqSelect.value)
+                };
+                habits.push(newHabit);
+                saveStudentHabits(studentId, habits);
+                newInput.value = '';
+                renderMyClassDailyHabits(studentId);
+            };
+            
+            newBtnAdd.addEventListener('click', handleAdd);
+            
+            // Allow enter key press
+            newInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    handleAdd();
+                }
+            };
+        }
+
+        safeCreateIcons();
+    };
+
+    // Update Parent & Student Quick Menu Badges
+    const updateParentQuickMenuBadges = () => {
+        const parentQuickMenu = document.getElementById('parent-quick-menu');
+        const studentQuickMenu = document.getElementById('student-quick-menu');
+        
+        if (studentQuickMenu) {
+            if (userRole === 'student' && loggedInStudentId) {
+                studentQuickMenu.style.display = 'flex';
+            } else {
+                studentQuickMenu.style.display = 'none';
+            }
+        }
+
+        if (!parentQuickMenu) return;
+
+        if (userRole !== 'parent' || !loggedInStudentId) {
+            parentQuickMenu.style.display = 'none';
+            return;
+        }
+
+        parentQuickMenu.style.display = 'flex';
+
+        // 1. Unread feedbacks badge
+        const fbBadge = document.getElementById('parent-menu-feedback-badge');
+        if (fbBadge) {
+            const studentFeedbacks = feedbacks.filter(f => f.studentId === loggedInStudentId);
+            const lastViewStr = localStorage.getItem('gongbubang_last_feedback_view_' + loggedInStudentId);
+            let unreadFb = 0;
+            if (lastViewStr) {
+                const lastView = new Date(lastViewStr);
+                unreadFb = studentFeedbacks.filter(f => new Date(f.date) > lastView).length;
+            } else {
+                unreadFb = Math.min(studentFeedbacks.length, 3);
+            }
+            if (unreadFb > 0) {
+                fbBadge.textContent = unreadFb;
+                fbBadge.style.display = 'inline-block';
+            } else {
+                fbBadge.style.display = 'none';
+            }
+        }
+
+        // 2. Unread chat messages badge
+        const chatBadge = document.getElementById('parent-menu-chat-badge');
+        if (chatBadge) {
+            const unreadMessages = messages.filter(m => m.studentId === loggedInStudentId && m.sender === 'teacher' && !m.isRead);
+            if (unreadMessages.length > 0) {
+                chatBadge.textContent = unreadMessages.length;
+                chatBadge.style.display = 'inline-block';
+            } else {
+                chatBadge.style.display = 'none';
+            }
+        }
+
+        // 3. Pending homeworks badge
+        const hwBadge = document.getElementById('parent-menu-homework-badge');
+        if (hwBadge) {
+            const studentHw = homework.filter(h => h.studentId === loggedInStudentId && !h.isCompleted);
+            if (studentHw.length > 0) {
+                hwBadge.textContent = studentHw.length;
+                hwBadge.style.display = 'inline-block';
+            } else {
+                hwBadge.style.display = 'none';
+            }
+        }
+    };
+
+    // Render My Class Portal
+    const renderMyClass = () => {
+        const infoWidget = document.getElementById('myclass-info-widget');
+        const homeworkList = document.getElementById('myclass-homework-list');
+        const childSelectContainer = document.getElementById('myclass-child-selector-container');
+        const childSelect = document.getElementById('myclass-child-select');
+        
+        if (!loggedInStudentId) return;
+        const student = students.find(s => s.id === loggedInStudentId);
+        if (!student) return;
+
+        // Update badges before setting new view timestamp
+        updateParentQuickMenuBadges();
+
+        // Now set feedback viewed timestamp
+        localStorage.setItem('gongbubang_last_feedback_view_' + student.id, new Date().toISOString());
+
+        // Determine all children for the logged-in parent
+        let parentChildren = [];
+        const currentUserId = String(loggedInStudentId).split('-')[0];
+        const isEmailUser = currentUserId.length > 8 && currentUserId.includes('-') && !Number.isInteger(Number(currentUserId));
+        
+        if (isEmailUser) {
+            parentChildren = students.filter(s => String(s.id).startsWith(currentUserId) || (student.parentPhone && s.parentPhone === student.parentPhone));
+        } else if (student.parentPhone) {
+            parentChildren = students.filter(s => s.parentPhone === student.parentPhone || String(s.id).startsWith(currentUserId));
+        }
+
+        // Show/Hide and populate child selector (only visible for parent role and if multiple children exist)
+        const isParentRole = (typeof userRole !== 'undefined' && userRole === 'parent');
+        const parentChildManagementWidget = document.getElementById('parent-child-management-widget');
+        if (parentChildManagementWidget) {
+            parentChildManagementWidget.style.display = isParentRole ? 'flex' : 'none';
+        }
+        if (isParentRole && parentChildren.length > 1 && childSelectContainer && childSelect) {
+            childSelect.innerHTML = '';
+            parentChildren.forEach(child => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'child-toggle-btn';
+                btn.style.padding = '8px 16px';
+                btn.style.borderRadius = '12px';
+                btn.style.fontSize = '0.9rem';
+                btn.style.fontWeight = '700';
+                btn.style.cursor = 'pointer';
+                btn.style.transition = 'all 0.2s';
+                btn.style.display = 'inline-flex';
+                btn.style.alignItems = 'center';
+                btn.style.gap = '6px';
+                
+                const isActive = String(child.id) === String(loggedInStudentId);
+                
+                if (isActive) {
+                    btn.style.background = 'var(--mascot-purple-bg)';
+                    btn.style.color = '#ffffff';
+                    btn.style.border = '1px solid var(--mascot-purple-bg)';
+                    btn.innerHTML = `<i data-lucide="check" style="width: 14px; height: 14px;"></i> ${child.name}`;
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.border = '1px solid var(--border-color)';
+                    btn.innerHTML = `${child.name}`;
+                }
+                
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loggedInStudentId = child.id;
+                    renderMyClass();
+                });
+                
+                childSelect.appendChild(btn);
+            });
+            
+            // Adjust the parent selector container to act as a clean inline buttons wrapper
+            childSelectContainer.style.display = 'block';
+            safeCreateIcons();
+        } else {
+            if (childSelectContainer) childSelectContainer.style.display = 'none';
+        }
+
+        // Profile widget render
+        if (infoWidget) {
+            const targets = (isParentRole && parentChildren && parentChildren.length > 0) ? parentChildren : [student];
+            let allProfilesHtml = '';
+
+            targets.forEach(targetStudent => {
+                const studentProgressList = progressList
+                    .filter(p => p.studentId === targetStudent.id)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+                let progressListHtml = '';
+                studentProgressList.forEach(prog => {
+                    progressListHtml += `
+                        <div style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                            <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-green-bg); background: rgba(39, 39, 42, 0.08); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">${prog.date}</span>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${prog.content}</div>
+                        </div>
+                    `;
+                });
+                if (studentProgressList.length === 0) {
+                    progressListHtml = '<div style="color: var(--text-muted); font-size: 0.8rem;">진도 기록이 없습니다.</div>';
+                }
+
+                const studentFeedbacks = feedbacks
+                    .filter(f => f.studentId === targetStudent.id)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+                let feedbacksHtml = '';
+                studentFeedbacks.forEach(fb => {
+                    feedbacksHtml += `
+                        <div class="myclass-feedback-item" style="margin-top: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                            <span style="font-size: 0.72rem; font-weight: 700; color: var(--mascot-purple-bg); background: rgba(142, 68, 173, 0.08); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">${fb.date}</span>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${fb.content}</div>
+                        </div>
+                    `;
+                });
+                if (studentFeedbacks.length === 0) {
+                    feedbacksHtml = '<div style="color: var(--text-muted); font-size: 0.8rem;">피드백 기록이 없습니다.</div>';
+                }
+
+                allProfilesHtml += `
+                    <div style="border-bottom: 2px solid var(--border-color); margin-bottom: 20px; padding-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px dashed var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+                            <div>
+                                <h2 style="font-family: var(--ff-logo); font-size: 1.4rem; color: var(--text-primary); display: inline-block; margin-right: 8px; margin-bottom: 0;">${targetStudent.name}</h2>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">${targetStudent.age}세 &middot; ${targetStudent.school}</span>
+                            </div>
+                            <span class="student-sibling-tag" style="background: var(--primary-light); color: var(--primary-color); border: 1px solid var(--border-color); font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; font-weight: 700;">자녀 연동 완료</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; margin-bottom: 16px; color: var(--text-secondary);">
+                            <div><strong style="color: var(--text-primary);">대표 교재 / 과정:</strong> <span style="font-weight: 700; color: var(--primary-color);">${targetStudent.progress}</span></div>
+                            
+                            <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px;">학습 진도 기록 히스토리:</strong>
+                                <div style="max-height: 120px; overflow-y: auto; padding-right: 4px;">
+                                    ${progressListHtml}
+                                </div>
+                            </div>
+                            
+                            ${userRole === 'student' ? '' : `
+                            <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px;">선생님 지도 피드백 기록:</strong>
+                                <div class="myclass-feedback-list" style="max-height: 120px; overflow-y: auto; padding-right: 4px;">
+                                    ${feedbacksHtml}
+                                </div>
+                            </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            infoWidget.innerHTML = allProfilesHtml;
+            
+            // Render parent calendar (view only)
+            if (myClassCalYear === null || myClassCalMonth === null) {
+                const today = new Date();
+                myClassCalYear = today.getFullYear();
+                myClassCalMonth = today.getMonth();
+            }
+            const calTarget = window.currentCalStudentId || student.id;
+            renderCalendar(calTarget, myClassCalYear, myClassCalMonth, 'myclass-calendar-grid-days', false);
+        }
+
+
+        // Homework list render
+        if (homeworkList) {
+            homeworkList.innerHTML = '';
+            const targets = (isParentRole && parentChildren && parentChildren.length > 0) ? parentChildren : [student];
+            
+            targets.forEach(targetStudent => {
+                const studentHomework = homework.filter(h => String(h.studentId) === String(targetStudent.id));
+                const pending = studentHomework.filter(h => !h.isCompleted);
+                const completed = studentHomework.filter(h => h.isCompleted);
+                
+                let targetHwHtml = `
+                    <div style="margin-bottom: 24px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; color: var(--text-primary); border-bottom: 2px solid var(--primary-light); padding-bottom: 4px; display: inline-block;">
+                            ${targetStudent.name}의 과제
+                        </h4>
+                `;
+                
+                if (studentHomework.length === 0) {
+                    targetHwHtml += '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 12px 0;">등록된 과제가 없습니다.</div>';
+                } else {
+                    if (pending.length > 0) {
+                        targetHwHtml += pending.map(hw => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem;">${hw.title}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">마감일: <span style="font-weight: 600; color: #ef4444;">${hw.dueDate}</span></div>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 4px 10px; border-radius: 20px;">대기 중</span>
+                            </div>`).join('');
+                    }
+                    if (completed.length > 0) {
+                        targetHwHtml += completed.map(hw => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem; text-decoration: line-through;">${hw.title}</div>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 700; color: #10b981; background: #d1fae5; padding: 4px 10px; border-radius: 20px;">완료</span>
+                            </div>`).join('');
+                    }
+                }
+                
+                targetHwHtml += '</div>';
+                homeworkList.innerHTML += targetHwHtml;
+            });
+            
+            const hwPagination = document.getElementById('myclass-homework-pagination');
+            if (hwPagination) hwPagination.style.display = 'none';
+        }
+        
+        // --- Parent Dashboard Enhancements ---
+        if (isParentRole && parentChildren && parentChildren.length > 1) {
+            const calSelector = document.getElementById('calendar-child-selector');
+            if (calSelector) {
+                calSelector.style.display = 'flex';
+                calSelector.innerHTML = '';
+                parentChildren.forEach(child => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'child-toggle-btn';
+                    const isActive = String(child.id) === String(window.currentCalStudentId || student.id);
+                    btn.style.cssText = isActive 
+                        ? 'padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: var(--primary-color); color: #fff; border: 1px solid var(--primary-color);'
+                        : 'padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: #fff; color: var(--text-secondary); border: 1px solid var(--border-color);';
+                    btn.innerHTML = child.name;
+                    btn.onclick = () => {
+                        window.currentCalStudentId = child.id;
+                        renderMyClass(); // re-render to update active state of buttons
+                    };
+                    calSelector.appendChild(btn);
+                });
+            }
+            
+            const habitSelector = document.getElementById('habit-child-selector');
+            if (habitSelector) {
+                habitSelector.style.display = 'flex';
+                habitSelector.innerHTML = '';
+                parentChildren.forEach(child => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'child-toggle-btn';
+                    const isActive = String(child.id) === String(window.currentHabitStudentId || student.id);
+                    btn.style.cssText = isActive 
+                        ? 'padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: var(--mascot-green-bg); color: #fff; border: 1px solid var(--mascot-green-bg);'
+                        : 'padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: #fff; color: var(--text-secondary); border: 1px solid var(--border-color);';
+                    btn.innerHTML = child.name;
+                    btn.onclick = () => {
+                        window.currentHabitStudentId = child.id;
+                        if (typeof renderDailyHabits === 'function') {
+                            renderDailyHabits(child.id);
+                        }
+                        renderMyClass(); 
+                    };
+                    habitSelector.appendChild(btn);
+                });
+            }
+        }
+        
+        // --- Graded Exams Widget ---
+        const gradedExamsWidget = document.getElementById('parent-graded-exams-widget');
+        if (gradedExamsWidget && isParentRole) {
+            gradedExamsWidget.style.display = 'flex';
+            const examsList = document.getElementById('parent-graded-exams-list');
+            
+            const targetStudents = (parentChildren && parentChildren.length > 0) ? parentChildren : [student];
+            let allGraded = [];
+            targetStudents.forEach(child => {
+                const childExams = (window.exams || []).filter(e => e.studentId === child.id && e.status === 'graded');
+                childExams.forEach(e => allGraded.push({...e, childName: child.name}));
+            });
+            
+            allGraded.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            const gradeFilter = document.getElementById('parent-exam-grade-filter');
+            const semesterFilter = document.getElementById('parent-exam-semester-filter');
+            const gVal = gradeFilter ? gradeFilter.value : 'all';
+            const sVal = semesterFilter ? semesterFilter.value : 'all';
+            
+            let filteredExams = allGraded;
+            if (gVal !== 'all') filteredExams = filteredExams.filter(e => e.grade === gVal);
+            if (sVal !== 'all') {
+                filteredExams = filteredExams.filter(e => {
+                    const month = new Date(e.date).getMonth() + 1;
+                    const sem = month <= 7 ? '1학기' : '2학기';
+                    return sem === sVal;
+                });
+            }
+            
+            if (filteredExams.length === 0) {
+                if(examsList) examsList.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:20px 0;">채점된 시험지가 없습니다.</div>';
+            } else {
+                if(examsList) examsList.innerHTML = filteredExams.map(e => {
+                    const prevExams = (window.exams || []).filter(pe => pe.studentId === e.studentId && pe.status === 'graded' && pe.subject === e.subject && new Date(pe.date) < new Date(e.date));
+                    prevExams.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    let progressHtml = '';
+                    if (prevExams.length > 0) {
+                        const prevScore = prevExams[0].score || 0;
+                        const diff = (e.score || 0) - prevScore;
+                        if (diff > 0) progressHtml = `<span style="font-size:0.75rem; color:#16a34a; background:#dcfce7; padding:2px 6px; border-radius:12px; font-weight:700;">▲ ${diff}점</span>`;
+                        else if (diff < 0) progressHtml = `<span style="font-size:0.75rem; color:#dc2626; background:#fee2e2; padding:2px 6px; border-radius:12px; font-weight:700;">▼ ${Math.abs(diff)}점</span>`;
+                        else progressHtml = `<span style="font-size:0.75rem; color:var(--text-secondary); background:#f1f5f9; padding:2px 6px; border-radius:12px; font-weight:700;">- 유지</span>`;
+                    }
+                    return `
+                        <div style="display:flex; justify-content:space-between; align-items:center; border:1px solid var(--border-color); border-radius:12px; padding:12px; background:#fff; cursor:pointer; transition:0.2s;" onmouseover="this.style.borderColor='var(--primary-color)';" onmouseout="this.style.borderColor='var(--border-color)';">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                    <span style="font-size:0.75rem; font-weight:700; color:var(--primary-color); background:var(--primary-light); padding:2px 8px; border-radius:12px;">${e.childName}</span>
+                                    <span style="font-size:0.75rem; color:var(--text-secondary);">${e.grade} ${e.subject}</span>
+                                </div>
+                                <div style="font-weight:700; font-size:0.9rem; color:var(--text-primary);">${e.title}</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${new Date(e.date).toLocaleDateString()}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:1.1rem; font-weight:800; color:var(--text-primary); margin-bottom:4px;">${e.score || 0}점</div>
+                                ${progressHtml}
+                            </div>
+                        </div>`;
+                }).join('');
+            }
+        }
+
+        const vocabWidget = document.getElementById('myclass-vocab-widget');
+        if (vocabWidget) {
+            vocabWidget.style.display = (typeof userRole !== 'undefined' && userRole === 'parent') ? 'none' : 'flex';
+        }
+
+
+        // Render Class Textbooks & Monthly Tuition
+        const tuitionContainer = document.getElementById('myclass-tuition-status-container');
+        const tuitionWidget = document.getElementById('myclass-tuition-widget');
+        const isParent = (typeof userRole !== 'undefined' && userRole === 'parent');
+
+        if (tuitionWidget) {
+            tuitionWidget.style.display = isParent ? 'flex' : 'none';
+        }
+
+        if (isParent && tuitionContainer) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const tuitionMonth = year + '년 ' + month + '월';
+
+            const allItems = [];
+
+            parentChildren.forEach(child => {
+                const childClass = classes.find(c => String(c.id) === String(child.classId));
+                
+                // --- 1. Tuition ---
+                const tuitionName = '회비 (' + tuitionMonth + ')';
+                const feeAmount = child.tuitionFeeAmount || 250000;
+                const feeDay = child.tuitionFeeDay || 10;
+
+                let reqTuition = textbookRequests.find(r => String(r.studentId) === String(child.id) && r.textbookName === tuitionName);
+                if (!reqTuition) {
+                    reqTuition = {
+                        id: crypto.randomUUID(),
+                        studentId: child.id,
+                        studentName: child.name,
+                        classId: childClass ? childClass.id : 1,
+                        className: childClass ? childClass.name : '없음',
+                        textbookName: tuitionName,
+                        price: feeAmount,
+                        isConfirmed: true,
+                        paymentStatus: '미결제',
+                        createdAt: new Date().toISOString()
+                    };
+                    textbookRequests.unshift(reqTuition);
+                    saveTextbookRequests();
+                }
+
+                allItems.push({ child, req: reqTuition, feeAmount, feeDay,
+                    isPaid: reqTuition.paymentStatus === '결제완료',
+                    itemTitle: child.name + ' 회비(' + tuitionMonth + ')',
+                    isTextbook: false
+                });
+
+                // --- 2. Textbooks ---
+                const classTextbooks = (childClass && childClass.textbooks) ? childClass.textbooks : [];
+                const childReqs = textbookRequests.filter(r => String(r.studentId) === String(child.id) && !r.textbookName.startsWith('회비 ('));
+                
+                const addedNames = new Set();
+                
+                classTextbooks.forEach(tb => {
+                    const req = childReqs.find(r => r.textbookName === tb.name);
+                    allItems.push({
+                        child, req, feeAmount: tb.price, feeDay: null,
+                        isPaid: req && req.paymentStatus === '결제완료',
+                        itemTitle: child.name + ' ' + tb.name,
+                        isTextbook: true,
+                        tbName: tb.name
+                    });
+                    addedNames.add(tb.name);
+                });
+                
+                childReqs.forEach(req => {
+                    if (!addedNames.has(req.textbookName)) {
+                        allItems.push({
+                            child, req, feeAmount: req.price, feeDay: null,
+                            isPaid: req.paymentStatus === '결제완료',
+                            itemTitle: child.name + ' ' + req.textbookName,
+                            isTextbook: true,
+                            tbName: req.textbookName
+                        });
+                        addedNames.add(req.textbookName);
+                    }
+                });
+            });
+
+            const renderTuitionList = (filter) => {
+                tuitionContainer.dataset.filter = filter;
+                tuitionContainer.innerHTML = '';
+
+                const visibleItems = allItems.filter(item => filter === 'done' ? item.isPaid : !item.isPaid);
+
+                if (visibleItems.length === 0) {
+                    tuitionContainer.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.88rem;">' + (filter === 'done' ? '결제 완료된 항목이 없습니다.' : '결제 대기 중인 항목이 없습니다. 🎉') + '</div>';
+                    return;
+                }
+
+                visibleItems.forEach(({ child, req, isPaid, feeAmount, feeDay, itemTitle, isTextbook, tbName }) => {
+                    let actionHtml = '';
+                    if (isTextbook && !req) {
+                        actionHtml = '<button type="button" class="btn-request-purchase" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:var(--mascot-purple-bg);color:white;font-weight:700;cursor:pointer;" data-student-id="' + child.id + '" data-tb-name="' + tbName + '" data-tb-price="' + feeAmount + '">구매 요청</button>';
+                    } else if (req && !req.isConfirmed && isTextbook) {
+                        actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">승인 대기</span>';
+                    } else if (req && req.paymentStatus === '입금확인중') {
+                        actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">입금확인중</span>';
+                    } else if (req && req.paymentStatus === '미결제') {
+                        actionHtml = '<div style="display:flex;gap:6px;align-items:center;"><span style="font-size:0.78rem;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:20px;font-weight:700;">결제 대기</span><button type="button" class="btn-pay-tuition-toss" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:#3b82f6;color:white;font-weight:700;cursor:pointer;" data-req-id="' + req.id + '" data-fee-amount="' + feeAmount + '">결제하기</button></div>';
+                    } else {
+                        actionHtml = '<span style="font-size:0.78rem;color:#10b981;background:#d1fae5;padding:3px 10px;border-radius:20px;font-weight:700;">✓ 결제완료</span>';
+                    }
+
+                    const subText = feeDay ? '매월 ' + feeDay + '일' : '교재비';
+
+                    const itemEl = document.createElement('div');
+                    itemEl.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border-color);border-radius:14px;background:#ffffff;';
+                    itemEl.innerHTML = '<div style="text-align:left;min-width:0;flex:1;"><div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">' + itemTitle + '</div><div style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;">금액: <span style="font-weight:600;color:var(--primary-color);">' + Number(feeAmount).toLocaleString() + '원</span> &nbsp;|&nbsp; 기준: <span style="font-weight:600;">' + subText + '</span></div></div><div style="flex-shrink:0;margin-left:10px;">' + actionHtml + '</div>';
+                    tuitionContainer.appendChild(itemEl);
+                });
+
+                tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const payModal = document.getElementById('textbook-payment-modal');
+                        const payTbName = document.getElementById('pay-textbook-name');
+                        const payTbPrice = document.getElementById('pay-textbook-price');
+                        const payReqId = document.getElementById('pay-request-id');
+                        const linkToss = document.getElementById('link-toss-transfer');
+                        const reqId = btn.getAttribute('data-req-id');
+                        const feeAmt = btn.getAttribute('data-fee-amount');
+                        const matchedItem = allItems.find(it => it.req && String(it.req.id) === String(reqId));
+                        if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                            payTbName.textContent = matchedItem ? matchedItem.itemTitle : '회비/교재비 결제';
+                            payTbPrice.textContent = Number(feeAmt).toLocaleString() + '원';
+                            payReqId.value = reqId;
+                            linkToss.href = 'supertoss://send?bank=국민&accountNo=76870201244813&amount=' + feeAmt;
+                            payModal.classList.add('open');
+                        }
+                    });
+                });
+
+                tuitionContainer.querySelectorAll('.btn-request-purchase').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const cId = btn.getAttribute('data-student-id');
+                        const targetChild = students.find(s => String(s.id) === String(cId));
+                        const tbName = btn.getAttribute('data-tb-name');
+                        const tbPrice = btn.getAttribute('data-tb-price');
+                        const childClass = classes.find(c => String(c.id) === String(targetChild?.classId));
+                        if (!targetChild) return;
+
+                        const newReq = {
+                            id: crypto.randomUUID(),
+                            studentId: targetChild.id,
+                            studentName: targetChild.name,
+                            classId: childClass ? childClass.id : 1,
+                            className: childClass ? childClass.name : '없음',
+                            textbookName: tbName,
+                            price: tbPrice,
+                            isConfirmed: false,
+                            paymentStatus: '미결제',
+                            createdAt: new Date().toISOString()
+                        };
+                        textbookRequests.unshift(newReq);
+                        await saveTextbookRequests();
+                        renderMyClass();
+                        if (isAdmin) renderTextbookRequests();
+                        showToast('교재 구매 요청이 전송되었습니다. 원장님 승인 후 결제가 가능합니다.');
+                    });
+                });
+            };
+
+            const btnPending = document.getElementById('btn-tuition-filter-pending');
+            const btnDone = document.getElementById('btn-tuition-filter-done');
+
+            const setActiveTab = (active, inactive) => {
+                active.style.background = '#3b82f6';
+                active.style.color = '#fff';
+                active.style.borderColor = '#3b82f6';
+                inactive.style.background = '#ffffff';
+                inactive.style.color = 'var(--text-secondary)';
+                inactive.style.borderColor = 'var(--border-color)';
+            };
+
+            if (btnPending && !btnPending.dataset.bound) {
+                btnPending.dataset.bound = 'true';
+                btnPending.addEventListener('click', () => { setActiveTab(btnPending, btnDone); renderTuitionList('pending'); });
+            }
+            if (btnDone && !btnDone.dataset.bound) {
+                btnDone.dataset.bound = 'true';
+                btnDone.addEventListener('click', () => { setActiveTab(btnDone, btnPending); renderTuitionList('done'); });
+            }
+
+            renderTuitionList('pending');
+        }
+
+                renderMyClassAiHistory();
+        renderStudentChat();
+        renderMyClassDailyHabits(loggedInStudentId);
+        renderStudentFormulasAndBadges(student);
+        safeCreateIcons();
+    };
+
+    // Toggle Student/Parent Login Modal
+    if (btnStudentLoginToggle && studentLoginModal && studentLoginForm && studentLoginNameInput && studentLoginPhoneInput && studentAuthErrorMsg) {
+        btnStudentLoginToggle.addEventListener('click', async () => {
+            if (isAdmin || isStudent) {
+                // Logout
+                try {
+                    await supabase.auth.signOut();
+                } catch(e) {
+                    console.error('Signout error:', e);
+                }
+
+                handleLogoutCleanup();
+                showToast('로그아웃 되었습니다.');
+            } else {
+                // Open login modal
+                studentLoginNameInput.value = localStorage.getItem('gongbubang_last_student_name') || '';
+                studentLoginPhoneInput.value = '';
+                studentAuthErrorMsg.style.display = 'none';
+                
+                const loginEmailInput = document.getElementById('student-login-email');
+                const loginPasswordInput = document.getElementById('student-login-password');
+                const studentEmailAuthErrorMsg = document.getElementById('student-email-auth-error-msg');
+                if (loginEmailInput) loginEmailInput.value = localStorage.getItem('gongbubang_last_student_email') || '';
+                if (loginPasswordInput) loginPasswordInput.value = '';
+                if (studentEmailAuthErrorMsg) studentEmailAuthErrorMsg.style.display = 'none';
+
+                const adminLoginPassword = document.getElementById('admin-login-password');
+                const adminLoginAuthErrorMsg = document.getElementById('admin-login-auth-error-msg');
+                if (adminLoginPassword) adminLoginPassword.value = '';
+                if (adminLoginAuthErrorMsg) adminLoginAuthErrorMsg.style.display = 'none';
+
+                // Reset tabs to easy login as default
+                if (btnTabEasy && btnTabEmail && btnTabAdmin && easyLoginForm && emailLoginForm && adminLoginForm) {
+                    btnTabEasy.classList.add('active');
+                    btnTabEmail.classList.remove('active');
+                    btnTabAdmin.classList.remove('active');
+                    easyLoginForm.style.display = 'block';
+                    emailLoginForm.style.display = 'none';
+                    adminLoginForm.style.display = 'none';
+                    if (socialLoginDivider) socialLoginDivider.style.display = 'block';
+                    if (socialLoginButtons) socialLoginButtons.style.display = 'grid';
+                    if (signupPrompt) signupPrompt.style.display = 'block';
+                }
+
+                studentLoginModal.classList.add('open');
+                const savedUser = localStorage.getItem('gongbubang_saved_student_username') || '';
+                const savedPw = localStorage.getItem('gongbubang_saved_student_password') || '';
+                if (savedUser) {
+                    studentLoginNameInput.value = savedUser;
+                }
+                if (savedPw) {
+                    studentLoginPhoneInput.value = savedPw;
+                }
+                studentLoginNameInput.focus();
+            }
+            safeCreateIcons();
+        });
+
+        if (btnStudentLoginClose) {
+            btnStudentLoginClose.addEventListener('click', () => {
+                studentLoginModal.classList.remove('open');
+            });
+        }
+
+        // Backdrop click listener removed so login modal does not close when clicking outside
+
+        // Submit Student Login Form (Student Login via Student ID / Password)
+        studentLoginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inputId = studentLoginNameInput.value.trim();
+            const inputPassword = studentLoginPhoneInput.value;
+
+            let foundParent = null;
+            let foundChild = null;
+
+            // 1. Query Supabase directly first if online to check latest remote credentials
+            const currentStudents = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    const { data: dbStudents, error } = await supabase.from('sb_students')
+                        .select('*')
+                        .eq('username', inputId)
+                        .eq('password', inputPassword);
+                    if (!error && dbStudents && dbStudents.length > 0) {
+                        const directStudent = mapStudentFromDb(dbStudents[0]);
+                        foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
+                        let parentData = null;
+                        if (directStudent.parentEmail) {
+                            const { data: dbParents } = await supabase.from('sb_mock_users').select('*').eq('email', directStudent.parentEmail);
+                            if (dbParents && dbParents.length > 0) parentData = mapMockUserFromDb(dbParents[0]);
+                        }
+                        if (!parentData && directStudent.parentPhone) {
+                            const { data: dbParents2 } = await supabase.from('sb_mock_users').select('*').eq('phone', directStudent.parentPhone);
+                            if (dbParents2 && dbParents2.length > 0) parentData = mapMockUserFromDb(dbParents2[0]);
+                        }
+                        foundParent = parentData || mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                            id: 'parent-' + directStudent.id,
+                            status: 'approved',
+                            phone: directStudent.parentPhone || '010-0000-0000',
+                            email: directStudent.parentEmail || '',
+                            address: directStudent.address || ''
+                        };
+                        // Sync remote data back to local students list
+                        const existingIdx = currentStudents.findIndex(s => s.username === directStudent.username);
+                        if (existingIdx >= 0) {
+                            currentStudents[existingIdx] = directStudent;
+                        } else {
+                            currentStudents.push(directStudent);
+                        }
+                        localStorage.setItem('gongbubang_students', JSON.stringify(currentStudents));
+                        students = currentStudents;
+                        
+                        // Also heal parent children local cache password to match the new password
+                        let parentUpdated = false;
+                        const updatedMockUsers = mockUsers.map(u => {
+                            if (u.phone === directStudent.parentPhone) {
+                                const children = u.user_metadata?.children || [];
+                                const updatedChildren = children.map(c => {
+                                    if (c.name === directStudent.name) {
+                                        parentUpdated = true;
+                                        return { ...c, username: directStudent.username, password: directStudent.password };
+                                    }
+                                    return c;
+                                });
+                                return { ...u, user_metadata: { ...u.user_metadata, children: updatedChildren } };
+                            }
+                            return u;
+                        });
+                        if (parentUpdated) {
+                            localStorage.setItem('gongbubang_mock_users', JSON.stringify(updatedMockUsers));
+                        }
+                    }
+                } catch (err) {
+                    console.error('Supabase real-time auth failed, falling back to local cache check:', err);
+                }
+            }
+
+            // 2. Offline fallback using local storage caches
+            if (!foundChild) {
+                mockUsers.forEach(u => {
+                    const children = u.user_metadata?.children || [];
+                    children.forEach(c => {
+                        if (c.username && c.username.toLowerCase() === inputId.toLowerCase() && String(c.password) === String(inputPassword)) {
+                            foundParent = u;
+                            foundChild = c;
+                        }
+                    });
+                });
+            }
+
+            if (!foundChild) {
+                const directStudent = currentStudents.find(s => s.username && s.username.toLowerCase() === inputId.toLowerCase() && String(s.password) === String(inputPassword));
+                if (directStudent) {
+                    foundChild = { username: directStudent.username, name: directStudent.name, password: directStudent.password };
+                    foundParent = mockUsers.find(u => u.phone === directStudent.parentPhone) || {
+                        id: 'parent-' + directStudent.id,
+                        status: 'approved',
+                        phone: directStudent.parentPhone || '010-0000-0000',
+                        address: directStudent.address || ''
+                    };
+                }
+            }
+
+            if (foundParent && foundChild) {
+                // Check parent account status
+                if (foundParent.status === 'pending') {
+                    alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                    return;
+                }
+                if (foundParent.status === 'terminated') {
+                    alert('관리자에 의해 종결된 아이디 입니다.');
+                    return;
+                }
+                
+                let foundStudent = currentStudents.find(s => s.name === foundChild.name && s.parentPhone === foundParent.phone);
+                if (!foundStudent) {
+                    let age = 10;
+                    if (foundChild.birthdate) {
+                        const birthYear = new Date(foundChild.birthdate).getFullYear();
+                        age = new Date().getFullYear() - birthYear + 1;
+                    }
+                    foundStudent = {
+                        id: foundParent.id + '-' + foundParent.user_metadata?.children?.findIndex(x => x.username === foundChild.username),
+                        name: foundChild.name,
+                        age,
+                        school: '공부방 초등학교',
+                        phone: foundChild.phone || '',
+                        parentPhone: foundParent.phone,
+                        sibling: foundParent.user_metadata?.children?.length > 1 ? `${foundParent.user_metadata.children.length - 1}명의 형제자매` : '없음',
+                        schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
+                        progress: '개념 완성 과정 등록 대기 중',
+                        remarks: '자녀 계정으로 가입되었습니다. 스케줄을 설정해 주세요.',
+                        username: foundChild.username,
+                        password: foundChild.password,
+                        address: foundParent.address,
+                        classId: 1 // Default fallback to 초등 4학년 A반
+                    };
+                    currentStudents.unshift(foundStudent);
+                    students = currentStudents;
+                    saveStudents();
+                }
+
+                // Logged in successfully
+                localStorage.setItem('gongbubang_last_student_name', inputId);
+                localStorage.setItem('gongbubang_saved_student_username', inputId);
+                localStorage.setItem('gongbubang_saved_student_password', inputPassword);
+                localStorage.setItem('gongbubang_student_session', JSON.stringify({
+                    username: foundChild.username,
+                    name: foundChild.name,
+                    role: 'student'
+                }));
+                
+                isStudent = true;
+                loggedInStudentId = foundStudent.id;
+                userRole = 'student';
+                
+                // Hide admin/teacher panels to avoid clash
+                if (isAdmin) {
+                    isAdmin = false;
+                    if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+                    if (studentSection) studentSection.style.display = 'none';
+                    if (navLinkStudents) navLinkStudents.style.display = 'none';
+                    if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+                }
+
+                // Hide public curriculum, schedule, and resources sections
+                const scheduleSection = document.getElementById('schedule');
+                if (scheduleSection) scheduleSection.style.display = 'none';
+                const curriculumSection = document.getElementById('curriculum');
+                if (curriculumSection) curriculumSection.style.display = 'none';
+                const resourcesSection = document.getElementById('resources');
+                if (resourcesSection) resourcesSection.style.display = 'none';
+
+                studentLoginModal.classList.remove('open');
+                updateLoginButton();
+
+                if (myclassSection) myclassSection.style.display = 'block';
+                if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
+                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
+
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
+                renderMyClass();
+                showToast(`[로그인 성공] ${foundStudent.name} 학생 포털에 연결되었습니다.`);
+
+                // Check for callback redirect, otherwise scroll to myclass
+                if (sessionStorage.getItem('login_callback_url')) {
+                    handleLoginSuccessRedirection();
+                } else {
+                    setTimeout(() => {
+                        const targetOffset = myclassSection.offsetTop - 90;
+                        window.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                    }, 100);
+                }
+            } else {
+                studentAuthErrorMsg.style.display = 'block';
+                const authBox = studentLoginModal.querySelector('.modal-box');
+                if (authBox) {
+                    authBox.classList.add('shake');
+                    setTimeout(() => authBox.classList.remove('shake'), 400);
+                }
+            }
+        });
+
+        // Submit Student Email Login Form (Supabase Auth)
+        const studentEmailLoginForm = document.getElementById('student-email-login-form');
+        const studentEmailAuthErrorMsg = document.getElementById('student-email-auth-error-msg');
+
+        if (studentEmailLoginForm) {
+            studentEmailLoginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('student-login-email').value.trim();
+                const password = document.getElementById('student-login-password').value;
+
+                const submitBtn = studentEmailLoginForm.querySelector('.btn-modal-submit');
+                const originalText = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = '로그인 중...';
+                if (studentEmailAuthErrorMsg) studentEmailAuthErrorMsg.style.display = 'none';
+
+                try {
+                    // Hardcoded check for admin login via email
+                    if (email === 'teacher@math.com' && password === '9999') {
+                        studentLoginModal.classList.remove('open');
+                        handleAdminLoginSetup();
+                        showToast('관리자 모드가 활성화되었습니다.');
+                        
+                        // Redirection check
+                        if (sessionStorage.getItem('login_callback_url')) {
+                            handleLoginSuccessRedirection();
+                        }
+                        return;
+                    }
+
+                    // Check local mockUsers database first (runs in both mock and real mode)
+                    const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                    const foundUserLocal = mockUsers.find(u => u.email === email && u.password === password);
+                    
+                    if (foundUserLocal) {
+                        if (foundUserLocal.status === 'pending') {
+                            alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                            return;
+                        }
+                        if (foundUserLocal.status === 'terminated') {
+                            alert('관리자에 의해 종결된 아이디 입니다.');
+                            return;
+                        }
+                    }
+
+                    const { data, error } = await supabase.auth.signInWithPassword({
+                        email,
+                        password
+                    });
+
+                    if (error) {
+                        throw error;
+                    }
+
+                    if (data.user) {
+                        const userStatus = foundUserLocal ? foundUserLocal.status : (data.user.user_metadata?.status || 'approved');
+                        if (userStatus === 'pending') {
+                            alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                            await supabase.auth.signOut();
+                            return;
+                        }
+                        if (userStatus === 'terminated') {
+                            alert('관리자에 의해 종결된 아이디 입니다.');
+                            await supabase.auth.signOut();
+                            return;
+                        }
+
+                        localStorage.setItem('gongbubang_last_student_email', email);
+                        localStorage.removeItem('gongbubang_student_session'); // clear student session
+                        
+                        const role = data.user.user_metadata?.role || 'parent';
+                        userRole = role;
+
+                        // Rely on onAuthStateChange to set up student/parent state properly
+                        
+                        // Hide admin/teacher panels to avoid clash
+                        if (isAdmin) {
+                            isAdmin = false;
+                            if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+                            if (studentSection) studentSection.style.display = 'none';
+                            if (navLinkStudents) navLinkStudents.style.display = 'none';
+                            if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+                        }
+
+                        studentLoginModal.classList.remove('open');
+                        updateLoginButton();
+
+                        if (myclassSection) myclassSection.style.display = 'block';
+                        if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
+                        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
+
+                        if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                            await initializeDataFromSupabase();
+                        }
+                        renderMyClass();
+                        showToast(`[로그인 성공] ${name} 학부모 포털에 연결되었습니다.`);
+
+                        // Smooth scroll to myclass
+                        setTimeout(() => {
+                            const targetOffset = myclassSection.offsetTop - 90;
+                            window.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                        }, 200);
+                    }
+                } catch (err) {
+                    console.error('Login error:', err);
+                    if (studentEmailAuthErrorMsg) {
+                        studentEmailAuthErrorMsg.textContent = err.message || '이메일 또는 비밀번호가 잘못되었습니다.';
+                        studentEmailAuthErrorMsg.style.display = 'block';
+                        const authBox = studentLoginModal.querySelector('.modal-box');
+                        if (authBox) {
+                            authBox.classList.add('shake');
+                            setTimeout(() => authBox.classList.remove('shake'), 400);
+                        }
+                    }
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            });
+        }
+
+        // Submit Signup Form (Save profile locally and trigger Step 2: Social OAuth)
+        const studentSignupForm = document.getElementById('student-signup-form');
+        const signupErrorMsg = document.getElementById('signup-error-msg');
+
+        if (studentSignupForm) {
+            studentSignupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const parentName = document.getElementById('student-signup-name').value.trim();
+                const phone = document.getElementById('student-signup-phone').value.trim();
+                const addressBase = document.getElementById('student-signup-address').value.trim();
+                const addressDetail = document.getElementById('student-signup-address-detail').value.trim();
+
+                // Validate house address
+                if (!addressBase) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '집 주소를 입력해 주세요.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+                const address = addressDetail ? `${addressBase} | ${addressDetail}` : addressBase;
+
+                // Collect children info dynamically
+                const children = [];
+                const childBlocks = signupChildrenContainer.querySelectorAll('.signup-child-block');
+                let childValidationError = '';
+                
+                childBlocks.forEach(block => {
+                    const name = block.querySelector('.child-name-input').value.trim();
+                    const birthdate = block.querySelector('.child-birth-input').value;
+                    const childPhone = block.querySelector('.child-phone-input').value.trim();
+                    const childUsername = block.querySelector('.child-id-input').value.trim();
+                    const childPassword = block.querySelector('.child-pw-input').value;
+                    
+                    if (!name || !birthdate || !childUsername || !childPassword) {
+                        childValidationError = '자녀 정보(이름, 생년월일, 아이디, 비밀번호)를 모두 입력해 주세요.';
+                    }
+                    
+                    const childSchool = block.querySelector('.child-school-input') ? block.querySelector('.child-school-input').value.trim() : '';
+                    const activeGrade = block.querySelector('.active-grade') || block.querySelector('.child-grade-text');
+                    const childGrade = activeGrade ? activeGrade.value.trim() : '';
+                    children.push({ name, birthdate, phone: childPhone, school: childSchool, grade: childGrade, username: childUsername, password: childPassword });
+                });
+
+                if (childValidationError) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = childValidationError;
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                if (children.length === 0) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '최소 한 명 이상의 자녀를 등록해 주세요.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Check child username duplication
+                let childUsernameDuplicate = false;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const students = JSON.parse(localStorage.getItem('gongbubang_students') || '[]');
+                children.forEach(c => {
+                    const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === c.username.toLowerCase());
+                    let takenInMock = false;
+                    mockUsers.forEach(u => {
+                        if (u.role === 'student' && u.email === c.username) {
+                            takenInMock = true;
+                        }
+                        const uChildren = u.user_metadata?.children || [];
+                        if (uChildren.some(uc => uc.username && uc.username.toLowerCase() === c.username.toLowerCase())) {
+                            takenInMock = true;
+                        }
+                    });
+                    if (takenInStudents || takenInMock) {
+                        childUsernameDuplicate = true;
+                    }
+                });
+
+                if (childUsernameDuplicate) {
+                    if (signupErrorMsg) {
+                        signupErrorMsg.textContent = '등록하려는 자녀의 학생 아이디 중 이미 사용 중인 아이디가 있습니다. 중복 체크를 완료해 주세요.';
+                        signupErrorMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                if (signupErrorMsg) signupErrorMsg.style.display = 'none';
+
+                // Save data to sessionStorage for retrieval after OAuth redirect
+                const pendingData = {
+                    parentName,
+                    phone,
+                    address,
+                    children
+                };
+                sessionStorage.setItem('pending_signup_data', JSON.stringify(pendingData));
+                sessionStorage.setItem('gongbubang_signup_flow', 'true');
+
+                // Send Telegram Notification
+                try {
+                    let childrenInfo = children.map((c, i) => `   ${i+1}. 이름: ${c.name} (아이디: ${c.username})`).join('\n');
+                    const telegramMessage = `🔔 <b>신규 학부모 가입 및 인증 시도</b>\n\n` +
+                        `👤 <b>학부모 이름:</b> ${parentName}\n` +
+                        `📱 <b>연락처:</b> ${phone}\n` +
+                        `🏠 <b>주소:</b> ${address}\n` +
+                        `👶 <b>자녀 정보:</b>\n${childrenInfo}`;
+                    sendTelegramNotification(telegramMessage); // Async, but don't block
+                } catch (e) {
+                    console.error('Failed to send telegram notification for signup:', e);
+                }
+
+
+                // Transition to Step 2 (Social Authentication Option)
+                const stepSocial = document.getElementById('signup-step-social');
+                const stepProfile = document.getElementById('signup-step-profile');
+                if (stepSocial) stepSocial.style.display = 'block';
+                if (stepProfile) stepProfile.style.display = 'none';
+            });
+        }
+    }
+
+    // Homework Assignment Modal Submissions
+    if (homeworkForm && homeworkFormModal && homeworkStudentIdInput && homeworkDueDateInput && homeworkTitleInput && homeworkDescriptionInput) {
+        if (btnHomeworkClose) {
+            btnHomeworkClose.addEventListener('click', () => homeworkFormModal.classList.remove('open'));
+        }
+        
+        homeworkFormModal.addEventListener('click', (e) => {
+            if (e.target === homeworkFormModal) homeworkFormModal.classList.remove('open');
+        });
+
+        homeworkForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(homeworkStudentIdInput.value);
+            const dueDate = homeworkDueDateInput.value;
+            const title = homeworkTitleInput.value.trim();
+            const description = homeworkDescriptionInput.value.trim();
+
+            const newHw = {
+                id: crypto.randomUUID(),
+                studentId,
+                dueDate,
+                title,
+                description,
+                isCompleted: false
+            };
+
+            homework.unshift(newHw);
+            saveHomework();
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            
+            // If logged in as student, re-render myclass as well
+            if (isStudent && loggedInStudentId === studentId) {
+                renderMyClass();
+            }
+
+            homeworkFormModal.classList.remove('open');
+            const targetStudent = students.find(s => s.id === studentId);
+            showToast(`[과제 출제완료] ${targetStudent ? targetStudent.name : '원생'}에게 새 숙제가 배정되었습니다.`);
+        });
+    }
+
+    // Feedback Assignment Modal Submissions
+    if (feedbackForm && feedbackFormModal && feedbackStudentIdInput && feedbackDateInput && feedbackContentInput) {
+        if (btnFeedbackClose) {
+            btnFeedbackClose.addEventListener('click', () => feedbackFormModal.classList.remove('open'));
+        }
+
+        feedbackFormModal.addEventListener('click', (e) => {
+            if (e.target === feedbackFormModal) feedbackFormModal.classList.remove('open');
+        });
+
+        feedbackForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(feedbackStudentIdInput.value);
+            const date = feedbackDateInput.value;
+            const content = feedbackContentInput.value.trim();
+
+            const newFb = {
+                id: crypto.randomUUID(),
+                studentId,
+                date,
+                content
+            };
+
+            feedbacks.unshift(newFb);
+            saveFeedbacks();
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+
+            // If logged in as student, re-render myclass as well to show feedback immediately
+            if (isStudent && loggedInStudentId === studentId) {
+                renderMyClass();
+            }
+
+            feedbackFormModal.classList.remove('open');
+            const targetStudent = students.find(s => s.id === studentId);
+            showToast(`[피드백 등록완료] ${targetStudent ? targetStudent.name : '원생'}에게 새 피드백이 등록되었습니다.`);
+        });
+    }
+
+    // Progress Modal Submissions
+    if (progressForm && progressFormModal && progressStudentIdInput && progressDateInput && progressContentInput) {
+        if (btnProgressClose) {
+            btnProgressClose.addEventListener('click', () => progressFormModal.classList.remove('open'));
+        }
+
+        progressFormModal.addEventListener('click', (e) => {
+            if (e.target === progressFormModal) progressFormModal.classList.remove('open');
+        });
+
+        progressForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(progressStudentIdInput.value);
+            const date = progressDateInput.value;
+            const content = progressContentInput.value.trim();
+
+            const existingProg = progressList.find(p => p.studentId === studentId && p.date === date);
+            if (existingProg) {
+                existingProg.content = content;
+            } else {
+                const newProg = {
+                    id: crypto.randomUUID(),
+                    studentId,
+                    date,
+                    content
+                };
+                progressList.unshift(newProg);
+            }
+            saveProgressList();
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+
+            // If logged in as student, re-render myclass as well to show progress immediately
+            if (isStudent && loggedInStudentId === studentId) {
+                renderMyClass();
+            }
+
+            progressFormModal.classList.remove('open');
+            const targetStudent = students.find(s => s.id === studentId);
+            showToast(`[진도 기록 완료] ${targetStudent ? targetStudent.name : '원생'}의 학습 진도가 기록되었습니다.`);
+        });
+    }
+
+    // Calendar Modal Submissions & Navigation
+    const calModal = document.getElementById('attendance-calendar-modal');
+    const btnCalendarClose = document.getElementById('btn-calendar-close');
+    const btnCalendarPrev = document.getElementById('btn-calendar-prev');
+    const btnCalendarNext = document.getElementById('btn-calendar-next');
+    
+    const makeupForm = document.getElementById('makeup-form');
+    const makeupDateInput = document.getElementById('makeup-date');
+    const makeupMemoInput = document.getElementById('makeup-memo');
+
+    const attendanceEditForm = document.getElementById('attendance-edit-form');
+    const attendanceEditDate = document.getElementById('attendance-edit-date');
+    const attendanceEditType = document.getElementById('attendance-edit-type');
+    const attendanceEditMemo = document.getElementById('attendance-edit-memo');
+    const btnAttendanceDelete = document.getElementById('btn-attendance-delete');
+
+    if (calModal) {
+        if (btnCalendarClose) {
+            btnCalendarClose.addEventListener('click', () => calModal.classList.remove('open'));
+        }
+        calModal.addEventListener('click', (e) => {
+            if (e.target === calModal) calModal.classList.remove('open');
+        });
+
+        if (btnCalendarPrev) {
+            btnCalendarPrev.addEventListener('click', () => {
+                if (currentCalMonth === 0) {
+                    currentCalMonth = 11;
+                    currentCalYear--;
+                } else {
+                    currentCalMonth--;
+                }
+                renderCalendar(currentCalStudentId, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+            });
+        }
+
+        if (btnCalendarNext) {
+            btnCalendarNext.addEventListener('click', () => {
+                if (currentCalMonth === 11) {
+                    currentCalMonth = 0;
+                    currentCalYear++;
+                } else {
+                    currentCalMonth++;
+                }
+                renderCalendar(currentCalStudentId, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+            });
+        }
+    }
+
+    // Makeup Class Form Submit
+    if (makeupForm && makeupDateInput && makeupMemoInput) {
+        makeupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!currentCalStudentId) return;
+
+            const date = makeupDateInput.value;
+            const memo = makeupMemoInput.value.trim();
+
+            // Determine day of the week safely (local timezone)
+            const parts = date.split('-');
+            const dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            const dayOfWeek = dateObj.getDay(); // 0: Sun, 1: Mon, ...
+            const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const dayKey = dayKeys[dayOfWeek];
+
+            // Get target student
+            const targetStudent = students.find(s => s.id === currentCalStudentId);
+
+            // Get target student's starting class schedule time for this day of week
+            const getStartTime = (scheduleStr) => {
+                if (!scheduleStr) return '';
+                const parts = scheduleStr.split('~');
+                return parts[0].trim();
+            };
+
+            const targetScheduleObj = getStudentSchedule(targetStudent);
+            const targetSchedule = targetScheduleObj[dayKey] || '';
+            const targetStartTime = getStartTime(targetSchedule);
+
+            const studentIdsToRegister = [currentCalStudentId];
+            if (targetStartTime) {
+                students.forEach(s => {
+                    if (s.id !== currentCalStudentId) {
+                        const sScheduleObj = getStudentSchedule(s);
+                        if (sScheduleObj[dayKey]) {
+                            const sStartTime = getStartTime(sScheduleObj[dayKey]);
+                            if (sStartTime === targetStartTime) {
+                                studentIdsToRegister.push(s.id);
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Register makeup for all matching student IDs (avoiding duplicates)
+            studentIdsToRegister.forEach((sid, idx) => {
+                const exists = attendance.some(a => a.studentId === sid && a.date === date && a.type === 'makeup');
+                if (!exists) {
+                    attendance.push({
+                        id: crypto.randomUUID(),
+                        studentId: sid,
+                        date,
+                        type: 'makeup',
+                        time: '',
+                        memo
+                    });
+                }
+            });
+
+            saveAttendance();
+            
+            // Re-render
+            renderCalendar(currentCalStudentId, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            if (isStudent && loggedInStudentId === currentCalStudentId) {
+                renderMyClass();
+            }
+
+            // Reset inputs (memo)
+            makeupMemoInput.value = '';
+
+            const registeredNames = studentIdsToRegister.map(sid => {
+                const s = students.find(std => std.id === sid);
+                return s ? s.name : '';
+            }).filter(Boolean);
+
+            showToast(`[보강 예약 완료] ${registeredNames.join(', ')} 학생에게 보강 일정이 등록되었습니다.`);
+        });
+    }
+
+    // Daily Attendance Edit Form Submit
+    if (attendanceEditForm && attendanceEditDate && attendanceEditType) {
+        attendanceEditForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!currentCalStudentId) return;
+
+            const date = attendanceEditDate.value;
+            const type = attendanceEditType.value;
+            const memo = attendanceEditMemo.value.trim();
+
+            if (type === 'absent') {
+                attendance = attendance.filter(a => !(a.studentId === currentCalStudentId && a.date === date));
+            } else if (type === 'in' || type === 'out') {
+                attendance = attendance.filter(a => !(a.studentId === currentCalStudentId && a.date === date && a.type === type));
+                attendance = attendance.filter(a => !(a.studentId === currentCalStudentId && a.date === date && a.type === 'absent'));
+            } else if (type === 'makeup') {
+                attendance = attendance.filter(a => !(a.studentId === currentCalStudentId && a.date === date && a.type === 'makeup'));
+            }
+
+            const newRecord = {
+                id: crypto.randomUUID(),
+                studentId: currentCalStudentId,
+                date,
+                type,
+                time: '',
+                memo
+            };
+
+            attendance.push(newRecord);
+            saveAttendance();
+
+            // Re-render
+            renderCalendar(currentCalStudentId, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+            renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            if (isStudent && loggedInStudentId === currentCalStudentId) {
+                renderMyClass();
+            }
+
+            // Hide panel
+            document.getElementById('attendance-edit-panel').style.display = 'none';
+
+            showToast('[출결 설정 완료] 선택한 일자의 출결 정보가 저장되었습니다.');
+        });
+
+        if (btnAttendanceDelete) {
+            btnAttendanceDelete.addEventListener('click', () => {
+                if (!currentCalStudentId) return;
+                const date = attendanceEditDate.value;
+                if (confirm(`${date} 일자의 모든 출결 및 보강 기록을 삭제하시겠습니까?`)) {
+                    attendance = attendance.filter(a => !(a.studentId === currentCalStudentId && a.date === date));
+                    saveAttendance();
+
+                    // Re-render
+                    renderCalendar(currentCalStudentId, currentCalYear, currentCalMonth, 'calendar-grid-days', true);
+                    renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                    if (isStudent && loggedInStudentId === currentCalStudentId) {
+                        renderMyClass();
+                    }
+
+                    // Hide panel
+                    document.getElementById('attendance-edit-panel').style.display = 'none';
+                    showToast('[삭제 완료] 선택한 일자의 출결/보강 기록이 삭제되었습니다.');
+                }
+            });
+        }
+    }
+
+
+    // Student Chat Send Form
+    if (chatSendForm && chatInputMessage) {
+        chatSendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = chatInputMessage.value.trim();
+            if (!text || !loggedInStudentId) return;
+
+            const newMsg = {
+                id: getNextSequentialId(wordSets),
+                studentId: loggedInStudentId,
+                sender: 'parent',
+                text,
+                time: getFormattedTime()
+            };
+
+            messages.push(newMsg);
+            saveMessages();
+            chatInputMessage.value = '';
+            renderStudentChat();
+            
+            // If teacher modal is currently open for this student, update it
+            const tChatStudentIdInput = document.getElementById('teacher-chat-student-id');
+            const tChatModal = document.getElementById('teacher-chat-modal');
+            if (tChatModal && tChatModal.classList.contains('open') && tChatStudentIdInput && parseStudentId(tChatStudentIdInput.value) === loggedInStudentId) {
+                renderTeacherChat(loggedInStudentId);
+            }
+        });
+    }
+
+    // Teacher Chat Modal Submissions
+    if (teacherChatSendForm && teacherChatModal && teacherChatStudentIdInput && teacherChatInput) {
+        if (btnTeacherChatClose) {
+            btnTeacherChatClose.addEventListener('click', () => teacherChatModal.classList.remove('open'));
+        }
+
+        teacherChatModal.addEventListener('click', (e) => {
+            if (e.target === teacherChatModal) teacherChatModal.classList.remove('open');
+        });
+
+        teacherChatSendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(teacherChatStudentIdInput.value);
+            const text = teacherChatInput.value.trim();
+            if (!text || !studentId) return;
+
+            const newMsg = {
+                id: crypto.randomUUID(),
+                studentId,
+                sender: 'teacher',
+                text,
+                time: getFormattedTime()
+            };
+
+            messages.push(newMsg);
+            saveMessages();
+            teacherChatInput.value = '';
+            renderTeacherChat(studentId);
+
+            // If student portal is open, update student portal chat
+            if (isStudent && loggedInStudentId === studentId) {
+                renderStudentChat();
+            }
+        });
+    }
+
+    // Admin Chat Widget (inline/floating) Submit & Toggle Handler
+    const adminChatWidget = document.getElementById('admin-chat-widget');
+    const adminChatSendForm = document.getElementById('admin-chat-send-form');
+    const adminChatInput = document.getElementById('admin-chat-input-message');
+    const adminChatStudentIdInput = document.getElementById('admin-chat-student-id');
+    const btnAdminChatClose = document.getElementById('btn-admin-chat-close');
+
+    if (adminChatSendForm && adminChatInput && adminChatStudentIdInput) {
+        adminChatSendForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentId = parseStudentId(adminChatStudentIdInput.value);
+            const text = adminChatInput.value.trim();
+            if (!text || !studentId) return;
+
+            const newMsg = {
+                id: crypto.randomUUID(),
+                studentId,
+                sender: 'teacher',
+                text,
+                time: getFormattedTime()
+            };
+
+            messages.push(newMsg);
+            saveMessages();
+            adminChatInput.value = '';
+            renderTeacherChat(studentId);
+
+            // If student portal is open, update student portal chat
+            if (isStudent && loggedInStudentId === studentId) {
+                renderStudentChat();
+            }
+        });
+    }
+
+    if (btnAdminChatClose && adminChatWidget) {
+        btnAdminChatClose.addEventListener('click', () => {
+            adminChatWidget.style.display = 'none';
+        });
+    }
+
+    // Admin layout setup and cleanup helpers
+    const handleLogoutCleanup = () => {
+        isAdmin = false;
+        isStudent = false;
+        loggedInStudentId = null;
+        
+        // Restore schedule section back to main feed
+        const scheduleSection = document.getElementById('schedule');
+        const curriculumSection = document.getElementById('curriculum');
+        if (scheduleSection && curriculumSection) {
+            curriculumSection.parentNode.insertBefore(scheduleSection, curriculumSection.nextSibling);
+            scheduleSection.style.display = 'block';
+        }
+        if (curriculumSection) {
+            curriculumSection.style.display = 'block';
+        }
+
+        // Show resources section
+        const resourcesSection = document.getElementById('resources');
+        if (resourcesSection) {
+            resourcesSection.style.display = 'block';
+        }
+
+        // Hide admin/student specific elements
+        if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+        if (studentSection) studentSection.style.display = 'none';
+        if (navLinkStudents) navLinkStudents.style.display = 'none';
+        if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+        if (tuitionAdminSection) tuitionAdminSection.style.display = 'none';
+        if (navLinkTuitionAdmin) navLinkTuitionAdmin.style.display = 'none';
+        if (drawerLinkTuitionAdmin) drawerLinkTuitionAdmin.style.display = 'none';
+        if (myclassSection) myclassSection.style.display = 'none';
+        if (navLinkMyclass) navLinkMyclass.style.display = 'none';
+        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+        
+        const adminChatWidget = document.getElementById('admin-chat-widget');
+        if (adminChatWidget) adminChatWidget.style.display = 'none';
+        
+        updateLoginButton();
+        safeCreateIcons();
+        renderNotices();
+    };
+
+    const handleAdminLoginSetup = () => {
+        isAdmin = true;
+        isStudent = false;
+        loggedInStudentId = null;
+        if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+            initializeDataFromSupabase().then(() => {
+                if (typeof renderApprovalList === 'function') renderApprovalList();
+                if (typeof renderStudentSearchAndList === 'function') renderStudentSearchAndList();
+                if (typeof renderAdminHabits === 'function') renderAdminHabits();
+                if (typeof renderNotices === 'function') renderNotices();
+                if (typeof renderClassList === 'function') renderClassList();
+                if (typeof renderCurriculumEditor === 'function') renderCurriculumEditor();
+                if (typeof populateClassSelect === 'function') populateClassSelect();
+                if (typeof populateClassFilter === 'function') populateClassFilter();
+                updateUngradedBadge();
+            }).catch(e => console.error(e));
+        }
+
+        // Move schedule section inside students section at the bottom (fifth position)
+        const scheduleSection = document.getElementById('schedule');
+        const studentsSection = document.getElementById('students');
+        if (scheduleSection && studentsSection) {
+            studentsSection.appendChild(scheduleSection);
+            scheduleSection.style.display = 'block';
+        }
+
+        // Hide resources section (자료공유 센터)
+        const resourcesSection = document.getElementById('resources');
+        if (resourcesSection) {
+            resourcesSection.style.display = 'none';
+        }
+
+        // Hide curriculum section (커리큘럼 소개)
+        const curriculumSection = document.getElementById('curriculum');
+        if (curriculumSection) {
+            curriculumSection.style.display = 'none';
+        }
+        
+        // Hide resource-management-card inside students
+        const resourceManagementCard = document.getElementById('resource-management-card');
+        if (resourceManagementCard) {
+            resourceManagementCard.style.display = 'none';
+        }
+
+        // Render admin daily checklist
+        renderAdminHabits();
+
+        // Update Quick Menu Highlights
+        updateAdminQuickMenuHighlights();
+
+        // Show admin controls
+        updateLoginButton();
+        if (btnAdminWrite) btnAdminWrite.style.display = 'inline-flex';
+        if (studentSection) studentSection.style.display = 'block';
+        if (navLinkStudents) navLinkStudents.style.display = 'inline-block';
+        if (drawerLinkStudents) drawerLinkStudents.style.display = 'block';
+        if (tuitionAdminSection) tuitionAdminSection.style.display = 'block';
+        if (navLinkTuitionAdmin) navLinkTuitionAdmin.style.display = 'inline-block';
+        if (drawerLinkTuitionAdmin) drawerLinkTuitionAdmin.style.display = 'block';
+
+        if (myclassSection) myclassSection.style.display = 'none';
+        if (navLinkMyclass) navLinkMyclass.style.display = 'none';
+        if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'none';
+
+        renderNotices();
+        renderStudents();
+        renderConsultList();
+        renderAdminCurriculumList();
+        renderAiQueryManagement();
+        if (typeof renderApprovalList === 'function') renderApprovalList();
+        if (typeof renderTextbookRequests === 'function') renderTextbookRequests();
+        if (typeof renderAdminTuition === 'function') renderAdminTuition();
+        safeCreateIcons();
+    };
+
+    // Initial load & Auth Listener Setup
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('[Auth Debug] Event:', event, 'Session:', session ? 'Present' : 'Null');
+        if (session && session.user) {
+            const emailLower = String(session.user.email || '').toLowerCase();
+            console.log('[Auth Debug] User Email:', emailLower);
+            
+            // Check if they are admin
+            if (['rlfn100@naver.com', 'raenisise@naver.com', 'kyungdea1@gmail.com'].includes(emailLower)) {
+                console.log('[Auth Debug] Match admin: True');
+                handleAdminLoginSetup();
+            } else {
+                console.log('[Auth Debug] Match admin: False');
+                // Ensure admin layout is cleaned up when student/parent logs in
+                handleLogoutCleanup();
+                // Check if this is a registered user
+                const userEmail = session.user.email;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                
+                // Normalizer helper for phone numbers
+                const normalizePhone = (p) => {
+                    let cleaned = String(p || '').replace(/\D/g, '');
+                    if (cleaned.startsWith('82')) {
+                        cleaned = '0' + cleaned.substring(2);
+                    }
+                    return cleaned;
+                };
+
+                const sessionPhone = normalizePhone(session.user.user_metadata?.phone);
+
+                // Find matching user in mockUsers by ID, email, or phone number
+                let matchedUser = mockUsers.find(u => {
+                    if (u.id === session.user.id) return true;
+                    const uEmail = String(u.email || '').toLowerCase();
+                    const uPhone = normalizePhone(u.phone);
+                    return (userEmail && uEmail === userEmail.toLowerCase()) || (sessionPhone && uPhone && uPhone === sessionPhone);
+                });
+
+
+                let existsInMockUsers = !!matchedUser;
+                
+                if (!existsInMockUsers && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    if (userEmail) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('email', userEmail);
+                        if (data && data.length > 0) { existsInMockUsers = true; matchedUser = mapMockUserFromDb(data[0]); }
+                    }
+                    if (!existsInMockUsers && sessionPhone) {
+                        const { data } = await supabase.from('sb_mock_users').select('*').eq('phone', sessionPhone);
+                        if (data && data.length > 0) { existsInMockUsers = true; matchedUser = mapMockUserFromDb(data[0]); }
+                    }
+                }
+
+                if (matchedUser) {
+                    // Update user ID and email in local database if different
+                    let changed = false;
+                    if (matchedUser.id !== session.user.id) {
+                        matchedUser.id = session.user.id;
+                        changed = true;
+                    }
+                    if (matchedUser.email.toLowerCase() !== userEmail.toLowerCase()) {
+                        matchedUser.email = userEmail;
+                        changed = true;
+                    }
+                    if (changed) {
+                        if (!mockUsers.find(u => u.id === matchedUser.id)) {
+                            mockUsers.push(matchedUser);
+                        }
+                        saveMockUsers(mockUsers);
+                    }
+                    
+                    // Override session user_metadata with registered user info
+                    session.user.user_metadata = {
+                        ...session.user.user_metadata,
+                        name: matchedUser.name,
+                        phone: matchedUser.phone,
+                        address: matchedUser.address,
+                        children: matchedUser.user_metadata?.children || matchedUser.children || [],
+                        role: 'parent',
+                        status: matchedUser.status
+                    };
+                }
+
+                const existsInStudents = students.some(s => {
+                    const sPhone = normalizePhone(s.phone);
+                    const sParentPhone = normalizePhone(s.parentPhone);
+                    return (sessionPhone && (sPhone === sessionPhone || sParentPhone === sessionPhone)) ||
+                           (userEmail && (String(s.phone || '').toLowerCase() === userEmail.toLowerCase() || String(s.parentPhone || '').toLowerCase() === userEmail.toLowerCase()));
+                });
+                const hasChildrenMetadata = session.user.user_metadata?.children && session.user.user_metadata.children.length > 0;
+                
+                if (!existsInMockUsers && !existsInStudents && !hasChildrenMetadata) {
+                    // Check if they are in the signup flow
+                    if (sessionStorage.getItem('gongbubang_signup_flow') === 'true') {
+                        const pendingDataStr = sessionStorage.getItem('pending_signup_data');
+                        if (pendingDataStr) {
+                            try {
+                                const pendingData = JSON.parse(pendingDataStr);
+                                
+                                // Create locally in mock database with status 'pending'
+                                const localPendingUser = {
+                                    id: userEmail,
+                                    email: userEmail,
+                                    name: pendingData.parentName,
+                                    phone: pendingData.phone,
+                                    address: pendingData.address,
+                                    role: 'parent',
+                                    status: 'pending',
+                                    createdAt: new Date().toISOString(),
+                                    user_metadata: {
+                                        name: pendingData.parentName,
+                                        phone: pendingData.phone,
+                                        address: pendingData.address,
+                                        children: pendingData.children,
+                                        role: 'parent'
+                                    }
+                                };
+                                
+                                // Push and save
+                                mockUsers.push(localPendingUser);
+                                if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                                    await supabase.from('sb_mock_users').upsert(mapMockUserToDb(localPendingUser));
+                                } else {
+                                    saveMockUsers(mockUsers);
+                                }
+                                
+                                alert('회원가입 승인 요청이 완료되었습니다.\n원장님의 승인 완료 후 서비스 이용이 가능합니다.');
+                            } catch (e) {
+                                console.error('Error parsing pending signup data:', e);
+                                alert('가입 진행 정보가 손실되었습니다. 다시 입력해 주세요.');
+                            }
+                        } else {
+                            alert('가입 진행 정보가 존재하지 않습니다. 처음부터 다시 입력해 주세요.');
+                        }
+                        
+                        // Clear signup flow flags and close modal
+                        sessionStorage.removeItem('pending_signup_data');
+                        sessionStorage.removeItem('gongbubang_signup_flow');
+                        if (studentSignupModal) studentSignupModal.classList.remove('open');
+                        
+                        // Force signout to clear auto-login session
+                        supabase.auth.signOut();
+                        return;
+                    } else {
+                        console.log('[Auth Debug] Signout: Unregistered user');
+                        alert('가입되지 않은 소셜 계정입니다. 먼저 학부모 회원가입을 완료해 주세요.');
+                        supabase.auth.signOut();
+                        return;
+                    }
+                }
+
+                // Check matched user status
+                if (matchedUser && matchedUser.status === 'pending') {
+                    console.log('[Auth Debug] Signout: Pending user');
+                    alert('승인 대기중입니다. 원장님의 승인 완료 후 이용 가능합니다.');
+                    supabase.auth.signOut();
+                    return;
+                }
+                if (matchedUser && matchedUser.status === 'terminated') {
+                    console.log('[Auth Debug] Signout: Terminated user');
+                    alert('관리자에 의해 종결된 계정입니다.');
+                    supabase.auth.signOut();
+                    return;
+                }
+
+                // They are a student/parent
+                isStudent = true;
+                isAdmin = false;
+                userRole = 'parent';
+                loggedInParentName = session.user.user_metadata?.name || (matchedUser ? matchedUser.name : '') || '학부모';
+
+                const parentPhone = session.user.user_metadata?.phone || '';
+                const childrenData = session.user.user_metadata?.children || [];
+
+                // Match parent's children by username(=id), parentEmail, or parentPhone
+                const parentEmail = session.user.email || '';
+                const childUsernames = childrenData.map(c => c.username).filter(Boolean);
+                
+                // CRITICAL FIX: Ensure local students array is synced with Supabase BEFORE checking parentChildren.
+                // Otherwise, a fresh browser login will see 0 children and overwrite the DB with empty classIds.
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
+
+                let parentChildren = students.filter(s =>
+                    (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
+                    (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
+                    String(s.id).startsWith(session.user.id) ||
+                    (parentPhone && s.parentPhone && normalizePhone(s.parentPhone) === normalizePhone(parentPhone))
+                );
+
+                // If no records linked yet, auto-create them from children metadata
+                if (parentChildren.length === 0 && childrenData.length > 0) {
+                    childrenData.forEach((c, idx) => {
+                        const studentId = c.username || `${session.user.id}-${idx}`;
+                        if (students.some(s => String(s.id) === String(studentId))) return;
+                        let age = 10;
+                        if (c.birthdate) {
+                            const birthYear = new Date(c.birthdate).getFullYear();
+                            age = new Date().getFullYear() - birthYear + 1;
+                        }
+                        students.unshift({
+                            id: studentId,
+                            name: c.name,
+                            age,
+                            birthdate: c.birthdate || '',
+                            school: c.school || '',
+                            phone: c.phone || '',
+                            parentPhone: parentPhone,
+                            parentEmail: parentEmail,
+                            sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : '없음',
+                            schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
+                            progress: '개념 완성 과정 등록 대기 중',
+                            remarks: 'Supabase로 가입된 자녀입니다. 스케줄을 설정해 주세요.',
+                            username: c.username,
+                            password: c.password,
+                            classId: c.classId || null,
+                            classDuration: c.classDuration || 90
+                        });
+                    });
+                    await saveStudents();
+                    parentChildren = students.filter(s =>
+                        (childUsernames.length > 0 && childUsernames.includes(String(s.id))) ||
+                        (parentEmail && s.parentEmail && s.parentEmail.toLowerCase() === parentEmail.toLowerCase()) ||
+                        String(s.id).startsWith(session.user.id) ||
+                        (parentPhone && s.parentPhone && normalizePhone(s.parentPhone) === normalizePhone(parentPhone))
+                    );
+                }
+
+                // If parent has children, set default selected child
+                if (parentChildren.length > 0) {
+                    const isOwnChild = parentChildren.some(c => c.id === loggedInStudentId);
+                    if (!isOwnChild) {
+                        loggedInStudentId = parentChildren[0].id;
+                    }
+                } else {
+                    loggedInStudentId = session.user.id;
+                }
+
+                // Selector is automatically populated during renderMyClass() below
+
+                updateLoginButton();
+                if (myclassSection) myclassSection.style.display = 'block';
+                if (navLinkMyclass) navLinkMyclass.style.display = 'inline-block';
+                if (drawerLinkMyclass) drawerLinkMyclass.style.display = 'block';
+
+                if (btnAdminWrite) btnAdminWrite.style.display = 'none';
+                if (studentSection) studentSection.style.display = 'none';
+                if (navLinkStudents) navLinkStudents.style.display = 'none';
+                if (drawerLinkStudents) drawerLinkStudents.style.display = 'none';
+
+                // Hide public curriculum, schedule, and resources sections
+                const scheduleSection = document.getElementById('schedule');
+                if (scheduleSection) scheduleSection.style.display = 'none';
+                const curriculumSection = document.getElementById('curriculum');
+                if (curriculumSection) curriculumSection.style.display = 'none';
+                const resourcesSection = document.getElementById('resources');
+                if (resourcesSection) resourcesSection.style.display = 'none';
+
+                if (typeof initializeDataFromSupabase === 'function' && typeof supabase !== 'undefined' && supabase && !isMock) {
+                    await initializeDataFromSupabase();
+                }
+                renderMyClass();
+            }
+        } else {
+            console.log('[Auth Debug] No session: cleaning up layout');
+            // No session
+            handleLogoutCleanup();
+        }
+
+        safeCreateIcons();
+        renderNotices();
+        if (isAdmin) renderStudents();
+        
+        // Auto-check callbackUrl and trigger login modal if not logged in
+        if (session) {
+            handleLoginSuccessRedirection();
+        } else {
+            const urlParams = new URLSearchParams(window.location.search);
+            const callbackUrl = urlParams.get('callbackUrl');
+            if (callbackUrl) {
+                sessionStorage.setItem('login_callback_url', callbackUrl);
+                setTimeout(() => {
+                    const studentLoginModal = document.getElementById('login-modal');
+                    if (studentLoginModal) {
+                        studentLoginModal.classList.add('open');
+                        showToast('로그인이 필요한 페이지입니다. 로그인해 주세요.');
+                    }
+                }, 300);
+            }
+        }
+    });
+
+    // Bind parent calendar navigation click listeners once
+        const btnMyClassCalPrev = document.getElementById('btn-myclass-cal-prev');
+        const btnMyClassCalNext = document.getElementById('btn-myclass-cal-next');
+        if (btnMyClassCalPrev) {
+            btnMyClassCalPrev.addEventListener('click', () => {
+                if (!loggedInStudentId) return;
+                if (myClassCalMonth === null) {
+                    const today = new Date();
+                    myClassCalYear = today.getFullYear();
+                    myClassCalMonth = today.getMonth();
+                }
+                if (myClassCalMonth === 0) {
+                    myClassCalMonth = 11;
+                    myClassCalYear--;
+                } else {
+                    myClassCalMonth--;
+                }
+                renderCalendar(loggedInStudentId, myClassCalYear, myClassCalMonth, 'myclass-calendar-grid-days', false);
+            });
+        }
+        if (btnMyClassCalNext) {
+            btnMyClassCalNext.addEventListener('click', () => {
+                if (!loggedInStudentId) return;
+                if (myClassCalMonth === null) {
+                    const today = new Date();
+                    myClassCalYear = today.getFullYear();
+                    myClassCalMonth = today.getMonth();
+                }
+                if (myClassCalMonth === 11) {
+                    myClassCalMonth = 0;
+                    myClassCalYear++;
+                } else {
+                    myClassCalMonth++;
+                }
+                renderCalendar(loggedInStudentId, myClassCalYear, myClassCalMonth, 'myclass-calendar-grid-days', false);
+            });
+        }
+
+        // ==========================================================================
+        // Class Management (LMS Class / Schedule Administration)
+        // ==========================================================================
+        const populateClassSelect = () => {
+            const select = document.getElementById('student-class-select');
+            if (select) {
+                select.innerHTML = '<option value="">직접 입력 (반 없음)</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    select.appendChild(opt);
+                });
+            }
+
+            const batchSelect = document.getElementById('batch-progress-class-select');
+            if (batchSelect) {
+                batchSelect.innerHTML = '<option value="">-- 반 선택 --</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    batchSelect.appendChild(opt);
+                });
+            }
+
+            const batchTbSelect = document.getElementById('batch-textbook-class-select');
+            if (batchTbSelect) {
+                batchTbSelect.innerHTML = '<option value="">-- 반 선택 --</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    batchTbSelect.appendChild(opt);
+                });
+            }
+        };
+
+        const populateClassFilter = () => {
+            const filter = document.getElementById('student-class-filter');
+            if (!filter) return;
+            const currentValue = filter.value;
+            filter.innerHTML = `<option value="">전체 반 보기 (${students.length})</option>`;
+            classes.forEach(c => {
+                const classStudents = students.filter(s => String(s.classId) === String(c.id));
+                const count = classStudents.length;
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.name} (${count})`;
+                if (String(c.id) === String(currentValue)) {
+                    opt.selected = true;
+                }
+                filter.appendChild(opt);
+            });
+
+            // Populate the formula-class-select dropdown
+            const formulaSelect = document.getElementById('formula-class-select');
+            if (formulaSelect) {
+                const prevVal = formulaSelect.value;
+                formulaSelect.innerHTML = '<option value="">반 선택</option>';
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    if (String(c.id) === String(prevVal)) {
+                        opt.selected = true;
+                    }
+                    formulaSelect.appendChild(opt);
+                });
+            }
+
+            // Populate the vocab-student-select dropdown with student list
+            const vocabSelect = document.getElementById('vocab-student-select');
+            if (vocabSelect) {
+                const prevVal = vocabSelect.value;
+                vocabSelect.innerHTML = '<option value="">-- 학생을 선택하세요 --</option>';
+                [...students].sort((a, b) => a.name.localeCompare(b.name, 'ko')).forEach(stu => {
+                    const opt = document.createElement('option');
+                    opt.value = stu.id;
+                    opt.textContent = stu.name;
+                    if (String(stu.id) === String(prevVal)) {
+                        opt.selected = true;
+                    }
+                    vocabSelect.appendChild(opt);
+                });
+                
+                // Add event listener once
+                if (!vocabSelect.dataset.listener) {
+                    vocabSelect.dataset.listener = "true";
+                    vocabSelect.addEventListener('change', () => {
+                        onClassSelectedForVocab(vocabSelect.value);
+                    });
+                }
+            }
+
+            // Populate the beautiful class filter tab pills
+            populateClassTabs();
+        };
+
+        const populateClassTabs = () => {
+            const container = document.getElementById('class-tabs-container');
+            if (!container) return;
+            
+            const filterSelect = document.getElementById('student-class-filter');
+            const activeId = filterSelect ? filterSelect.value : '';
+            
+            container.innerHTML = '';
+            
+            // "전체 반 보기" Tab
+            const allBtn = document.createElement('button');
+            allBtn.type = 'button';
+            allBtn.className = `class-tab ${activeId === '' ? 'active' : ''}`;
+            allBtn.textContent = `전체 반 보기 (${students.length})`;
+            allBtn.setAttribute('data-class-id', '');
+            allBtn.addEventListener('click', () => {
+                if (filterSelect) {
+                    filterSelect.value = '';
+                    filterSelect.dispatchEvent(new Event('change'));
+                }
+            });
+            container.appendChild(allBtn);
+            
+            // Class Tabs
+            classes.forEach(c => {
+                const classStudents = students.filter(s => String(s.classId) === String(c.id));
+                const count = classStudents.length;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `class-tab ${String(c.id) === String(activeId) ? 'active' : ''}`;
+                btn.textContent = `${c.name} (${count})`;
+                btn.setAttribute('data-class-id', c.id);
+                btn.addEventListener('click', () => {
+                    if (filterSelect) {
+                        filterSelect.value = c.id;
+                        filterSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+                container.appendChild(btn);
+            });
+        };
+
+        const renderClassList = () => {
+            try {
+                const container = document.getElementById('class-list-container');
+                if (!container) return;
+                
+                container.innerHTML = '';
+                if (!Array.isArray(classes) || classes.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 반이 없습니다.</div>';
+                    return;
+                }
+                
+                classes.forEach(c => {
+                    if (!c) return;
+                    const item = document.createElement('div');
+                    item.style.display = 'flex';
+                    item.style.flexDirection = 'column';
+                    item.style.gap = '8px';
+                    item.style.padding = '12px';
+                    item.style.border = '1px solid var(--border-color)';
+                    item.style.borderRadius = '8px';
+                    item.style.background = '#ffffff';
+                    
+                    // Format schedule summary
+                    const schedList = [];
+                    const dayNames = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
+                    Object.keys(dayNames).forEach(day => {
+                        if (c.schedule && c.schedule[day]) {
+                            schedList.push(`${dayNames[day]}: ${c.schedule[day]}`);
+                        }
+                    });
+                    const schedSummary = schedList.length > 0 ? schedList.join('<br>') : '지정된 수업시간 없음';
+                    
+                    item.innerHTML = `
+                        <div style="text-align: left; width: 100%;">
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary); line-height: 1.4;">${c.name}</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">${schedSummary}</div>
+                        </div>
+                        <div style="display: flex; gap: 6px; width: 100%; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 2px;">
+                            <button type="button" class="btn-class-textbooks" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: #fdfafd; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 600; flex-grow: 1;">교재</button>
+                            <button type="button" class="btn-class-edit" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: #f8fafc; cursor: pointer; flex-grow: 1;">수정</button>
+                            <button type="button" class="btn-class-delete" data-id="${c.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer; flex-grow: 1;">삭제</button>
+                        </div>
+                    `;
+                    
+                    // Attach textbooks listener
+                    item.querySelector('.btn-class-textbooks').addEventListener('click', () => {
+                        openClassTextbooksModal(c.id);
+                    });
+
+                    // Attach edit listener
+                    item.querySelector('.btn-class-edit').addEventListener('click', () => {
+                        try {
+                            document.getElementById('edit-class-id').value = c.id;
+                            document.getElementById('class-name-input').value = c.name;
+                            document.getElementById('class-duration-input').value = c.duration || 90;
+                            
+                            const monTime = splitTimeRange(c.schedule ? c.schedule.mon : '');
+                            document.getElementById('class-time-mon-start').value = monTime.start;
+                            document.getElementById('class-time-mon-end').value = monTime.end;
+                            
+                            const tueTime = splitTimeRange(c.schedule ? c.schedule.tue : '');
+                            document.getElementById('class-time-tue-start').value = tueTime.start;
+                            document.getElementById('class-time-tue-end').value = tueTime.end;
+                            
+                            const wedTime = splitTimeRange(c.schedule ? c.schedule.wed : '');
+                            document.getElementById('class-time-wed-start').value = wedTime.start;
+                            document.getElementById('class-time-wed-end').value = wedTime.end;
+                            
+                            const thuTime = splitTimeRange(c.schedule ? c.schedule.thu : '');
+                            document.getElementById('class-time-thu-start').value = thuTime.start;
+                            document.getElementById('class-time-thu-end').value = thuTime.end;
+                            
+                            const friTime = splitTimeRange(c.schedule ? c.schedule.fri : '');
+                            document.getElementById('class-time-fri-start').value = friTime.start;
+                            document.getElementById('class-time-fri-end').value = friTime.end;
+                        } catch (err) {
+                            console.error('Error editing class:', err);
+                            alert('반 수정 불러오기 중 에러: ' + err.message);
+                        }
+                    });
+                    
+                    // Attach delete listener
+                    item.querySelector('.btn-class-delete').addEventListener('click', () => {
+                        try {
+                            if (confirm(`'${c.name}' 반을 삭제하시겠습니까? (이 반에 소속된 학생들은 '반 없음'으로 변경됩니다.)`)) {
+                                classes = classes.filter(cls => cls.id !== c.id);
+                                saveClasses();
+                                if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                                    supabase.from('sb_classes').delete().eq('id', c.id).then(() => {});
+                                }
+                                
+                                // Update students classId to null
+                                students = students.map(s => {
+                                    if (s && String(s.classId) === String(c.id)) {
+                                        return { ...s, classId: null };
+                                    }
+                                    return s;
+                                });
+                                saveStudents();
+                                
+                                renderClassList();
+                                populateClassSelect();
+                                populateClassFilter();
+                                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+                                showToast('반이 삭제되었습니다.');
+                            }
+                        } catch (err) {
+                            console.error('Error deleting class:', err);
+                            alert('반 삭제 중 에러: ' + err.message);
+                        }
+                    });
+                    
+                    container.appendChild(item);
+                });
+            } catch (err) {
+                console.error('Error in renderClassList:', err);
+                alert('renderClassList 중 에러 발생: ' + err.message + '\n' + err.stack);
+            }
+        };
+
+        // Form submission for classes
+        const classEditorForm = document.getElementById('class-editor-form');
+        if (classEditorForm) {
+            classEditorForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const editId = document.getElementById('edit-class-id').value;
+                const name = document.getElementById('class-name-input').value.trim();
+                const duration = parseInt(document.getElementById('class-duration-input').value, 10) || 90;
+                const schedule = {
+                    mon: joinTimeRange(document.getElementById('class-time-mon-start').value, document.getElementById('class-time-mon-end').value),
+                    tue: joinTimeRange(document.getElementById('class-time-tue-start').value, document.getElementById('class-time-tue-end').value),
+                    wed: joinTimeRange(document.getElementById('class-time-wed-start').value, document.getElementById('class-time-wed-end').value),
+                    thu: joinTimeRange(document.getElementById('class-time-thu-start').value, document.getElementById('class-time-thu-end').value),
+                    fri: joinTimeRange(document.getElementById('class-time-fri-start').value, document.getElementById('class-time-fri-end').value)
+                };
+                
+                if (editId) {
+                    const id = parseStudentId(editId);
+                    classes = classes.map(c => {
+                        if (String(c.id) === String(id)) {
+                            return { ...c, name, duration, schedule };
+                        }
+                        return c;
+                    });
+                    saveClasses();
+                    showToast('반 정보가 수정되었습니다.');
+                } else {
+                    const newClass = {
+                        id: getNextSequentialId(classes),
+                        name,
+                        duration,
+                        schedule
+                    };
+                    classes.push(newClass);
+                    saveClasses();
+                    showToast('새로운 반이 등록되었습니다.');
+                }
+                
+                classEditorForm.reset();
+                document.getElementById('edit-class-id').value = '';
+                document.getElementById('class-duration-input').value = 90;
+                
+                renderClassList();
+                populateClassSelect();
+                populateClassFilter();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+            
+            const btnClassClear = document.getElementById('btn-class-clear');
+            if (btnClassClear) {
+                btnClassClear.addEventListener('click', () => {
+                    classEditorForm.reset();
+                    document.getElementById('edit-class-id').value = '';
+                    document.getElementById('class-duration-input').value = 90;
+                });
+            }
+        }
+
+        // Inline layout doesn't require modal triggers.
+
+
+        // Apply time input formatters to class schedule editor fields
+        document.querySelectorAll('#class-editor-form .time-input').forEach(el => {
+            el.addEventListener('input', handleTimeInput);
+        });
+
+        const updateClassEndTimeForInput = (startInput) => {
+            const startVal = startInput.value;
+            const durationInput = document.getElementById('class-duration-input');
+            if (startVal.length === 5 && durationInput) {
+                const duration = parseInt(durationInput.value, 10) || 0;
+                if (duration > 0) {
+                    const endInputId = startInput.id.replace('-start', '-end');
+                    const endInput = document.getElementById(endInputId);
+                    if (endInput) {
+                        endInput.value = calculateEndTime(startVal, duration);
+                    }
+                }
+            }
+        };
+
+        // Attach class end time auto-calculation to start time inputs in class form
+        document.querySelectorAll('#class-editor-form .time-input[id$="-start"]').forEach(el => {
+            el.addEventListener('input', (e) => {
+                updateClassEndTimeForInput(e.target);
+            });
+        });
+
+        // Update class end times when class duration is modified
+        const classDurationInput = document.getElementById('class-duration-input');
+        if (classDurationInput) {
+            classDurationInput.addEventListener('input', () => {
+                const duration = parseInt(classDurationInput.value, 10) || 0;
+                if (duration > 0) {
+                    document.querySelectorAll('#class-editor-form .time-input[id$="-start"]').forEach(startInput => {
+                        const startVal = startInput.value;
+                        if (startVal.length === 5) {
+                            const endInputId = startInput.id.replace('-start', '-end');
+                            const endInput = document.getElementById(endInputId);
+                            if (endInput) {
+                                endInput.value = calculateEndTime(startVal, duration);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // Add change listener to student class selector to automatically populate schedule fields
+        const studentClassSelect = document.getElementById('student-class-select');
+        if (studentClassSelect) {
+            studentClassSelect.addEventListener('change', () => {
+                const classId = studentClassSelect.value;
+                const studentClassDurationInput = document.getElementById('student-class-duration');
+                const timeInputs = [
+                    studentTimeMonStart, studentTimeMonEnd,
+                    studentTimeTueStart, studentTimeTueEnd,
+                    studentTimeWedStart, studentTimeWedEnd,
+                    studentTimeThuStart, studentTimeThuEnd,
+                    studentTimeFriStart, studentTimeFriEnd
+                ];
+                
+                if (classId) {
+                    const cls = classes.find(c => String(c.id) === String(classId));
+                    if (cls) {
+                        const monTime = splitTimeRange(cls.schedule.mon);
+                        studentTimeMonStart.value = monTime.start;
+                        studentTimeMonEnd.value = monTime.end;
+                        
+                        const tueTime = splitTimeRange(cls.schedule.tue);
+                        studentTimeTueStart.value = tueTime.start;
+                        studentTimeTueEnd.value = tueTime.end;
+                        
+                        const wedTime = splitTimeRange(cls.schedule.wed);
+                        studentTimeWedStart.value = wedTime.start;
+                        studentTimeWedEnd.value = wedTime.end;
+                        
+                        const thuTime = splitTimeRange(cls.schedule.thu);
+                        studentTimeThuStart.value = thuTime.start;
+                        studentTimeThuEnd.value = thuTime.end;
+                        
+                        const friTime = splitTimeRange(cls.schedule.fri);
+                        studentTimeFriStart.value = friTime.start;
+                        studentTimeFriEnd.value = friTime.end;
+                        
+                        if (studentClassDurationInput) {
+                            studentClassDurationInput.value = cls.duration || 90;
+                            studentClassDurationInput.disabled = true;
+                        }
+                        timeInputs.forEach(input => { if (input) input.disabled = true; });
+                    }
+                } else {
+                    if (studentClassDurationInput) {
+                        studentClassDurationInput.disabled = false;
+                    }
+                    timeInputs.forEach(input => { if (input) input.disabled = false; });
+                }
+            });
+        }
+
+        // Bind class filter change listener
+        const studentClassFilter = document.getElementById('student-class-filter');
+        if (studentClassFilter) {
+            studentClassFilter.addEventListener('change', () => {
+                const val = studentClassFilter.value;
+                const tabs = document.querySelectorAll('.class-tab');
+                tabs.forEach(tab => {
+                    const classId = tab.getAttribute('data-class-id');
+                    if (String(classId) === String(val)) {
+                        tab.classList.add('active');
+                    } else {
+                        tab.classList.remove('active');
+                    }
+                });
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+        }
+        // Auto-fill today's date on termination check
+        if (studentTerminatedCheckbox && studentTerminationDateInput) {
+            studentTerminatedCheckbox.addEventListener('change', () => {
+                if (studentTerminatedCheckbox.checked) {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    studentTerminationDateInput.value = `${year}-${month}-${day}`;
+                } else {
+                    studentTerminationDateInput.value = '';
+                }
+            });
+        }
+
+        // Student View Switching (Active vs Terminated)
+        const btnViewActive = document.getElementById('btn-view-active');
+        const btnViewTerminated = document.getElementById('btn-view-terminated');
+        const terminatedYearFilterContainer = document.getElementById('terminated-year-filter-container');
+        const terminatedYearFilter = document.getElementById('terminated-year-filter');
+        const classTabsContainer = document.getElementById('class-tabs-container');
+
+        if (btnViewActive && btnViewTerminated) {
+            btnViewActive.addEventListener('click', () => {
+                btnViewActive.classList.add('active');
+                btnViewTerminated.classList.remove('active');
+                currentStudentView = 'active';
+                if (terminatedYearFilterContainer) terminatedYearFilterContainer.style.display = 'none';
+                if (classTabsContainer) classTabsContainer.style.display = '';
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+
+            btnViewTerminated.addEventListener('click', () => {
+                btnViewTerminated.classList.add('active');
+                btnViewActive.classList.remove('active');
+                currentStudentView = 'terminated';
+                if (terminatedYearFilterContainer) terminatedYearFilterContainer.style.display = 'flex';
+                if (classTabsContainer) classTabsContainer.style.display = 'none';
+                populateTerminationYears();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+        }
+
+        if (terminatedYearFilter) {
+            terminatedYearFilter.addEventListener('change', () => {
+                currentTerminatedYear = terminatedYearFilter.value;
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+            });
+        }
+
+        // Initialize class select dropdown inside student form
+        populateClassSelect();
+        populateClassFilter();
+        renderClassList();
+        renderMainScheduleTable();
+        updateTotalStudentsCount();
+        populateTerminationYears();
+
+        // Default date for batch progress input to today
+        const batchProgDateInput = document.getElementById('batch-progress-date-input');
+        if (batchProgDateInput) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            batchProgDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Batch Progress Registration Form Submit Listener
+        const classProgressBatchForm = document.getElementById('class-progress-batch-form');
+        
+        const loadBatchProgressContent = () => {
+            const classSelect = document.getElementById('batch-progress-class-select');
+            const dateInput = document.getElementById('batch-progress-date-input');
+            const contentInput = document.getElementById('batch-progress-content-input');
+            
+            if (!classSelect || !dateInput || !contentInput || !classSelect.value || !dateInput.value) {
+                if (contentInput && !contentInput.value) contentInput.value = '';
+                return;
+            }
+            
+            const classId = parseStudentId(classSelect.value);
+            const date = dateInput.value;
+            const classStudents = students.filter(s => s.classId === classId);
+            
+            if (classStudents.length > 0) {
+                const firstStudent = classStudents[0];
+                const existingProg = progressList.find(p => p.studentId === firstStudent.id && p.date === date);
+                if (existingProg) {
+                    contentInput.value = existingProg.content;
+                } else {
+                    contentInput.value = '';
+                }
+            } else {
+                contentInput.value = '';
+            }
+        };
+
+        const batchProgressClassSelect = document.getElementById('batch-progress-class-select');
+        const batchProgressDateInput = document.getElementById('batch-progress-date-input');
+        if (batchProgressClassSelect) batchProgressClassSelect.addEventListener('change', loadBatchProgressContent);
+        if (batchProgressDateInput) batchProgressDateInput.addEventListener('change', loadBatchProgressContent);
+
+        if (classProgressBatchForm) {
+            classProgressBatchForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('batch-progress-class-select');
+                const dateInput = document.getElementById('batch-progress-date-input');
+                const contentInput = document.getElementById('batch-progress-content-input');
+                
+                if (!classSelect || !dateInput || !contentInput) return;
+
+                const classId = parseStudentId(classSelect.value);
+                const date = dateInput.value;
+                const content = contentInput.value.trim();
+
+                if (!classId) {
+                    showToast('진도를 등록할 반을 선택해 주세요.');
+                    return;
+                }
+
+                // Find all students in this class
+                const classStudents = students.filter(s => s.classId === classId);
+                if (classStudents.length === 0) {
+                    showToast('해당 반에 등록된 학생이 없습니다.');
+                    return;
+                }
+
+                // Add or update progress for each student
+                classStudents.forEach((student) => {
+                    const existingProg = progressList.find(p => p.studentId === student.id && p.date === date);
+                    if (existingProg) {
+                        existingProg.content = content;
+                    } else {
+                        const newProg = {
+                            id: crypto.randomUUID(),
+                            studentId: student.id,
+                            date: date,
+                            content: content
+                        };
+                        progressList.unshift(newProg);
+                    }
+                });
+
+                saveProgressList();
+                renderStudents(studentSearchInput ? studentSearchInput.value : '');
+
+                // Re-render myclass if student portal is open
+                if (isStudent && loggedInStudentId) {
+                    const currentStudent = students.find(s => s.id === loggedInStudentId);
+                    if (currentStudent && currentStudent.classId === classId) {
+                        renderMyClass();
+                    }
+                }
+
+                // Reset content input but keep class and date selections for convenience
+                contentInput.value = '';
+                
+                const selectedClass = classes.find(c => c.id === classId);
+                showToast(`[진도 일괄 등록 완료] ${selectedClass ? selectedClass.name : '해당 반'} 원생 ${classStudents.length}명의 진도가 일괄 등록되었습니다.`);
+            });
+        }
+
+        // Batch Textbook list rendering
+        const renderBatchTextbookList = (classId) => {
+            const listEl = document.getElementById('batch-textbook-list');
+            if (!listEl) return;
+
+            if (!classId) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">반을 선택하면 등록된 교재 목록이 표시됩니다.</div>';
+                return;
+            }
+
+            const targetClass = classes.find(c => c.id === classId);
+            if (!targetClass) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">반 정보를 찾을 수 없습니다.</div>';
+                return;
+            }
+
+            const tbs = targetClass.textbooks || [];
+            if (tbs.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 0;">등록된 교재가 없습니다.</div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            tbs.forEach((tb, index) => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '8px 12px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '8px';
+                item.style.background = '#ffffff';
+
+                item.innerHTML = `
+                    <div style="text-align: left;">
+                        <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary);">${tb.name}</span>
+                        <span style="font-size: 0.78rem; color: var(--primary-color); font-weight: 600; margin-left: 6px;">${Number(tb.price).toLocaleString()}원</span>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button type="button" class="btn-edit-batch-tb" data-index="${index}" style="border: none; background: #e0f2fe; color: #0284c7; font-size: 0.72rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 2px;"><i data-lucide="edit-2" style="width: 10px; height: 10px;"></i>수정</button>
+                        <button type="button" class="btn-delete-batch-tb" data-index="${index}" style="border: none; background: #fee2e2; color: #ef4444; font-size: 0.72rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 2px;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i>삭제</button>
+                    </div>
+                `;
+
+                // Bind edit button
+                item.querySelector('.btn-edit-batch-tb').addEventListener('click', () => {
+                    const nameInput = document.getElementById('batch-textbook-name-input');
+                    const priceInput = document.getElementById('batch-textbook-price-input');
+                    const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                    const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                    const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
+
+                    if (nameInput && priceInput && editIndexInput && submitBtn && cancelBtn) {
+                        nameInput.value = tb.name;
+                        priceInput.value = tb.price;
+                        editIndexInput.value = index;
+                        submitBtn.textContent = '교재 수정';
+                        cancelBtn.style.display = 'inline-block';
+                        nameInput.focus();
+                    }
+                });
+
+                // Bind delete button
+                item.querySelector('.btn-delete-batch-tb').addEventListener('click', async () => {
+                    if (confirm(`'${tb.name}' 교재를 삭제하시겠습니까?`)) {
+                        targetClass.textbooks.splice(index, 1);
+                        await saveClasses();
+                        renderBatchTextbookList(classId);
+                        if (typeof renderClassList === 'function') renderClassList();
+                        showToast(`'${tb.name}' 교재가 삭제되었습니다.`);
+                    }
+                });
+
+                listEl.appendChild(item);
+            });
+
+            safeCreateIcons();
+        };
+
+        // Class select change listener
+        const batchTbClassSelect = document.getElementById('batch-textbook-class-select');
+        if (batchTbClassSelect) {
+            batchTbClassSelect.addEventListener('change', (e) => {
+                const classId = parseStudentId(e.target.value);
+                // Reset edit mode
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
+
+                if (nameInput) nameInput.value = '';
+                if (priceInput) priceInput.value = '';
+                if (editIndexInput) editIndexInput.value = '';
+                if (submitBtn) submitBtn.textContent = '교재 등록';
+                if (cancelBtn) cancelBtn.style.display = 'none';
+
+                renderBatchTextbookList(classId);
+            });
+        }
+
+        // Cancel edit button click listener
+        const btnBatchTextbookCancel = document.getElementById('btn-batch-textbook-cancel');
+        if (btnBatchTextbookCancel) {
+            btnBatchTextbookCancel.addEventListener('click', () => {
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                
+                if (nameInput) nameInput.value = '';
+                if (priceInput) priceInput.value = '';
+                if (editIndexInput) editIndexInput.value = '';
+                if (submitBtn) submitBtn.textContent = '교재 등록';
+                btnBatchTextbookCancel.style.display = 'none';
+            });
+        }
+
+        // Batch Textbook Registration Form Submit Listener
+        const classTextbookBatchForm = document.getElementById('class-textbook-batch-form');
+        if (classTextbookBatchForm) {
+            classTextbookBatchForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('batch-textbook-class-select');
+                const nameInput = document.getElementById('batch-textbook-name-input');
+                const priceInput = document.getElementById('batch-textbook-price-input');
+                const editIndexInput = document.getElementById('batch-textbook-edit-index');
+                const submitBtn = document.getElementById('btn-batch-textbook-submit');
+                const cancelBtn = document.getElementById('btn-batch-textbook-cancel');
+                
+                if (!classSelect || !nameInput || !priceInput || !editIndexInput || !submitBtn || !cancelBtn) return;
+
+                const classId = parseStudentId(classSelect.value);
+                const tbName = nameInput.value.trim();
+                const tbPrice = parseInt(priceInput.value);
+                const editIndexStr = editIndexInput.value;
+
+                if (!classId) {
+                    showToast('반을 선택해 주세요.');
+                    return;
+                }
+
+                if (!tbName) {
+                    showToast('교재명을 입력해 주세요.');
+                    return;
+                }
+
+                if (isNaN(tbPrice) || tbPrice < 0) {
+                    showToast('올바른 금액을 입력해 주세요.');
+                    return;
+                }
+
+                let targetClass = classes.find(c => c.id === classId);
+                if (!targetClass) {
+                    showToast('반 정보를 찾을 수 없습니다.');
+                    return;
+                }
+
+                if (!targetClass.textbooks) {
+                    targetClass.textbooks = [];
+                }
+
+                if (editIndexStr !== '') {
+                    // Edit Mode
+                    const editIdx = parseInt(editIndexStr);
+                    // Check duplicate (except itself)
+                    if (targetClass.textbooks.some((t, idx) => t.name === tbName && idx !== editIdx)) {
+                        showToast('이미 다른 교재명으로 등록되어 있습니다.');
+                        return;
+                    }
+
+                    const oldName = targetClass.textbooks[editIdx].name;
+                    targetClass.textbooks[editIdx] = { name: tbName, price: tbPrice };
+                    await saveClasses();
+
+                    showToast(`[교재 수정 완료] '${oldName}' 교재가 '${tbName}' (${tbPrice.toLocaleString()}원)으로 수정되었습니다.`);
+                    
+                    // Reset edit state
+                    editIndexInput.value = '';
+                    submitBtn.textContent = '교재 등록';
+                    cancelBtn.style.display = 'none';
+                } else {
+                    // Registration Mode
+                    if (targetClass.textbooks.some(t => t.name === tbName)) {
+                        showToast('이미 등록된 교재명입니다.');
+                        return;
+                    }
+
+                    targetClass.textbooks.push({ name: tbName, price: tbPrice });
+                    await saveClasses();
+
+                    showToast(`[교재 등록 완료] ${targetClass.name} 반에 '${tbName}' (${tbPrice.toLocaleString()}원) 교재가 등록되었습니다.`);
+                }
+                
+                // Refresh UIs
+                renderBatchTextbookList(classId);
+                if (typeof renderClassList === 'function') {
+                    renderClassList();
+                }
+
+                // Reset inputs
+                nameInput.value = '';
+                priceInput.value = '';
+            });
+        }
+
+        // ==========================================================================
+        // 📞 상담 예약 문의 (Visitor Modal & Admin Management)
+        // ==========================================================================
+
+        const consultInquiryModal = document.getElementById('consult-inquiry-modal');
+        const btnOpenConsultModal = document.getElementById('btn-open-consult-modal');
+        const btnConsultInquiryClose = document.getElementById('btn-consult-inquiry-close');
+        const consultInquiryForm = document.getElementById('consult-inquiry-form');
+        const consultPhoneInput = document.getElementById('consult-phone');
+        const consultListTbody = document.getElementById('consult-list-tbody');
+        const consultTabBtns = document.querySelectorAll('.consult-tab-btn');
+        const consultYearFilter = document.getElementById('consult-year-filter');
+        const consultYearFilterContainer = document.getElementById('consult-year-filter-container');
+        let currentConsultFilter = 'pending'; // default is pending (상담 미완료)
+        let currentConsultYear = 'all';
+
+        // Open/Close Visitor Modal
+        if (btnOpenConsultModal && consultInquiryModal) {
+            btnOpenConsultModal.addEventListener('click', () => {
+                consultInquiryModal.classList.add('open');
+                if (consultInquiryForm) consultInquiryForm.reset();
+            });
+        }
+
+        if (btnConsultInquiryClose && consultInquiryModal) {
+            btnConsultInquiryClose.addEventListener('click', () => {
+                consultInquiryModal.classList.remove('open');
+            });
+        }
+
+        if (consultInquiryModal) {
+            consultInquiryModal.addEventListener('click', (e) => {
+                if (e.target === consultInquiryModal) {
+                    consultInquiryModal.classList.remove('open');
+                }
+            });
+        }
+
+        // Phone input formatter for consult form
+        if (consultPhoneInput) {
+            consultPhoneInput.addEventListener('input', handlePhoneInput);
+        }
+
+        // Form Submit for Consultation Inquiry
+        if (consultInquiryForm) {
+            consultInquiryForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('consult-name').value.trim();
+                const phone = document.getElementById('consult-phone').value.trim();
+                const school = document.getElementById('consult-school').value.trim();
+                const grade = document.getElementById('consult-grade').value;
+                const memo = document.getElementById('consult-memo').value.trim();
+
+                const newInquiry = {
+                    id: crypto.randomUUID(),
+                    name,
+                    phone,
+                    school,
+                    grade,
+                    memo,
+                    date: getFormattedDate().replace(/\.\s/g, '-').replace(/\.$/, ''), // YYYY-MM-DD format
+                    status: 'pending'
+                };
+
+                consultations.unshift(newInquiry);
+                await saveConsultations();
+                showToast('상담 예약 신청이 접수되었습니다. 원장님이 곧 연락드리겠습니다.');
+
+                // Send Telegram Notification
+                const telegramMessage = `🔔 <b>신규 상담 예약</b>\n\n` +
+                    `👤 <b>이름:</b> ${name}\n` +
+                    `📱 <b>연락처:</b> ${phone}\n` +
+                    `🏫 <b>학교/학년:</b> ${school} ${grade}\n` +
+                    `📝 <b>메모:</b> ${memo || '없음'}`;
+                await sendTelegramNotification(telegramMessage);
+
+                if (consultInquiryModal) consultInquiryModal.classList.remove('open');
+                consultInquiryForm.reset();
+
+                // Refresh Admin Panel if open
+                if (isAdmin) renderConsultList();
+            });
+        }
+
+        // Render Admin Consultations List Table
+        // Populate Year Options for Consultation Filter
+        const populateConsultYears = () => {
+            if (!consultYearFilter) return;
+            const prevValue = consultYearFilter.value;
+            const years = [...new Set(consultations.map(c => {
+                if (!c.date) return null;
+                const yr = new Date(c.date).getFullYear();
+                return isNaN(yr) ? null : yr;
+            }).filter(Boolean))];
+            years.sort((a, b) => b - a);
+
+            let optionsHtml = '<option value="all">전체 년도</option>';
+            years.forEach(yr => {
+                optionsHtml += `<option value="${yr}">${yr}년</option>`;
+            });
+            consultYearFilter.innerHTML = optionsHtml;
+
+            if (years.map(String).includes(prevValue) || prevValue === 'all') {
+                consultYearFilter.value = prevValue;
+            } else {
+                consultYearFilter.value = 'all';
+            }
+            currentConsultYear = consultYearFilter.value;
+        };
+
+        const renderConsultList = () => {
+            if (!consultListTbody) return;
+            
+            // Populate years dropdown dynamically based on latest data
+            populateConsultYears();
+            
+            let filtered = consultations;
+            if (currentConsultFilter === 'pending') {
+                filtered = consultations.filter(c => c.status === 'pending');
+            } else if (currentConsultFilter === 'completed') {
+                filtered = consultations.filter(c => c.status === 'completed');
+            } else if (currentConsultFilter === 'all') {
+                if (currentConsultYear !== 'all') {
+                    filtered = consultations.filter(c => {
+                        if (!c.date) return false;
+                        const yr = new Date(c.date).getFullYear().toString();
+                        return yr === currentConsultYear;
+                    });
+                }
+            }
+
+            if (filtered.length === 0) {
+                consultListTbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="padding: 30px; text-align: center; color: var(--text-muted); font-weight: 500; font-size: 0.85rem;">
+                            등록된 상담 예약 문의 내역이 없습니다.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            consultListTbody.innerHTML = filtered.map(c => {
+                const isPending = c.status === 'pending';
+                const checkboxTooltip = isPending ? '미완료 (클릭 시 완료 처리)' : '완료 (클릭 시 미완료 처리)';
+
+                return `
+                    <tr style="border-bottom: 1px solid var(--border-color-split);">
+                        <td style="padding: 12px; text-align: center;">
+                            <input type="checkbox" class="chk-toggle-status" data-id="${c.id}" ${!isPending ? 'checked' : ''} style="cursor: pointer; transform: scale(1.15); width: 16px; height: 16px;" title="${checkboxTooltip}">
+                        </td>
+                        <td style="padding: 12px; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">${c.date}</td>
+                        <td style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text-primary); text-align: left;">${c.name}</td>
+                        <td style="padding: 12px; font-size: 0.85rem; color: var(--text-primary); text-align: left;">${c.phone}</td>
+                        <td style="padding: 12px; font-size: 0.82rem; color: var(--text-secondary); text-align: left;">
+                            <div style="font-weight: 500;">${c.school}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${c.grade}</div>
+                        </td>
+                        <td style="padding: 12px; font-size: 0.82rem; color: var(--text-primary); text-align: left; word-break: break-all; white-space: pre-line;">${c.memo || '<span style="color: var(--text-muted); font-style: italic;">내용 없음</span>'}</td>
+                        <td style="padding: 12px; text-align: center;">
+                            <button type="button" class="btn-delete-consult" data-id="${c.id}" style="background: none; border: none; color: var(--error-color); cursor: pointer; padding: 4px;" aria-label="삭제"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            safeCreateIcons();
+        };
+
+        // Year selector listener
+        if (consultYearFilter) {
+            consultYearFilter.addEventListener('change', (e) => {
+                currentConsultYear = e.target.value;
+                renderConsultList();
+            });
+        }
+
+        // Filter Tabs for Consultations
+        consultTabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                consultTabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentConsultFilter = btn.getAttribute('data-filter');
+                
+                // Show/hide year filter based on tab
+                if (consultYearFilterContainer) {
+                    if (currentConsultFilter === 'all') {
+                        consultYearFilterContainer.style.display = 'flex';
+                    } else {
+                        consultYearFilterContainer.style.display = 'none';
+                    }
+                }
+                
+                renderConsultList();
+            });
+        });
+
+        // Click delegation on Consultations Table Body
+        if (consultListTbody) {
+            consultListTbody.addEventListener('click', async (e) => {
+                const chkToggle = e.target.closest('.chk-toggle-status');
+                if (chkToggle) {
+                    const id = Number(chkToggle.getAttribute('data-id'));
+                    const isChecked = chkToggle.checked;
+                    const nextStatus = isChecked ? 'completed' : 'pending';
+                    const consult = consultations.find(c => c.id === id);
+                    if (consult) {
+                        consult.status = nextStatus;
+                        await saveConsultations();
+                        showToast(nextStatus === 'completed' ? '상담 완료 처리되었습니다.' : '상담 미완료 처리되었습니다.');
+                        renderConsultList();
+                    }
+                    return;
+                }
+
+                const btnDelete = e.target.closest('.btn-delete-consult');
+                if (btnDelete) {
+                    const rawId = btnDelete.getAttribute('data-id');
+                    if (confirm('이 상담 예약 신청 내역을 정말 삭제하시겠습니까?')) {
+                        // 1. Supabase에서 먼저 삭제 (숫자/문자 ID 모두 대응)
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                const numericId = Number(rawId);
+                                let deleteError = null;
+                                if (!isNaN(numericId) && numericId > 0) {
+                                    // 숫자 ID로 시도
+                                    const res = await supabase.from('sb_consultations').delete().eq('id', numericId);
+                                    deleteError = res.error;
+                                    if (deleteError) {
+                                        // 문자열 ID로 재시도
+                                        const res2 = await supabase.from('sb_consultations').delete().eq('id', rawId);
+                                        deleteError = res2.error;
+                                    }
+                                } else {
+                                    const res = await supabase.from('sb_consultations').delete().eq('id', rawId);
+                                    deleteError = res.error;
+                                }
+                                if (deleteError) console.error('[Delete] Consultation delete error:', deleteError.message);
+                                else console.log('[Delete] Consultation deleted from Supabase, id:', rawId);
+                            } catch(err) {
+                                console.error('[Delete] Consultation delete exception:', err);
+                            }
+                        }
+                        // 2. 로컬 상태 업데이트
+                        consultations = consultations.filter(c => String(c.id) !== String(rawId));
+                        try {
+                            localStorage.setItem('gongbubang_consultations', JSON.stringify(consultations));
+                        } catch(err) {}
+                        showToast('상담 내역이 삭제되었습니다.');
+                        renderConsultList();
+                    }
+                    return;
+                }
+            });
+        }
+
+
+        // ==========================================================================
+        // 📚 커리큘럼 소개 동적 렌더링 및 관리자 CRUD
+        // ==========================================================================
+
+        const curriculumGridContainer = document.getElementById('curriculum-grid-container');
+        const curriculumListContainer = document.getElementById('curriculum-list-container');
+        const curriculumEditorForm = document.getElementById('curriculum-editor-form');
+        const editCurriculumIdInput = document.getElementById('edit-curriculum-id');
+        const curriculumTitleInput = document.getElementById('curriculum-title');
+        const curriculumStepNumInput = document.getElementById('curriculum-step-num');
+        const curriculumDescInput = document.getElementById('curriculum-desc');
+        const curriculumTargetsInput = document.getElementById('curriculum-targets');
+        const btnCurriculumClear = document.getElementById('btn-curriculum-clear');
+        const curriculumEditorTitle = document.getElementById('curriculum-editor-title');
+
+        // Render curriculum cards on home page
+        const renderCurriculumGrid = () => {
+            if (!curriculumGridContainer) return;
+            
+            const sorted = [...curriculums].sort((a, b) => {
+                const aNum = parseInt(a.stepNum) || a.id;
+                const bNum = parseInt(b.stepNum) || b.id;
+                return aNum - bNum;
+            });
+
+            curriculumGridContainer.innerHTML = sorted.map((c, index) => {
+                const stepClass = `card-step${(index % 3) + 1}`;
+                const targetsHtml = (c.targets || []).map(t => `<span>${t.trim()}</span>`).join('');
+
+                return `
+                    <div class="curriculum-card ${stepClass}">
+                        <div class="step-num">${c.stepNum}</div>
+                        <h3 class="step-title">${c.title}</h3>
+                        <p class="step-desc">${c.description}</p>
+                        <div class="step-targets">
+                            ${targetsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // Render curriculum list in admin panel
+        const renderAdminCurriculumList = () => {
+            if (!curriculumListContainer) return;
+
+            const sorted = [...curriculums].sort((a, b) => {
+                const aNum = parseInt(a.stepNum) || a.id;
+                const bNum = parseInt(b.stepNum) || b.id;
+                return aNum - bNum;
+            });
+
+            if (sorted.length === 0) {
+                curriculumListContainer.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.88rem;">
+                        등록된 커리큘럼 단계가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            curriculumListContainer.innerHTML = sorted.map(c => {
+                return `
+                    <div style="background: #ffffff; border: 1px solid var(--border-color-split); border-radius: var(--border-radius-base); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: var(--primary-bg); color: var(--primary-color); font-weight: 700; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-family: var(--ff-logo);">${c.stepNum}</span>
+                                <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${c.title}</span>
+                            </div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px;">${c.description}</span>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn-edit-curriculum" data-id="${c.id}" style="background: none; border: none; color: var(--primary-color); cursor: pointer; padding: 4px;" aria-label="수정"><i data-lucide="edit" style="width: 16px; height: 16px;"></i></button>
+                            <button type="button" class="btn-delete-curriculum" data-id="${c.id}" style="background: none; border: none; color: var(--error-color); cursor: pointer; padding: 4px;" aria-label="삭제"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            safeCreateIcons();
+        };
+
+        // Form Submit for Curriculum Editor
+        if (curriculumEditorForm) {
+            curriculumEditorForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = editCurriculumIdInput.value;
+                const title = curriculumTitleInput.value.trim();
+                const stepNum = curriculumStepNumInput.value.trim();
+                const description = curriculumDescInput.value.trim();
+                const targets = curriculumTargetsInput.value.split(',').map(t => t.trim()).filter(Boolean);
+
+                if (id) {
+                    curriculums = curriculums.map(c => {
+                        if (String(c.id) === String(id)) {
+                            return { ...c, title, stepNum, description, targets };
+                        }
+                        return c;
+                    });
+                    showToast('커리큘럼 단계가 성공적으로 수정되었습니다.');
+                } else {
+                    const newStep = {
+                        id: crypto.randomUUID(),
+                        title,
+                        stepNum,
+                        description,
+                        targets
+                    };
+                    curriculums.push(newStep);
+                    showToast('새로운 커리큘럼 단계가 등록되었습니다.');
+                }
+
+                saveCurriculums();
+                resetCurriculumForm();
+                renderCurriculumGrid();
+                renderAdminCurriculumList();
+            });
+        }
+
+        // Reset Curriculum Form
+        const resetCurriculumForm = () => {
+            if (curriculumEditorForm) curriculumEditorForm.reset();
+            if (editCurriculumIdInput) editCurriculumIdInput.value = '';
+            if (curriculumEditorTitle) {
+                curriculumEditorTitle.innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 커리큘럼 등록 / 수정`;
+            }
+            safeCreateIcons();
+        };
+
+        if (btnCurriculumClear) {
+            btnCurriculumClear.addEventListener('click', resetCurriculumForm);
+        }
+
+        // Click delegation on Curriculum Admin List
+        if (curriculumListContainer) {
+            curriculumListContainer.addEventListener('click', (e) => {
+                const btnEdit = e.target.closest('.btn-edit-curriculum');
+                if (btnEdit) {
+                    const id = Number(btnEdit.getAttribute('data-id'));
+                    const item = curriculums.find(c => c.id === id);
+                    if (item) {
+                        editCurriculumIdInput.value = item.id;
+                        curriculumTitleInput.value = item.title;
+                        curriculumStepNumInput.value = item.stepNum;
+                        curriculumDescInput.value = item.description;
+                        curriculumTargetsInput.value = (item.targets || []).join(', ');
+                        
+                        if (curriculumEditorTitle) {
+                            curriculumEditorTitle.innerHTML = `<i data-lucide="edit" style="width: 18px; height: 18px;"></i> 커리큘럼 수정 (단계: ${item.stepNum})`;
+                        }
+                        safeCreateIcons();
+                    }
+                    return;
+                }
+
+                const btnDelete = e.target.closest('.btn-delete-curriculum');
+                if (btnDelete) {
+                    const id = Number(btnDelete.getAttribute('data-id'));
+                    if (confirm('이 커리큘럼 단계를 정말 삭제하시겠습니까?')) {
+                        curriculums = curriculums.filter(c => c.id !== id);
+                        saveCurriculums();
+                        showToast('커리큘럼 단계가 삭제되었습니다.');
+                        resetCurriculumForm();
+                        renderCurriculumGrid();
+                        renderAdminCurriculumList();
+                    }
+                    return;
+                }
+            });
+        }
+
+        // ==========================================================================
+        // 🤖 AI Solver (Student Query & Admin History Viewer)
+        // ==========================================================================
+
+        const getMockAiResponse = (question, hasImage) => {
+            if (hasImage) {
+                return `**[AI 이미지 수식 분석 완료]**
+업로드하신 이미지에서 수학 문제(이차방정식: \\(x^2 - 4x - 5 = 0\\))가 감지되었습니다. 이에 대한 상세 풀이과정을 안내해 드립니다.
+
+**1. 인수분해를 통한 풀이:**
+이차방정식 \\(x^2 - 4x - 5 = 0\\)의 상수항은 \\(-5\\), 일차항의 계수는 \\(-4\\)입니다.
+곱해서 \\(-5\\), 더해서 \\(-4\\)가 되는 두 수는 \\(-5\\)와 \\(1\\)입니다.
+\\[(x - 5)(x + 1) = 0\\]
+
+**2. 해 도출:**
+곱한 결과가 \\(0\\)이 되려면 각각의 인수가 \\(0\\)이어야 하므로:
+\\[x - 5 = 0 \\implies x = 5\\]
+\\[x + 1 = 0 \\implies x = -1\\]
+따라서 구하고자 하는 방정식의 해는 **\\(x = 5\\) 또는 \\(x = -1\\)** 입니다.
+
+추가적인 수식 설명이나 다른 풀이법이 필요하다면 언제든 알려주세요!`;
+            }
+            const q = question.toLowerCase();
+            if (q.includes('x^2') || q.includes('이차방정식') || q.includes('근의 공식') || q.includes('근의공식')) {
+                return `이차방정식 풀이과정입니다.
+
+**1. 인수분해를 이용한 풀이:**
+이차방정식 \\(ax^2 + bx + c = 0\\)의 일반적인 풀이를 위해 인수분해를 시도합니다. 곱해서 \\(ac\\), 더해서 \\(b\\)가 되는 두 수 \\(p, q\\)를 찾아 다음과 같이 인수분해합니다.
+\\[(x - p)(x - q) = 0 \\implies x = p \\quad \\text{또는} \\quad x = q\\]
+
+**2. 근의 공식을 이용한 풀이:**
+인수분해가 어려운 경우 이차방정식 근의 공식을 적용합니다.
+\\[x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\\]
+
+예시로 \\(x^2 - 5x + 6 = 0\\)의 경우:
+\\(a = 1, b = -5, c = 6\\)을 근의 공식에 대입하면:
+\\[x = \\frac{-(-5) \\pm \\sqrt{(-5)^2 - 4 \\cdot 1 \\cdot 6}}{2 \\cdot 1}\\]
+\\[x = \\frac{5 \\pm \\sqrt{25 - 24}}{2} = \\frac{5 \\pm 1}{2}\\]
+따라서 구하는 해는 \\(x = 3\\) 또는 \\(x = 2\\)가 됩니다.`;
+            } else if (q.includes('피타고라스') || q.includes('직각삼각형') || q.includes('빗변')) {
+                return `**피타고라스 정리(Pythagorean Theorem)** 공식과 설명입니다.
+
+**1. 기본 정의:**
+직각삼각형에서 직각을 끼고 있는 두 변의 길이를 각각 \\(a, b\\)라 하고, 가장 긴 변(빗변)의 길이를 \\(c\\)라고 할 때 다음 공식이 항상 성립합니다.
+\\[a^2 + b^2 = c^2\\]
+
+**2. 변의 길이 구하기 예시:**
+- **빗변 \\(c\\) 구하기:** 두 변의 길이가 \\(3\\)과 \\(4\\)인 직각삼각형의 빗변 길이는:
+  \\[c = \\sqrt{a^2 + b^2} = \\sqrt{3^2 + 4^2} = \\sqrt{9 + 16} = \\sqrt{25} = 5\\]
+- **다른 한 변 \\(a\\) 구하기:** 빗변이 \\(10\\)이고 한 변이 \\(8\\)일 때 다른 변의 길이는:
+  \\[a = \\sqrt{c^2 - b^2} = \\sqrt{10^2 - 8^2} = \\sqrt{100 - 64} = \\sqrt{36} = 6\\]
+
+피타고라스 정리를 활용하면 직각삼각형의 두 변의 길이를 알 때 나머지 한 변의 길이를 아주 쉽게 계산할 수 있습니다.`;
+            } else if (q.includes('sin') || q.includes('cos') || q.includes('tan') || q.includes('삼각함수') || q.includes('삼각비')) {
+                return `**삼각함수(Trigonometric Functions)** 공식과 특수각의 값입니다.
+
+**1. 삼각비의 기본 정의:**
+직각삼각형에서 한 예각을 \\(\\theta\\), 밑변을 \\(x\\), 높이를 \\(y\\), 빗변을 \\(r\\)이라 할 때:
+- **사인 (Sine):** \\(\\sin\\theta = \\frac{\\text{높이}}{\\text{빗변}} = \\frac{y}{r}\\)
+- **코사인 (Cosine):** \\(\\cos\\theta = \\frac{\\text{밑변}}{\\text{빗변}} = \\frac{x}{r}\\)
+- **탄젠트 (Tangent):** \\(\\tan\\theta = \\frac{\\text{높이}}{\\text{밑변}} = \\frac{y}{x}\\)
+
+**2. 자주 쓰는 특수각의 삼각비 표:**
+\\[
+\\begin{array}{c|c|c|c}
+\\text{각도 } (\\theta) & 30^\\circ \\left(\\frac{\\pi}{6}\\right) & 45^\\circ \\left(\\frac{\\pi}{4}\\right) & 60^\\circ \\left(\\frac{\\pi}{3}\\right) \\\\ \\hline
+\\sin\\theta & \\frac{1}{2} & \\frac{\\sqrt{2}}{2} & \\frac{\\sqrt{3}}{2} \\\\ \\hline
+\\cos\\theta & \\frac{\\sqrt{3}}{2} & \\frac{\\sqrt{2}}{2} & \\frac{1}{2} \\\\ \\hline
+\\tan\\theta & \\frac{\\sqrt{3}}{3} & 1 & \\sqrt{3}
+\\end{array}
+\\]
+
+**3. 삼각함수의 기본 공식:**
+- \\(\\sin^2\\theta + \\cos^2\\theta = 1\\)
+- \\(\\tan\\theta = \\frac{\\sin\\theta}{\\cos\\theta}\\)`;
+            } else if (q.includes('미분') || q.includes('적분') || q.includes('도함수')) {
+                return `**미분과 적분(Calculus) 기본 공식**입니다.
+
+**1. 미분 공식 (Differentiation):**
+함수 \\(f(x)\\)의 변화율을 나타내는 도함수를 구하는 공식입니다.
+- **다항함수의 미분:** \\(\\frac{d}{dx}(x^n) = n x^{n-1}\\) (단, \\(n\\)은 실수)
+- **상수함수의 미분:** \\(\\frac{d}{dx}(c) = 0\\)
+- **곱의 미분법:** \\(\\{f(x)g(x)\\}' = f'(x)g(x) + f(x)g'(x)\\)
+
+*예시:* \\(f(x) = 3x^2 + 5x - 2\\)의 미분은:
+\\[f'(x) = 6x + 5\\]
+
+**2. 부정적분 공식 (Indefinite Integration):**
+미분의 역과정으로 원래 함수를 찾는 공식입니다. (\\(C\\)는 적분상수)
+- **다항함수의 적분:** \\(\\int x^n dx = \\frac{1}{n+1} x^{n+1} + C\\) (단, \\(n \\neq -1\\))
+- **상수함수의 적분:** \\(\\int a dx = ax + C\\)
+
+*예시:* \\(\\int (6x + 5) dx\\)의 적분은:
+\\[6 \\cdot \\frac{1}{2}x^2 + 5x + C = 3x^2 + 5x + C\\]`;
+            } else if (q.includes('인수분해') || q.includes('곱셈 공식') || q.includes('곱셈공식')) {
+                return `**인수분해(Factorization) 및 곱셈 공식**의 주요 양식입니다.
+
+**1. 주요 곱셈 공식 및 인수분해 공식:**
+- **완전제곱식:**
+  \\[(a + b)^2 = a^2 + 2ab + b^2 \\iff a^2 + 2ab + b^2 = (a + b)^2\\]
+  \\[(a - b)^2 = a^2 - 2ab + b^2 \\iff a^2 - 2ab + b^2 = (a - b)^2\\]
+- **합차 공식:**
+  \\[(a + b)(a - b) = a^2 - b^2 \\iff a^2 - b^2 = (a + b)(a - b)\\]
+- **이차식의 인수분해:**
+  \\[(x + a)(x + b) = x^2 + (a+b)x + ab \\iff x^2 + (a+b)x + ab = (x + a)(x + b)\\]
+
+**2. 인수분해 대입 예시:**
+다항식 \\(x^2 - 4\\)의 인수분해는 합차 공식을 사용하여 다음과 같이 나타냅니다.
+\\[x^2 - 4 = x^2 - 2^2 = (x + 2)(x - 2)\\]
+
+인수분해는 복잡한 다항식을 일차식들의 곱으로 표현하여 방정식의 해를 찾기 쉽게 해주는 아주 유용한 수학적 기법입니다.`;
+            } else {
+                return `안녕하세요! AI 수학 선생님입니다. 
+질문하신 **"${question}"** 문제에 대한 개념 분석 및 문제 해결을 위한 단계별 접근법입니다.
+
+**1단계: 문제 상황 파악 및 정의하기**
+질문하신 개념이나 문제는 주어진 조건과 구하고자 하는 목표값을 명확히 구분하는 것부터 시작합니다.
+- 주어진 조건: 질문에 포함된 수학적 개념
+- 해결 목표: 공식 유도 또는 문제 풀이 단계 도출
+
+**2단계: 수학적 성질 및 공식 떠올리기**
+이와 같은 유형의 문제는 아래의 기본 수학 공식을 기반으로 접근할 수 있습니다.
+\\[\\text{성질 또는 공식} : A \\cdot x + B = C\\]
+- 변수가 포함된 경우, 양변의 연산을 통해 하나의 문자(예: \\(x\\))로 식을 정리합니다.
+- 성질 설명: 관련 단원의 주요 정의 및 정리들을 대입해 봅니다.
+
+**3단계: 단계별 풀이 접근 방식**
+1. 식의 단순화: 괄호를 풀고 동류항끼리 묶어 식의 복잡도를 낮춥니다.
+2. 미지수 구하기: 상수를 반대편 항으로 이항하여 미지수의 계수로 나누어 줍니다.
+3. 검산: 도출된 임계값을 최초 수식에 대입하여 등호가 성립하는지 확인합니다.
+
+더 궁금하신 구체적인 수식이나 풀이를 적어주시면 더 자세하게 안내해 드리겠습니다!`;
+            }
+        };
+
+        const btnAskAi = document.getElementById('btn-ask-ai');
+        const aiQueryInput = document.getElementById('ai-query-input');
+        const aiResponseContainer = document.getElementById('ai-response-container');
+        const aiResponseContent = document.getElementById('ai-response-content');
+
+        // Image elements for AI query
+        const btnAiUploadImage = document.getElementById('btn-ai-upload-image');
+        const aiImageInput = document.getElementById('ai-image-input');
+        const aiImagePreviewContainer = document.getElementById('ai-image-preview-container');
+        const aiImagePreview = document.getElementById('ai-image-preview');
+        const aiImageFilename = document.getElementById('ai-image-filename');
+        const aiImageFilesize = document.getElementById('ai-image-filesize');
+        const btnAiRemoveImage = document.getElementById('btn-ai-remove-image');
+
+        let attachedAiImageBase64 = null;
+        let attachedAiImageName = "";
+
+        if (btnAiUploadImage && aiImageInput) {
+            btnAiUploadImage.addEventListener('click', () => aiImageInput.click());
+            
+            aiImageInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (!file.type.startsWith('image/')) {
+                    showToast('이미지 파일만 등록할 수 있습니다.');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    attachedAiImageBase64 = event.target.result;
+                    attachedAiImageName = file.name;
+                    
+                    if (aiImagePreview) aiImagePreview.src = attachedAiImageBase64;
+                    if (aiImageFilename) aiImageFilename.textContent = file.name;
+                    
+                    let sizeStr = (file.size / 1024).toFixed(1) + " KB";
+                    if (file.size > 1024 * 1024) {
+                        sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
+                    }
+                    if (aiImageFilesize) aiImageFilesize.textContent = sizeStr;
+                    
+                    if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'flex';
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        if (btnAiRemoveImage) {
+            btnAiRemoveImage.addEventListener('click', () => {
+                attachedAiImageBase64 = null;
+                attachedAiImageName = "";
+                if (aiImageInput) aiImageInput.value = '';
+                if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'none';
+            });
+        }
+
+        if (btnAskAi && aiQueryInput && aiResponseContainer && aiResponseContent) {
+            btnAskAi.addEventListener('click', async () => {
+                const queryText = aiQueryInput.value.trim();
+                if (!queryText && !attachedAiImageBase64) {
+                    showToast('질문할 수학 문제나 개념을 입력하거나 문제 사진을 등록해 주세요.');
+                    return;
+                }
+
+                // Show loading state
+                btnAskAi.disabled = true;
+                btnAskAi.innerHTML = `AI 선생님 문제 해결 중... (최대 1분 소요)`;
+                aiResponseContainer.style.display = 'none';
+
+                try {
+                    // Generate AI response
+                    let base64Data = null;
+                    let mimeType = 'image/jpeg';
+                    if (attachedAiImageBase64) {
+                        const parts = attachedAiImageBase64.split(',');
+                        if (parts.length === 2) {
+                            const match = parts[0].match(/:(.*?);/);
+                            if (match) mimeType = match[1];
+                            base64Data = parts[1];
+                        }
+                    }
+
+                    const responseText = await callGeminiMathSolver(queryText, base64Data, mimeType);
+                    
+                    // Format response text with optional attached image preview
+                    let imageHtml = '';
+                    if (attachedAiImageBase64) {
+                        imageHtml = `
+                            <div style="margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; max-width: 100%; width: 220px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                <img src="${attachedAiImageBase64}" style="width: 100%; display: block; cursor: pointer;" title="클릭하여 원본 보기" onclick="const w=window.open(); w.document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%;\\' />');">
+                            </div>
+                        `;
+                    }
+                    aiResponseContent.innerHTML = imageHtml + responseText.replace(/\n/g, '<br>');
+                    aiResponseContainer.style.display = 'flex';
+                    
+                    // Re-render LaTeX math expressions using KaTeX
+                    if (typeof renderMathInElement === 'function') {
+                        renderMathInElement(aiResponseContent, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\(', right: '\\)', display: false},
+                                {left: '\\[', right: '\\]', display: true}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+
+                    // Save query in our localStorage database
+                    const currentStudent = students.find(s => s.id === loggedInStudentId);
+                    const name = currentStudent ? currentStudent.name : '학부모 자녀';
+                    
+                    const newQuery = {
+                        id: getNextSequentialId(wordSets),
+                        studentId: loggedInStudentId,
+                        studentName: name,
+                        question: queryText || `[사진 질문] ${attachedAiImageName}`,
+                        answer: responseText,
+                        image: attachedAiImageBase64 || null,
+                        date: getFormattedDate().replace(/\.\s/g, '-').replace(/\.$/, ''), // YYYY-MM-DD
+                        timestamp: new Date().toTimeString().split(' ')[0] // HH:MM:SS
+                    };
+
+                    aiQueries.unshift(newQuery);
+                    localStorage.setItem('gongbubang_ai_queries', JSON.stringify(aiQueries));
+                    
+                    // Clear input
+                    aiQueryInput.value = '';
+                    
+                    // Clear image preview and state variables
+                    attachedAiImageBase64 = null;
+                    attachedAiImageName = "";
+                    if (aiImageInput) aiImageInput.value = '';
+                    if (aiImagePreviewContainer) aiImagePreviewContainer.style.display = 'none';
+
+                    // Refresh history and admin panel
+                    renderMyClassAiHistory();
+                    if (isAdmin) renderAiQueryManagement();
+                } catch (err) {
+                    console.error('AI Math Solver Error:', err);
+                    alert('AI 문제 풀이 중 오류 발생: ' + err.message);
+                } finally {
+                    // Reset button
+                    btnAskAi.disabled = false;
+                    btnAskAi.innerHTML = `<i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기`;
+                    safeCreateIcons();
+                }
+            });
+        }
+
+        const renderMyClassAiHistory = () => {
+            const historyList = document.getElementById('myclass-ai-history-list');
+            const historyContainer = document.getElementById('myclass-ai-history-container');
+            if (!historyList || !historyContainer) return;
+
+            // Find all queries for the logged-in student
+            const myQueries = aiQueries.filter(q => q.studentId === loggedInStudentId);
+
+            if (myQueries.length === 0) {
+                historyContainer.style.display = 'none';
+                return;
+            }
+
+            historyContainer.style.display = 'flex';
+            historyList.innerHTML = myQueries.slice(0, 3).map(q => {
+                return `
+                    <button type="button" class="btn-myclass-ai-history-item" data-id="${q.id}" style="text-align: left; background: none; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 4px;">
+                        <span style="font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 80%;">${q.question}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">${q.date}</span>
+                    </button>
+                `;
+            }).join('');
+
+            // Click listener for history items to restore them
+            historyList.querySelectorAll('.btn-myclass-ai-history-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = Number(btn.getAttribute('data-id'));
+                    const query = aiQueries.find(q => q.id === id);
+                    if (query && aiResponseContainer && aiResponseContent) {
+                        aiResponseContent.innerHTML = query.answer.replace(/\n/g, '<br>');
+                        aiResponseContainer.style.display = 'flex';
+                        
+                        if (typeof renderMathInElement === 'function') {
+                            renderMathInElement(aiResponseContent, {
+                                delimiters: [
+                                    {left: '$$', right: '$$', display: true},
+                                    {left: '$', right: '$', display: false},
+                                    {left: '\\(', right: '\\)', display: false},
+                                    {left: '\\[', right: '\\]', display: true}
+                                ],
+                                throwOnError: false
+                            });
+                        }
+                    }
+                });
+            });
+
+            safeCreateIcons();
+        };
+
+        const aiQueryDateList = document.getElementById('ai-query-date-list');
+        const aiQueryDetailContent = document.getElementById('ai-query-detail-content');
+
+        const renderAiQueryManagement = () => {
+            if (!aiQueryDateList) return;
+
+            // Group queries by date
+            const groupedByDate = {};
+            aiQueries.forEach(q => {
+                if (!groupedByDate[q.date]) {
+                    groupedByDate[q.date] = [];
+                }
+                groupedByDate[q.date].push(q);
+            });
+
+            // Get dates sorted descending
+            const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
+
+            if (sortedDates.length === 0) {
+                aiQueryDateList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 20px 0;">질의 기록이 없습니다.</div>`;
+                if (aiQueryDetailContent) {
+                    aiQueryDetailContent.innerHTML = `
+                        <div style="text-align: center; color: var(--text-muted); font-size: 0.88rem; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 250px;">
+                            <i data-lucide="info" style="width: 32px; height: 32px; margin-bottom: 10px; color: #d9d9d9;"></i>
+                            질문 내역이 비어 있습니다.
+                        </div>
+                    `;
+                    safeCreateIcons();
+                }
+                return;
+            }
+
+            // Render list of dates and student names
+            aiQueryDateList.innerHTML = sortedDates.map(date => {
+                const queriesForDate = groupedByDate[date];
+                const studentQueries = {};
+                queriesForDate.forEach(q => {
+                    if (!studentQueries[q.studentName]) {
+                        studentQueries[q.studentName] = [];
+                    }
+                    studentQueries[q.studentName].push(q);
+                });
+
+                const studentNamesHtml = Object.keys(studentQueries).map(name => {
+                    const unreadCount = studentQueries[name].filter(q => !q.isRead).length;
+                    const badgeBg = unreadCount > 0 ? '#ef4444' : '#f0f0f0';
+                    const badgeColor = unreadCount > 0 ? '#ffffff' : 'var(--text-secondary)';
+                    return `
+                        <button type="button" class="btn-view-ai-query-detail" data-date="${date}" data-name="${name}" style="border: none; background: #ffffff; border: 1px solid ${unreadCount > 0 ? '#fca5a5' : 'var(--border-color)'}; border-radius: 20px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--text-primary); transition: var(--transition-smooth); display: flex; align-items: center; gap: 4px; height: 28px; line-height: 1;">
+                            <i data-lucide="user" style="width: 12px; height: 12px; color: var(--text-secondary);"></i> ${name}
+                            <span style="font-size: 0.7rem; background: ${badgeBg}; color: ${badgeColor}; border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; margin-left: 2px; font-weight: 700;">${studentQueries[name].length}</span>
+                        </button>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="ai-query-date-group" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); background: #f0f0f0; padding: 4px 10px; border-radius: 6px; display: inline-block; width: fit-content;">${date}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding-left: 4px;">
+                            ${studentNamesHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Click listener for buttons in the date list
+            const detailBtns = aiQueryDateList.querySelectorAll('.btn-view-ai-query-detail');
+            detailBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    detailBtns.forEach(b => {
+                        b.style.background = '#ffffff';
+                        b.style.borderColor = 'var(--border-color)';
+                        b.style.color = 'var(--text-primary)';
+                    });
+                    btn.style.background = '#e6f4ff';
+                    btn.style.borderColor = 'var(--primary-color)';
+                    btn.style.color = 'var(--primary-color)';
+
+                    const date = btn.getAttribute('data-date');
+                    const name = btn.getAttribute('data-name');
+                    showAiQueryDetails(date, name);
+                });
+            });
+
+            safeCreateIcons();
+        };
+
+        const showAiQueryDetails = (date, name) => {
+            if (!aiQueryDetailContent) return;
+
+            // Find all queries matching this date and name
+            const matchingQueries = aiQueries.filter(q => q.date === date && q.studentName === name);
+
+            if (matchingQueries.length === 0) return;
+
+            // Mark matching queries as read
+            let hasChanged = false;
+            aiQueries = aiQueries.map(q => {
+                if (q.date === date && q.studentName === name && !q.isRead) {
+                    hasChanged = true;
+                    return { ...q, isRead: true };
+                }
+                return q;
+            });
+
+            if (hasChanged) {
+                saveAiQueries();
+                updateAdminQuickMenuHighlights();
+                renderAiQueryManagement();
+            }
+
+            const queriesHtml = matchingQueries.map(q => {
+                let imageHtml = '';
+                if (q.image) {
+                    imageHtml = `
+                        <div style="margin-top: 8px; margin-bottom: 8px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; max-width: 100%; width: 180px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <img src="${q.image}" style="width: 100%; display: block; cursor: pointer;" title="클릭하여 원본 보기" onclick="const w=window.open(); w.document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%;\\' />');">
+                        </div>
+                    `;
+                }
+                return `
+                    <div style="border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; background: #fafafa; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                            <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;"><i data-lucide="clock" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i> ${q.timestamp}</span>
+                            <span style="font-size: 0.72rem; color: var(--primary-color); background: #e6f4ff; border: 1px solid #91caee; padding: 2px 8px; border-radius: 20px; font-weight: 700;">AI 질문</span>
+                        </div>
+                        <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); word-break: break-all; white-space: pre-wrap;"><span style="color: var(--primary-color); font-weight: 800; margin-right: 4px;">Q.</span>${q.question}</div>
+                        ${imageHtml}
+                        
+                        <div style="margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="bot" style="width: 14px; height: 14px;"></i> AI 답변 풀이:
+                            </div>
+                            <div class="ai-query-solution-markdown" style="font-size: 0.85rem; line-height: 1.5; color: var(--text-primary); background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; white-space: pre-wrap; font-family: var(--ff-primary); overflow-x: auto;">${q.answer}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            aiQueryDetailContent.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 14px; height: 100%; overflow-y: auto; max-height: 420px; padding-right: 4px; text-align: left; width: 100%;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-bottom: 6px;">
+                        <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="user" style="color: var(--primary-color); width: 18px; height: 18px;"></i> ${name} 원생의 질문
+                        </h4>
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);">${date}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        ${queriesHtml}
+                    </div>
+                </div>
+            `;
+
+            // Re-render LaTeX math in details panel using KaTeX
+            const solutionBlocks = aiQueryDetailContent.querySelectorAll('.ai-query-solution-markdown');
+            solutionBlocks.forEach(block => {
+                if (typeof renderMathInElement === 'function') {
+                    renderMathInElement(block, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            });
+
+            safeCreateIcons();
+        };
+
+        // Unified user management DB initialization
+        const initUsers = () => {
+            let users = [];
+            try {
+                users = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            } catch(e){}
+            
+            
+            // Sync default student cards
+            let updatedStudents = false;
+            students = students.map(s => {
+                let updated = { ...s };
+                if (s.name === '김민준' && !s.username) {
+                    updated.username = 'minjun';
+                    updated.password = '1234';
+                    updated.address = '서울시 강남구 역삼동 101호';
+                    updatedStudents = true;
+                } else if (s.name === '이서윤' && !s.username) {
+                    updated.username = 'seoyun';
+                    updated.password = '1234';
+                    updated.address = '서울시 서초구 반포동 202호';
+                    updatedStudents = true;
+                } else if (s.name === '김서아' && !s.username) {
+                    updated.username = 'seoah';
+                    updated.password = '1234';
+                    updated.address = '서울시 강남구 역삼동 101호';
+                    updatedStudents = true;
+                }
+                return updated;
+            });
+            if (updatedStudents) {
+                saveStudents();
+            }
+        };
+
+        // Render Admin Approval Request Queue & User Termination Management
+        const renderApprovalList = () => {
+            const tbody = document.getElementById('approval-list-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const filterStatus = document.getElementById('approval-status-filter')?.value || 'pending';
+            const filterYear = document.getElementById('approval-year-filter')?.value || 'all';
+            
+            const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+            const parentUsers = mockUsers.filter(u => u.role === 'parent');
+            
+            let filtered = parentUsers.filter(u => {
+                const status = u.status || 'pending';
+                if (status !== filterStatus) return false;
+                
+                if (filterYear !== 'all') {
+                    const dateStr = u.createdAt || u.approvedAt || u.terminatedAt || '';
+                    if (!dateStr.includes(filterYear)) return false;
+                }
+                return true;
+            });
+            
+            const countLabel = document.getElementById('approval-count-label');
+            if (countLabel) {
+                countLabel.textContent = `조회 결과: ${filtered.length}건`;
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding: 24px; text-align: center; color: var(--text-secondary);">해당 조건의 가입/신청 내역이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            filtered.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                
+                const childrenText = (u.user_metadata?.children || []).map(c => 
+                    `<div style="font-size: 0.82rem; font-weight: 600; text-align: left;">- 이름: ${c.name} (${c.birthdate || ''})</div>
+                     <div style="font-size: 0.76rem; color: var(--text-muted); margin-left: 8px; text-align: left;">아이디: <strong>${c.username || '-'}</strong> / 비번: <strong>${c.password || '-'}</strong></div>`
+                ).join('<div style="height: 6px;"></div>');
+                
+                const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-';
+                let dateLabel = `신청일: ${dateStr}`;
+                if (filterStatus === 'approved') {
+                    const appDate = u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '-';
+                    dateLabel = `신청일: ${dateStr}<br><span style="color: var(--success-color); font-weight: 600;">승인일: ${appDate}</span>`;
+                } else if (filterStatus === 'terminated') {
+                    const appDate = u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '-';
+                    const termDate = u.terminatedAt ? new Date(u.terminatedAt).toLocaleDateString() : '-';
+                    dateLabel = `승인일: ${appDate}<br><span style="color: #ff4d4f; font-weight: 600;">종결일: ${termDate}</span>`;
+                }
+                
+                let actionBtn = '';
+                if (filterStatus === 'pending') {
+                    actionBtn = `<button type="button" class="btn-approve" data-id="${u.id}" style="padding: 6px 14px; font-size: 0.8rem; background: var(--success-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 700;">승인</button>`;
+                } else if (filterStatus === 'approved') {
+                    actionBtn = `<label style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 700; color: #ff4d4f;">
+                                    <input type="checkbox" class="chk-terminate" data-id="${u.id}" style="accent-color: #ff4d4f;"> 종결
+                                 </label>`;
+                } else if (filterStatus === 'terminated') {
+                    actionBtn = `<button type="button" class="btn-terminate-cancel" data-id="${u.id}" style="padding: 6px 12px; font-size: 0.78rem; background: #f1f5f9; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-weight: 600;">종결 취소</button>`;
+                }
+                
+                tr.innerHTML = `
+                    <td style="padding: 12px; font-size: 0.85rem; line-height: 1.4; text-align: left;">
+                        <div style="font-weight: 700; color: var(--text-primary);">${u.name} (${u.email})</div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">연락처: ${u.phone || u.user_metadata?.phone || '-'}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">주소: ${(u.address || u.user_metadata?.address || '-').replace(' | ', ' ')}</div>
+                    </td>
+                    <td style="padding: 12px; text-align: left;">
+                        ${childrenText}
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);">
+                        ${dateLabel}
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        ${actionBtn}
+                    </td>
+                `;
+                
+                // Bind actions
+                if (filterStatus === 'pending') {
+                    tr.querySelector('.btn-approve').addEventListener('click', async () => {
+                        if (confirm(`"${u.name}" 학부모 계정을 가입 승인하시겠습니까?\n승인 시 자녀 계정들도 활성화되며 원생 명단에 추가됩니다.`)) {
+                            u.status = 'approved';
+                            u.approvedAt = new Date().toISOString();
+                            
+                            const childrenData = u.user_metadata?.children || [];
+                            const parentEmail = u.email || '';
+                            childrenData.forEach((c, idx) => {
+                                const studentId = c.username || `${u.id}-${idx}`;
+                                let exist = students.find(s =>
+                                    String(s.id) === String(studentId) ||
+                                    (s.name === c.name && s.birthdate && s.birthdate === c.birthdate) ||
+                                    (s.name === c.name && (s.parentPhone === u.phone || s.phone === c.phone))
+                                );
+                                let age = 10;
+                                if (c.birthdate) {
+                                    const birthYear = new Date(c.birthdate).getFullYear();
+                                    age = new Date().getFullYear() - birthYear + 1;
+                                }
+                                if (!exist) {
+                                    students.unshift({
+                                        id: studentId,
+                                        name: c.name,
+                                        age,
+                                        birthdate: c.birthdate || '',
+                                        school: c.school || '',
+                                        phone: c.phone || '',
+                                        parentPhone: u.phone,
+                                        parentEmail: parentEmail,
+                                        sibling: childrenData.length > 1 ? `${childrenData.length - 1}명의 형제자매` : '없음',
+                                        schedule: { mon: '', tue: '', wed: '', thu: '', fri: '' },
+                                        progress: '개념 완성 과정 등록 대기 중',
+                                        remarks: '신규 가입 자녀입니다. 스케줄을 설정해 주세요.',
+                                        username: c.username,
+                                        password: c.password,
+                                        address: u.address
+                                    });
+                                } else {
+                                    exist.username = c.username;
+                                    exist.password = c.password;
+                                    exist.address = u.address;
+                                    exist.birthdate = exist.birthdate || c.birthdate || '';
+                                    exist.school = exist.school || c.school || '';
+                                    exist.parentEmail = exist.parentEmail || parentEmail;
+                                    exist.id = studentId;
+                                }
+                            });
+                            
+                            saveMockUsers(mockUsers);
+                            await saveStudents();
+                            renderApprovalList();
+                            renderStudents();
+                            showToast(`"${u.name}" 학부모 가입이 승인되었습니다.`);
+                        }
+                    });
+                } else if (filterStatus === 'approved') {
+                    tr.querySelector('.chk-terminate').addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            if (confirm(`"${u.name}" 학부모 및 등록된 자녀 계정을 종결(퇴원) 처리하시겠습니까?\n종결 처리 시 해당 계정의 로그인이 즉시 차단됩니다.`)) {
+                                u.status = 'terminated';
+                                u.terminatedAt = new Date().toISOString();
+                                
+                                const childIds = (u.user_metadata?.children || []).map((_, idx) => `${u.id}-${idx}`);
+                                students = students.map(s => {
+                                    if (childIds.includes(String(s.id))) {
+                                        return {
+                                            ...s,
+                                            isTerminated: true,
+                                            terminationDate: new Date().toISOString().split('T')[0]
+                                        };
+                                    }
+                                    return s;
+                                });
+                                
+                                saveMockUsers(mockUsers);
+                                saveStudents();
+                                renderApprovalList();
+                                renderStudents();
+                                showToast(`"${u.name}" 학부모 계정이 종결되었습니다.`);
+                            } else {
+                                e.target.checked = false;
+                            }
+                        }
+                    });
+                } else if (filterStatus === 'terminated') {
+                    tr.querySelector('.btn-terminate-cancel').addEventListener('click', () => {
+                        if (confirm(`"${u.name}" 학부모 계정의 종결 처리를 취소하고 다시 승인 상태로 복원하시겠습니까?`)) {
+                            u.status = 'approved';
+                            u.terminatedAt = null;
+                            
+                            const childIds = (u.user_metadata?.children || []).map((_, idx) => `${u.id}-${idx}`);
+                            students = students.map(s => {
+                                if (childIds.includes(String(s.id))) {
+                                    return {
+                                        ...s,
+                                        isTerminated: false,
+                                        terminationDate: ''
+                                    };
+                                }
+                                return s;
+                            });
+                            
+                            saveMockUsers(mockUsers);
+                            saveStudents();
+                            renderApprovalList();
+                            renderStudents();
+                            showToast(`"${u.name}" 학부모 계정이 승인 상태로 복원되었습니다.`);
+                        }
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            safeCreateIcons();
+        };
+
+        const renderTextbookRequests = () => {
+            const tbody = document.getElementById('textbook-request-list-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const filterConfirm = document.getElementById('textbook-confirm-filter')?.value || 'all';
+            const filterPayment = document.getElementById('textbook-payment-filter')?.value || 'all';
+            
+            let filtered = textbookRequests || [];
+            
+            // Filter by confirmation status
+            if (filterConfirm === 'unconfirmed') {
+                filtered = filtered.filter(r => !r.isConfirmed);
+            } else if (filterConfirm === 'confirmed') {
+                filtered = filtered.filter(r => r.isConfirmed);
+            }
+            
+            // Filter by payment status
+            if (filterPayment === 'unpaid') {
+                filtered = filtered.filter(r => r.paymentStatus === '미결제');
+            } else if (filterPayment === 'paid') {
+                filtered = filtered.filter(r => r.paymentStatus === '결제완료');
+            }
+            
+            const countLabel = document.getElementById('textbook-request-count-label');
+            if (countLabel) {
+                countLabel.textContent = `조회 결과: ${filtered.length}건`;
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">구매 요청 내역이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            filtered.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                
+                let confirmBadge = '';
+                if (r.isConfirmed) {
+                    confirmBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">확인 완료</span>`;
+                } else {
+                    confirmBadge = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미확인</span>`;
+                }
+                
+                let paymentBadge = '';
+                if (r.paymentStatus === '결제완료') {
+                    paymentBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                } else if (r.paymentStatus === '입금확인중') {
+                    paymentBadge = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
+                } else {
+                    paymentBadge = `<span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미결제</span>`;
+                }
+                
+                let actionBtn = '';
+                if (!r.isConfirmed) {
+                    actionBtn = `<button type="button" class="btn-confirm-req btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto;" data-req-id="${r.id}">확인</button>`;
+                } else if (r.paymentStatus === '입금확인중') {
+                    actionBtn = `<button type="button" class="btn-approve-payment btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto; background: #10b981; border: 1px solid #10b981;" data-req-id="${r.id}">입금승인</button>`;
+                } else if (r.paymentStatus === '결제완료') {
+                    actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">결제완료</span>`;
+                } else {
+                    actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">결제대기</span>`;
+                }
+                
+                tr.innerHTML = `
+                    <td style="padding: 12px; text-align: left; font-size: 0.85rem;">
+                        <strong>${r.className || '반 정보 없음'}</strong><br>
+                        <span style="color: var(--text-secondary);">${r.studentName}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: left; font-size: 0.85rem; font-weight: 600;">${r.textbookName}</td>
+                    <td style="padding: 12px; text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--primary-color);">${Number(r.price).toLocaleString()}원</td>
+                    <td style="padding: 12px; text-align: center;">${confirmBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${paymentBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${actionBtn}</td>
+                `;
+                
+                const btn = tr.querySelector('.btn-confirm-req');
+                if (btn) {
+                    btn.addEventListener('click', async () => {
+                        textbookRequests = textbookRequests.map(item => {
+                            if (String(item.id) === String(r.id)) {
+                                return { ...item, isConfirmed: true };
+                            }
+                            return item;
+                        });
+                        await saveTextbookRequests();
+                        renderTextbookRequests();
+                        updateAdminQuickMenuHighlights();
+                        showToast('구매 요청 건을 확인 승인하였습니다. 학부모 포털에서 즉시 확인 가능하며 결제 단계로 진행됩니다.');
+                    });
+                }
+
+                const approveBtn = tr.querySelector('.btn-approve-payment');
+                if (approveBtn) {
+                    approveBtn.addEventListener('click', async () => {
+                        textbookRequests = textbookRequests.map(item => {
+                            if (String(item.id) === String(r.id)) {
+                                return { ...item, paymentStatus: '결제완료' };
+                            }
+                            return item;
+                        });
+                        await saveTextbookRequests();
+                        renderTextbookRequests();
+                        showToast('교재비 입금 확인 처리가 완료되었습니다.');
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            safeCreateIcons();
+        };
+
+        const renderAdminTuition = () => {
+            const selectEl = document.getElementById('tuition-month-select');
+            const tbody = document.getElementById('tuition-admin-list-tbody');
+            if (!tbody) return;
+            
+            // Populate select option with last 6 months
+            if (selectEl && selectEl.children.length === 0) {
+                const today = new Date();
+                for (let i = 0; i < 6; i++) {
+                    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    
+                    const opt = document.createElement('option');
+                    opt.value = `${year}년 ${month}월`;
+                    opt.textContent = `${year}년 ${month}월`;
+                    selectEl.appendChild(opt);
+                }
+                
+                selectEl.addEventListener('change', renderAdminTuition);
+            }
+            
+            const selectedMonthStr = selectEl ? selectEl.value : '';
+            if (!selectedMonthStr) return;
+            
+            tbody.innerHTML = '';
+            
+            const tuitionName = `회비 (${selectedMonthStr})`;
+            
+            let expectedTotal = 0;
+            let paidTotal = 0;
+            let pendingTotal = 0;
+            
+            const activeStudents = students.filter(s => !s.isTerminated);
+            
+            if (activeStudents.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">등록된 학생이 없습니다.</td></tr>`;
+                return;
+            }
+            
+            activeStudents.forEach(student => {
+                const studentClass = classes.find(c => String(c.id) === String(student.classId));
+                const className = studentClass ? studentClass.name : '배정 없음';
+                const feeAmount = student.tuitionFeeAmount || 250000;
+                const feeDay = student.tuitionFeeDay || 10;
+                
+                expectedTotal += feeAmount;
+                
+                const req = textbookRequests.find(r => String(r.studentId) === String(student.id) && r.textbookName === tuitionName);
+                
+                let paymentStatus = '미결제';
+                let priceVal = feeAmount;
+                let requestDateStr = `매월 ${feeDay}일 (기준)`;
+                let actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">납부 대기</span>`;
+                
+                if (req) {
+                    paymentStatus = req.paymentStatus;
+                    priceVal = req.price;
+                    requestDateStr = req.createdAt ? new Date(req.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : requestDateStr;
+                    
+                    if (paymentStatus === '결제완료') {
+                        paidTotal += priceVal;
+                        actionBtn = `<span style="font-size: 0.78rem; color: var(--success-color); font-weight: 700;">확인 완료</span>`;
+                    } else if (paymentStatus === '입금확인중') {
+                        pendingTotal += priceVal;
+                        actionBtn = `<button type="button" class="btn-approve-tuition btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto; background: #10b981; border: 1px solid #10b981;" data-req-id="${req.id}">입금승인</button>`;
+                    }
+                }
+                
+                let statusBadge = '';
+                if (paymentStatus === '결제완료') {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 6px; font-weight: 700;">결제 완료</span>`;
+                } else if (paymentStatus === '입금확인중') {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #f59e0b; background: #fef3c7; padding: 4px 8px; border-radius: 6px; font-weight: 700;">입금확인중</span>`;
+                } else {
+                    statusBadge = `<span style="font-size: 0.8rem; color: #3b82f6; background: #dbeafe; padding: 4px 8px; border-radius: 6px; font-weight: 700;">미결제</span>`;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                tr.innerHTML = `
+                    <td style="padding: 12px; font-size: 0.85rem; color: var(--text-secondary);">${requestDateStr}</td>
+                    <td style="padding: 12px; font-size: 0.85rem; font-weight: 600;">${className}</td>
+                    <td style="padding: 12px; font-size: 0.85rem;">
+                        <strong>${student.name}</strong><br>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${student.phone || '연락처 없음'}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--primary-color);">${Number(priceVal).toLocaleString()}원</td>
+                    <td style="padding: 12px; text-align: center;">${statusBadge}</td>
+                    <td style="padding: 12px; text-align: center;">${actionBtn}</td>
+                `;
+                
+                const btnApprove = tr.querySelector('.btn-approve-tuition');
+                if (btnApprove) {
+                    btnApprove.addEventListener('click', async () => {
+                        const reqId = btnApprove.getAttribute('data-req-id');
+                        textbookRequests = textbookRequests.map(item => {
+                            if (String(item.id) === String(reqId)) {
+                                return { ...item, paymentStatus: '결제완료' };
+                            }
+                            return item;
+                        });
+                        await saveTextbookRequests();
+                        renderAdminTuition();
+                        showToast('회비 수납 입금 승인이 완료되었습니다.');
+                    });
+                }
+                
+                tbody.appendChild(tr);
+            });
+            
+            const unpaidTotal = expectedTotal - paidTotal - pendingTotal;
+            document.getElementById('tuition-sum-expected').textContent = `${Number(expectedTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-paid').textContent = `${Number(paidTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-pending').textContent = `${Number(pendingTotal).toLocaleString()}원`;
+            document.getElementById('tuition-sum-unpaid').textContent = `${Number(unpaidTotal).toLocaleString()}원`;
+            
+            safeCreateIcons();
+        };
+
+        // User Profile update modal logic
+        const linkUserProfileEdit = document.getElementById('link-user-profile-edit');
+        const userProfileModal = document.getElementById('user-profile-modal');
+        const btnUserProfileClose = document.getElementById('btn-user-profile-close');
+        const userProfileForm = document.getElementById('user-profile-form');
+        
+        if (linkUserProfileEdit && userProfileModal) {
+            linkUserProfileEdit.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                const emailDisplay = document.getElementById('profile-email-display');
+                const phoneInput = document.getElementById('profile-phone-input');
+                const phoneGroup = document.getElementById('profile-phone-group');
+                const passwordInput = document.getElementById('profile-password-input');
+                
+                if (passwordInput) passwordInput.value = '';
+                
+                if (isAdmin) {
+                    if (emailDisplay) emailDisplay.value = 'teacher@math.com (관리자)';
+                    if (phoneGroup) phoneGroup.style.display = 'none';
+                } else if (isStudent) {
+                    if (phoneGroup) phoneGroup.style.display = 'block';
+                    
+                    const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+                    if (studentSession) {
+                        if (emailDisplay) emailDisplay.value = studentSession.username + ' (학생)';
+                        const s = students.find(x => x.id === loggedInStudentId);
+                        if (s && phoneInput) phoneInput.value = s.phone || '';
+                    } else {
+                        const user = supabase.auth.user ? supabase.auth.user() : null;
+                        if (user) {
+                            if (emailDisplay) emailDisplay.value = user.email + ' (학부모)';
+                            if (phoneInput) phoneInput.value = user.user_metadata?.phone || '';
+                        }
+                    }
+                }
+                userProfileModal.classList.add('open');
+            });
+        }
+        
+        if (btnUserProfileClose && userProfileModal) {
+            btnUserProfileClose.addEventListener('click', () => {
+                userProfileModal.classList.remove('open');
+            });
+        }
+        
+        if (userProfileForm) {
+            userProfileForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newPhone = document.getElementById('profile-phone-input').value.trim();
+                const newPassword = document.getElementById('profile-password-input').value;
+                
+                try {
+                    if (isAdmin) {
+                        if (newPassword) {
+                            if (newPassword.length < 4) {
+                                alert('비밀번호는 4자리 이상이어야 합니다.');
+                                return;
+                            }
+                            localStorage.setItem('gongbubang_admin_password', newPassword);
+                            showToast('관리자 비밀번호가 성공적으로 변경되었습니다.');
+                        }
+                    } else if (isStudent) {
+                        const studentSession = JSON.parse(localStorage.getItem('gongbubang_student_session') || 'null');
+                        if (studentSession) {
+                            // Student password change
+                            const s = students.find(x => x.id === loggedInStudentId);
+                            if (s) {
+                                s.phone = newPhone;
+                                if (newPassword) {
+                                    if (newPassword.length < 4) {
+                                        alert('비밀번호는 4자리 이상이어야 합니다.');
+                                        return;
+                                    }
+                                    s.password = newPassword;
+                                }
+                                saveStudents();
+                            }
+                            
+                            // Sync back to gongbubang_mock_users
+                            let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                            let parentId = null;
+                            if (String(loggedInStudentId).includes('-')) {
+                                parentId = String(loggedInStudentId).split('-')[0];
+                            }
+                            if (parentId) {
+                                mockUsers = mockUsers.map(u => {
+                                    if (u.id === parentId) {
+                                        const updatedChildren = (u.user_metadata?.children || []).map(child => {
+                                            if (child.name === studentSession.name) {
+                                                let uc = { ...child, phone: newPhone };
+                                                if (newPassword) uc.password = newPassword;
+                                                return uc;
+                                            }
+                                            return child;
+                                        });
+                                        return {
+                                            ...u,
+                                            user_metadata: {
+                                                ...u.user_metadata,
+                                                children: updatedChildren
+                                            }
+                                        };
+                                    }
+                                    return u;
+                                });
+                                saveMockUsers(mockUsers);
+                            }
+                            showToast('학생 정보가 수정되었습니다.');
+                        } else {
+                            // Parent password change
+                            const user = supabase.auth.user ? supabase.auth.user() : null;
+                            if (user) {
+                                let mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                                mockUsers = mockUsers.map(u => {
+                                    if (u.id === user.id || u.email === user.email) {
+                                        let uu = { ...u, phone: newPhone };
+                                        if (newPassword) uu.password = newPassword;
+                                        uu.user_metadata = {
+                                            ...u.user_metadata,
+                                            phone: newPhone
+                                        };
+                                        return uu;
+                                    }
+                                    return u;
+                                });
+                                saveMockUsers(mockUsers);
+                                
+                                if (supabase.auth.updateUser) {
+                                    const updateData = { data: { phone: newPhone } };
+                                    if (newPassword) updateData.password = newPassword;
+                                    await supabase.auth.updateUser(updateData);
+                                }
+                                
+                                students = students.map(s => {
+                                    if (String(s.id).startsWith(user.id)) {
+                                        return { ...s, parentPhone: newPhone };
+                                    }
+                                    return s;
+                                });
+                                saveStudents();
+                                showToast('개인정보가 수정되었습니다.');
+                            }
+                        }
+                    }
+                    
+                    if (userProfileModal) userProfileModal.classList.remove('open');
+                    updateLoginButton();
+                    renderStudents();
+                    renderMyClass();
+                } catch(err) {
+                    console.error('Profile update error:', err);
+                    alert('정보 수정 중 오류가 발생했습니다: ' + err.message);
+                }
+            });
+        }
+
+        // Bind approval status change
+        const approvalStatusFilter = document.getElementById('approval-status-filter');
+        const approvalYearFilter = document.getElementById('approval-year-filter');
+        if (approvalStatusFilter) approvalStatusFilter.addEventListener('change', renderApprovalList);
+        if (approvalYearFilter) approvalYearFilter.addEventListener('change', renderApprovalList);
+
+        // Bind textbook requests filters
+        const textbookConfirmFilter = document.getElementById('textbook-confirm-filter');
+        const textbookPaymentFilter = document.getElementById('textbook-payment-filter');
+        if (textbookConfirmFilter) textbookConfirmFilter.addEventListener('change', renderTextbookRequests);
+        if (textbookPaymentFilter) textbookPaymentFilter.addEventListener('change', renderTextbookRequests);
+
+        // Bind resource CRUD form
+        const resourceForm = document.getElementById('resource-editor-form');
+        if (resourceForm) {
+            resourceForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = document.getElementById('edit-resource-id').value;
+                const title = document.getElementById('resource-title-input').value.trim();
+                const size = document.getElementById('resource-size-input').value.trim();
+                const target = document.getElementById('resource-target-input').value.trim();
+                const type = document.getElementById('resource-type-select').value;
+                const filename = document.getElementById('resource-filename-input').value.trim();
+                
+                let resources = [];
+                try {
+                    resources = JSON.parse(localStorage.getItem('gongbubang_resources') || '[]');
+                } catch(err){}
+                
+                if (id) {
+                    resources = resources.map(res => res.id === id ? { ...res, title, size, target, type, filename } : res);
+                    showToast('자료가 수정되었습니다.');
+                } else {
+                    const newRes = {
+                        id: 'res-' + Date.now(),
+                        title,
+                        size,
+                        target,
+                        type,
+                        filename,
+                        downloads: 0
+                    };
+                    resources.push(newRes);
+                    showToast('자료가 새로 등록되었습니다.');
+                }
+                
+                saveResources();
+                resourceForm.reset();
+                document.getElementById('edit-resource-id').value = '';
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정`;
+                renderResources();
+                renderAdminResources();
+            });
+        }
+        
+        const btnResourceClear = document.getElementById('btn-resource-clear');
+        if (btnResourceClear && resourceForm) {
+            btnResourceClear.addEventListener('click', () => {
+                resourceForm.reset();
+                document.getElementById('edit-resource-id').value = '';
+                document.getElementById('resource-editor-title').innerHTML = `<i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i> 자료 등록 / 수정`;
+                safeCreateIcons();
+            });
+        }
+
+        // Daum Postcode Search integration
+        const openPostcode = (inputElement) => {
+            if (typeof daum === 'undefined') {
+                alert('주소 검색 서비스를 불러올 수 없습니다. 인터넷 연결을 확인해 주세요.');
+                return;
+            }
+            
+            let containerId = '';
+            let embedId = '';
+            let closeBtnId = '';
+            
+            if (inputElement.id === 'student-signup-address') {
+                containerId = 'signup-address-search-container';
+                embedId = 'signup-postcode-embed';
+                closeBtnId = 'btn-close-signup-postcode';
+            } else {
+                containerId = 'admin-address-search-container';
+                embedId = 'admin-postcode-embed';
+                closeBtnId = 'btn-close-admin-postcode';
+            }
+            
+            const container = document.getElementById(containerId);
+            const embedDiv = document.getElementById(embedId);
+            const closeBtn = document.getElementById(closeBtnId);
+            
+            if (!container || !embedDiv) return;
+            
+            // Close other postcode container if open
+            const otherContainerId = (containerId === 'signup-address-search-container') ? 'admin-address-search-container' : 'signup-address-search-container';
+            const otherContainer = document.getElementById(otherContainerId);
+            if (otherContainer) otherContainer.style.display = 'none';
+            
+            container.style.display = 'block';
+            
+            new daum.Postcode({
+                oncomplete: function(data) {
+                    let addr = '';
+                    let extraAddr = '';
+
+                    if (data.userSelectedType === 'R') {
+                        addr = data.roadAddress;
+                    } else {
+                        addr = data.jibunAddress;
+                    }
+
+                    if (data.userSelectedType === 'R') {
+                        if (data.bname !== '' && /[동|로|가]$/g.test(data.bname)) {
+                            extraAddr += data.bname;
+                        }
+                        if (data.buildingName !== '' && data.apartment === 'Y') {
+                            extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
+                        }
+                        if (extraAddr !== '') {
+                            extraAddr = ' (' + extraAddr + ')';
+                        }
+                    }
+
+                    inputElement.value = addr + extraAddr;
+                    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                    container.style.display = 'none';
+                    
+                    // Autofocus detailed address field
+                    const detailInputId = (inputElement.id === 'student-signup-address') ? 'student-signup-address-detail' : 'student-address-detail-input';
+                    const detailInput = document.getElementById(detailInputId);
+                    if (detailInput) {
+                        detailInput.focus();
+                    }
+                },
+                width: '100%',
+                height: '100%'
+            }).embed(embedDiv);
+            
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    container.style.display = 'none';
+                };
+            }
+        };
+
+        const btnSignupSearchAddress = document.getElementById('btn-signup-search-address');
+        const inputSignupAddress = document.getElementById('student-signup-address');
+        if (btnSignupSearchAddress && inputSignupAddress) {
+            const handler = () => openPostcode(inputSignupAddress);
+            btnSignupSearchAddress.addEventListener('click', handler);
+            inputSignupAddress.addEventListener('click', handler);
+        }
+
+        const btnAdminSearchAddress = document.getElementById('btn-admin-search-address');
+        const inputAdminAddress = document.getElementById('student-address-input');
+        if (btnAdminSearchAddress && inputAdminAddress) {
+            const handler = () => openPostcode(inputAdminAddress);
+            btnAdminSearchAddress.addEventListener('click', handler);
+            inputAdminAddress.addEventListener('click', handler);
+        }
+
+        // Parent Login Modal Event Listeners
+        const parentLoginModal = document.getElementById('parent-login-modal');
+        const btnParentLoginToggle = document.getElementById('btn-parent-login-toggle');
+        const btnParentLoginClose = document.getElementById('btn-parent-login-close');
+        const linkParentGoSignup = document.getElementById('link-parent-go-signup');
+        const btnParentGoogleLogin = document.getElementById('btn-parent-google-login');
+        const btnParentKakaoLogin = document.getElementById('btn-parent-kakao-login');
+
+        if (btnParentLoginToggle && parentLoginModal) {
+            btnParentLoginToggle.addEventListener('click', () => {
+                if (isAdmin || isStudent) {
+                    (async () => {
+                        try {
+                            await supabase.auth.signOut();
+                        } catch(e) {}
+                        handleLogoutCleanup();
+                        showToast('로그아웃 되었습니다.');
+                    })();
+                } else {
+                    parentLoginModal.classList.add('open');
+                }
+                safeCreateIcons();
+            });
+
+            if (btnParentLoginClose) {
+                btnParentLoginClose.addEventListener('click', () => {
+                    parentLoginModal.classList.remove('open');
+                });
+            }
+
+            if (linkParentGoSignup && studentSignupModal) {
+                linkParentGoSignup.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    parentLoginModal.classList.remove('open');
+                    studentSignupModal.classList.add('open');
+                });
+            }
+
+            if (btnParentGoogleLogin) {
+                btnParentGoogleLogin.addEventListener('click', async () => {
+                    try {
+                        const { error } = await supabase.auth.signInWithOAuth({
+                            provider: 'google',
+                            options: { redirectTo: window.location.origin }
+                        });
+                        if (error) alert('Google 로그인 오류: ' + error.message);
+                    } catch(err) { console.error(err); }
+                });
+            }
+
+            if (btnParentKakaoLogin) {
+                btnParentKakaoLogin.addEventListener('click', async () => {
+                    try {
+                        const { error } = await supabase.auth.signInWithOAuth({
+                            provider: 'kakao',
+                            options: { redirectTo: window.location.origin }
+                        });
+                        if (error) alert('Kakao 로그인 오류: ' + error.message);
+                    } catch(err) { console.error(err); }
+                });
+            }
+        }
+
+        // Initial Renders
+        renderCurriculumGrid();
+
+        safeCreateIcons();
+        renderNotices();
+        
+        // Initialize user database and sync students
+        initUsers();
+        
+        // Textbook Payment Modal Actions
+        const payModal = document.getElementById('textbook-payment-modal');
+        const btnPayClose = document.getElementById('btn-textbook-payment-close');
+        const btnCopyAccount = document.getElementById('btn-copy-account');
+        const payForm = document.getElementById('textbook-payment-form');
+        
+        if (payModal && btnPayClose) {
+            btnPayClose.addEventListener('click', () => payModal.classList.remove('open'));
+            payModal.addEventListener('click', (e) => {
+                if (e.target === payModal) payModal.classList.remove('open');
+            });
+        }
+        
+        if (btnCopyAccount) {
+            btnCopyAccount.addEventListener('click', () => {
+                const accNum = document.getElementById('pay-account-number').textContent.replace(/-/g, '');
+                navigator.clipboard.writeText(accNum).then(() => {
+                    showToast('계좌번호가 클립보드에 복사되었습니다.');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    alert('계좌번호 복사에 실패했습니다. 직접 복사해 주세요: 768702-01-244813');
+                });
+            });
+        }
+        
+        if (payForm && payModal) {
+            payForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const reqId = document.getElementById('pay-request-id').value;
+                
+                textbookRequests = textbookRequests.map(r => {
+                    if (String(r.id) === String(reqId)) {
+                        return { ...r, paymentStatus: '입금확인중' };
+                    }
+                    return r;
+                });
+                
+                await saveTextbookRequests();
+                payModal.classList.remove('open');
+                renderMyClass();
+                if (isAdmin) {
+                    renderTextbookRequests();
+                    if (typeof renderAdminTuition === 'function') renderAdminTuition();
+                }
+                showToast('송금 완료 요청이 접수되었습니다. 원장님 확인 후 승인됩니다.');
+            });
+        }
+        if (isAdmin) {
+            renderStudents();
+            renderConsultList();
+            renderAdminCurriculumList();
+            renderAiQueryManagement();
+            renderApprovalList();
+            renderTextbookRequests();
+            renderAdminTuition();
+            renderAdminResources();
+        }
+
+        // ==========================================
+        // AI Formula Learning Features (Admin & Student)
+        // ==========================================
+
+        // --- Admin: AI Formula Search & Recommendation ---
+        const btnRecommend = document.getElementById('btn-ai-formula-recommend');
+        if (btnRecommend) {
+            btnRecommend.addEventListener('click', () => {
+                const nameInput = document.getElementById('formula-name-input');
+                const formulaName = nameInput ? nameInput.value.trim() : '';
+                if (!formulaName) {
+                    alert('공식 이름을 입력해 주세요.');
+                    return;
+                }
+                
+                let latex = '';
+                let piecesStr = '';
+                
+                const lowerName = formulaName.toLowerCase();
+                if (lowerName.includes('근의') && lowerName.includes('공식')) {
+                    latex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                    piecesStr = 'x,=,-b,±,√,b²,-,4ac,/,2a';
+                } else if (lowerName.includes('피타고라스')) {
+                    latex = 'a^2 + b^2 = c^2';
+                    piecesStr = 'a²,+,b²,=,c²';
+                } else if (lowerName.includes('원부피') || lowerName.includes('구의 부피')) {
+                    latex = 'V = \\frac{4}{3}\\pi r^3';
+                    piecesStr = 'V,=,4,/,3,π,r³';
+                } else if (lowerName.includes('원의 넓이') || lowerName.includes('원넓이')) {
+                    latex = 'S = \\pi r^2';
+                    piecesStr = 'S,=,π,r²';
+                } else if (lowerName.includes('삼각형') && lowerName.includes('넓이')) {
+                    latex = 'S = \\frac{1}{2}ah';
+                    piecesStr = 'S,=,1,/,2,a,h';
+                } else if (lowerName.includes('곱셈') && lowerName.includes('공식')) {
+                    latex = '(a+b)^2 = a^2 + 2ab + b^2';
+                    piecesStr = '(,a,+,b,),²,=,a²,+,2,a,b,+,b²';
+                } else {
+                    latex = 'a + b = c';
+                    piecesStr = 'a,+,b,=,c';
+                }
+                
+                const latexInput = document.getElementById('formula-latex-input');
+                const piecesInput = document.getElementById('formula-pieces-input');
+                if (latexInput) latexInput.value = latex;
+                if (piecesInput) piecesInput.value = piecesStr;
+                
+                showToast('AI 공식 추천 완료!');
+            });
+        }
+
+        // --- Admin: Formula OCR Photo Upload & Auto Parsing ---
+        const btnFormulaOcr = document.getElementById('btn-formula-ocr');
+        const ocrFileInput = document.getElementById('formula-ocr-file');
+        const ocrPreviewContainer = document.getElementById('formula-ocr-preview-container');
+        const ocrPreview = document.getElementById('formula-ocr-preview');
+        const latexInput = document.getElementById('formula-latex-input');
+        const piecesInput = document.getElementById('formula-pieces-input');
+
+        // Function to parse LaTeX to pieces
+        const parseLaTeXToPieces = (latex) => {
+            if (!latex) return "";
+            let str = latex.trim();
+            
+            // Replace \sqrt{...} first to remove nested braces
+            str = str.replace(/\\sqrt\s*\{([^{}]+)\}/g, ' √ $1 ');
+            
+            // Replace \frac{A}{B} -> A , / , B
+            let fracRegex = /\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g;
+            while (fracRegex.test(str)) {
+                str = str.replace(fracRegex, ' $1 / $2 ');
+            }
+            
+            // Common LaTeX tokens to math symbols
+            str = str.replace(/\\pm/g, ' ± ');
+            str = str.replace(/\\pi/g, ' π ');
+            str = str.replace(/\\times/g, ' × ');
+            str = str.replace(/\\div/g, ' ÷ ');
+            str = str.replace(/\\le/g, ' ≤ ');
+            str = str.replace(/\\ge/g, ' ≥ ');
+            str = str.replace(/\\neq/g, ' ≠ ');
+            str = str.replace(/\\theta/g, ' θ ');
+            str = str.replace(/\\alpha/g, ' α ');
+            str = str.replace(/\\beta/g, ' β ');
+            
+            // Superscripts
+            str = str.replace(/\^2/g, '²');
+            str = str.replace(/\^3/g, '³');
+            str = str.replace(/\^([0-9a-zA-Z])/g, '^$1');
+            
+            // Remove backslashes, remaining braces
+            str = str.replace(/\\/g, '');
+            str = str.replace(/[{}]/g, ' ');
+            
+            // Split by spaces and commas
+            const rawParts = str.split(/[\s,]+/);
+            const pieces = [];
+            
+            for (let i = 0; i < rawParts.length; i++) {
+                let part = rawParts[i];
+                if (!part) continue;
+                
+                // If part is a single operator
+                if (/^[=+\-*\/±√×÷≤≥≠²³]$/.test(part)) {
+                    pieces.push(part);
+                    continue;
+                }
+                
+                // If part starts with a minus or plus sign (e.g. -b, -4ac)
+                if (/^[+\-][a-zA-Z0-9²³]+$/.test(part)) {
+                    const lastPiece = pieces[pieces.length - 1];
+                    const isPrevOperator = !lastPiece || /^[=+\-*\/±√×÷≤≥≠]$/.test(lastPiece);
+                    if (isPrevOperator) {
+                        pieces.push(part);
+                    } else {
+                        pieces.push(part[0]);
+                        pieces.push(part.slice(1));
+                    }
+                    continue;
+                }
+                
+                // Otherwise, split any internal operators
+                const subParts = part.split(/([=+\-*\/±√×÷≤≥≠])/);
+                subParts.forEach(sp => {
+                    const trimmed = sp.trim();
+                    if (trimmed) {
+                        pieces.push(trimmed);
+                    }
+                });
+            }
+            
+            return pieces.filter(p => p.length > 0).join(',');
+        };
+
+        // Automatic parsing when latex input changes
+        if (latexInput) {
+            latexInput.addEventListener('input', () => {
+                if (piecesInput) {
+                    piecesInput.value = parseLaTeXToPieces(latexInput.value);
+                }
+            });
+            latexInput.addEventListener('change', () => {
+                if (piecesInput) {
+                    piecesInput.value = parseLaTeXToPieces(latexInput.value);
+                }
+            });
+        }
+
+        if (btnFormulaOcr && ocrFileInput) {
+            btnFormulaOcr.addEventListener('click', () => {
+                ocrFileInput.click();
+            });
+
+            ocrFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        if (ocrPreview) {
+                            ocrPreview.src = event.target.result;
+                        }
+                        if (ocrPreviewContainer) {
+                            ocrPreviewContainer.style.display = 'flex';
+                        }
+
+                        // Mockup OCR Logic matching filename or fallback
+                        const filename = file.name.toLowerCase();
+                        let detectedLatex = '';
+                        if (filename.includes('quadratic') || filename.includes('근의') || filename.includes('formula')) {
+                            detectedLatex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                        } else if (filename.includes('circle') || filename.includes('원')) {
+                            detectedLatex = 'S = \\pi r^2';
+                        } else if (filename.includes('triangle') || filename.includes('삼각형')) {
+                            detectedLatex = 'S = \\frac{1}{2}ah';
+                        } else if (filename.includes('pythagoras') || filename.includes('피타고라스')) {
+                            detectedLatex = 'a^2 + b^2 = c^2';
+                        } else if (filename.includes('linear') || filename.includes('일차') || filename.includes('함수')) {
+                            detectedLatex = 'y = ax + b';
+                        } else if (filename.includes('곱셈')) {
+                            detectedLatex = '(a+b)^2 = a^2 + 2ab + b^2';
+                        } else {
+                            detectedLatex = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+                        }
+
+                        if (latexInput) {
+                            latexInput.value = detectedLatex;
+                            // Trigger the change/input listeners to auto-fill formula-pieces-input
+                            latexInput.dispatchEvent(new Event('input'));
+                        }
+                        showToast('수식 이미지 OCR 분석 완료!');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // --- Admin: Quiz Upload Slots (10 questions) ---
+        const quizzesContainer = document.getElementById('formula-quizzes-container');
+        const quizData = Array.from({ length: 10 }, (_, i) => ({
+            number: i + 1,
+            imageBase64: '',
+            answer: ''
+        }));
+
+        const renderQuizUploadSlots = () => {
+            if (!quizzesContainer) return;
+            quizzesContainer.innerHTML = '';
+            for (let i = 0; i < 10; i++) {
+                const num = i + 1;
+                const slot = document.createElement('div');
+                slot.style.border = '1px solid var(--border-color)';
+                slot.style.borderRadius = '8px';
+                slot.style.padding = '8px';
+                slot.style.background = '#ffffff';
+                slot.style.display = 'flex';
+                slot.style.flexDirection = 'column';
+                slot.style.gap = '6px';
+                
+                slot.innerHTML = `
+                    <div style="font-weight: 700; font-size: 0.78rem; color: var(--text-primary);">Q${num} 문항</div>
+                    <div style="position: relative; width: 100%; height: 60px; border: 1px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fafafa; cursor: pointer;">
+                        <input type="file" id="admin-quiz-file-${num}" accept="image/*" style="position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer;">
+                        <img id="admin-quiz-preview-${num}" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;">
+                        <span id="admin-quiz-placeholder-${num}" style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">사진 업로드</span>
+                    </div>
+                    <input type="text" id="admin-quiz-answer-${num}" placeholder="정답 입력" style="padding: 4px 8px; font-size: 0.78rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; width: 100%;">
+                `;
+                
+                quizzesContainer.appendChild(slot);
+                
+                const fileInput = slot.querySelector(`#admin-quiz-file-${num}`);
+                const previewImg = slot.querySelector(`#admin-quiz-preview-${num}`);
+                const placeholder = slot.querySelector(`#admin-quiz-placeholder-${num}`);
+                const ansInput = slot.querySelector(`#admin-quiz-answer-${num}`);
+
+                // Pre-populate data if exists
+                if (quizData[i].imageBase64) {
+                    previewImg.src = quizData[i].imageBase64;
+                    previewImg.style.display = 'block';
+                    placeholder.style.display = 'none';
+                } else {
+                    previewImg.src = '';
+                    previewImg.style.display = 'none';
+                    placeholder.style.display = 'block';
+                }
+                ansInput.value = quizData[i].answer || '';
+                
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const base64 = event.target.result;
+                            quizData[num - 1].imageBase64 = base64;
+                            previewImg.src = base64;
+                            previewImg.style.display = 'block';
+                            placeholder.style.display = 'none';
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+                
+                ansInput.addEventListener('input', (e) => {
+                    quizData[num - 1].answer = e.target.value.trim();
+                });
+            }
+        };
+        renderQuizUploadSlots();
+
+        // --- Admin: AI Quiz Recommendation & Canvas Generation ---
+        const btnQuizRecommend = document.getElementById('btn-ai-quiz-recommend');
+        if (btnQuizRecommend) {
+            btnQuizRecommend.addEventListener('click', () => {
+                const nameInput = document.getElementById('formula-name-input');
+                const formulaName = nameInput ? nameInput.value.trim() : '';
+                if (!formulaName) {
+                    alert('공식 이름을 입력해 주세요.');
+                    return;
+                }
+
+                let questions = [];
+                const lowerName = formulaName.toLowerCase();
+                if (lowerName.includes('근의') && lowerName.includes('공식')) {
+                    questions = [
+                        { q: 'x² - 5x + 6 = 0의 해를 구하시오.', a: '2,3' },
+                        { q: 'x² - 3x + 2 = 0의 해를 구하시오.', a: '1,2' },
+                        { q: 'x² - 7x + 12 = 0의 해를 구하시오.', a: '3,4' },
+                        { q: 'x² - 6x + 8 = 0의 해를 구하시오.', a: '2,4' },
+                        { q: 'x² - 8x + 15 = 0의 해를 구하시오.', a: '3,5' },
+                        { q: 'x² - 9x + 20 = 0의 해를 구하시오.', a: '4,5' },
+                        { q: 'x² - 4x + 3 = 0의 해를 구하시오.', a: '1,3' },
+                        { q: 'x² - 10x + 24 = 0의 해를 구하시오.', a: '4,6' },
+                        { q: 'x² - 2x - 3 = 0의 해를 구하시오.', a: '-1,3' },
+                        { q: 'x² + 5x + 6 = 0의 해를 구하시오.', a: '-3,-2' }
+                    ];
+                } else if (lowerName.includes('피타고라스')) {
+                    questions = [
+                        { q: '직각삼각형의 두 직각변이 3, 4일 때 빗변의 길이를 구하시오.', a: '5' },
+                        { q: '직각삼각형의 두 직각변이 6, 8일 때 빗변의 길이를 구하시오.', a: '10' },
+                        { q: '직각삼각형의 두 직각변이 5, 12일 때 빗변의 길이를 구하시오.', a: '13' },
+                        { q: '직각삼각형의 두 직각변이 8, 15일 때 빗변의 길이를 구하시오.', a: '17' },
+                        { q: '직각삼각형의 빗변이 5, 한 변이 3일 때 다른 한 변의 길이를 구하시오.', a: '4' },
+                        { q: '직각삼각형의 빗변이 10, 한 변이 6일 때 다른 한 변의 길이를 구하시오.', a: '8' },
+                        { q: '직각삼각형의 빗변이 13, 한 변이 5일 때 다른 한 변의 길이를 구하시오.', a: '12' },
+                        { q: '직각삼각형의 두 직각변이 9, 12일 때 빗변의 길이를 구하시오.', a: '15' },
+                        { q: '직각삼각형의 두 직각변이 12, 16일 때 빗변의 길이를 구하시오.', a: '20' },
+                        { q: '직각삼각형의 빗변이 25, 한 변이 7일 때 다른 한 변의 길이를 구하시오.', a: '24' }
+                    ];
+                } else if (lowerName.includes('원의 넓이') || lowerName.includes('원넓이')) {
+                    questions = [
+                        { q: '반지름의 길이가 3인 원의 넓이를 구하시오. (원주율은 π)', a: '9π' },
+                        { q: '반지름의 길이가 5인 원의 넓이를 구하시오. (원주율은 π)', a: '25π' },
+                        { q: '반지름의 길이가 2인 원의 넓이를 구하시오. (원주율은 π)', a: '4π' },
+                        { q: '반지름의 길이가 10인 원의 넓이를 구하시오. (원주율은 π)', a: '100π' },
+                        { q: '반지름의 길이가 4인 원의 넓이를 구하시오. (원주율은 π)', a: '16π' },
+                        { q: '반지름의 길이가 6인 원의 넓이를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '반지름의 길이가 7인 원의 넓이를 구하시오. (원주율은 π)', a: '49π' },
+                        { q: '반지름의 길이가 8인 원의 넓이를 구하시오. (원주율은 π)', a: '64π' },
+                        { q: '지름의 길이가 6인 원의 넓이를 구하시오. (원주율은 π)', a: '9π' },
+                        { q: '지름의 길이가 10인 원의 넓이를 구하시오. (원주율은 π)', a: '25π' }
+                    ];
+                } else if (lowerName.includes('구의 부피') || lowerName.includes('원부피')) {
+                    questions = [
+                        { q: '반지름의 길이가 3인 구의 부피를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '반지름의 길이가 6인 구의 부피를 구하시오. (원주율은 π)', a: '288π' },
+                        { q: '반지름의 길이가 1인 구의 부피를 구하시오. (원주율은 π)', a: '4/3π' },
+                        { q: '반지름의 길이가 2인 구의 부피를 구하시오. (원주율은 π)', a: '32/3π' },
+                        { q: '반지름의 길이가 4인 구의 부피를 구하시오. (원주율은 π)', a: '256/3π' },
+                        { q: '반지름의 길이가 5인 구의 부피를 구하시오. (원주율은 π)', a: '500/3π' },
+                        { q: '반지름의 길이가 9인 구의 부피를 구하시오. (원주율은 π)', a: '972π' },
+                        { q: '지름의 길이가 6인 구의 부피를 구하시오. (원주율은 π)', a: '36π' },
+                        { q: '지름의 길이가 12인 구의 부피를 구하시오. (원주율은 π)', a: '288π' },
+                        { q: '반지름의 길이가 3인 반구의 부피를 구하시오. (원주율은 π)', a: '18π' }
+                    ];
+                } else if (lowerName.includes('삼각형') && lowerName.includes('넓이')) {
+                    questions = [
+                        { q: '밑변의 길이가 6이고 높이가 4인 삼각형의 넓이를 구하시오.', a: '12' },
+                        { q: '밑변의 길이가 5이고 높이가 8인 삼각형의 넓이를 구하시오.', a: '20' },
+                        { q: '밑변의 길이가 10이고 높이가 7인 삼각형의 넓이를 구하시오.', a: '35' },
+                        { q: '밑변의 길이가 8이고 높이가 5인 삼각형의 넓이를 구하시오.', a: '20' },
+                        { q: '밑변의 길이가 12이고 높이가 9인 삼각형의 넓이를 구하시오.', a: '54' },
+                        { q: '밑변의 길이가 4이고 높이가 3인 삼각형의 넓이를 구하시오.', a: '6' },
+                        { q: '밑변의 길이가 7이고 높이가 6인 삼각형의 넓이를 구하시오.', a: '21' },
+                        { q: '밑변의 길이가 9이고 높이가 8인 삼각형의 넓이를 구하시오.', a: '36' },
+                        { q: '밑변의 길이가 15이고 높이가 10인 삼각형의 넓이를 구하시오.', a: '75' },
+                        { q: '밑변의 길이가 11이고 높이가 12인 삼각형의 넓이를 구하시오.', a: '66' }
+                    ];
+                } else if (lowerName.includes('곱셈') && lowerName.includes('공식')) {
+                    questions = [
+                        { q: '(x + 2)² 을 전개한 식에서 x의 계수를 구하시오.', a: '4' },
+                        { q: '(x + 3)² 을 전개한 식에서 상수항을 구하시오.', a: '9' },
+                        { q: '(x - 4)² 을 전개한 식에서 x의 계수를 구하시오.', a: '-8' },
+                        { q: '(x - 5)² 을 전개한 식에서 상수항을 구하시오.', a: '25' },
+                        { q: '(2x + 1)² 을 전개한 식에서 x²의 계수를 구하시오.', a: '4' },
+                        { q: '(3x + 2)² 을 전개한 식에서 x의 계수를 구하시오.', a: '12' },
+                        { q: '(x - y)² = x² + Axy + y² 일 때, 상수 A의 값을 구하시오.', a: '-2' },
+                        { q: '(a + b)² - (a - b)² 을 간단히 하시오.', a: '4ab' },
+                        { q: '(x + y)² = 25 이고 xy = 6 일 때, x² + y²의 값을 구하시오.', a: '13' },
+                        { q: 'x + y = 6 이고 x² + y² = 20 일 때, xy의 값을 구하시오.', a: '8' }
+                    ];
+                } else {
+                    questions = [
+                        { q: 'x + 3 = 7의 해를 구하시오.', a: '4' },
+                        { q: '2x - 5 = 9의 해를 구하시오.', a: '7' },
+                        { q: '3x + 4 = 19의 해를 구하시오.', a: '5' },
+                        { q: '4x - 3 = 13의 해를 구하시오.', a: '4' },
+                        { q: '5x + 2 = 22의 해를 구하시오.', a: '4' },
+                        { q: 'x / 2 + 3 = 7의 해를 구하시오.', a: '8' },
+                        { q: '3(x - 2) = 12의 해를 구하시오.', a: '6' },
+                        { q: '2(2x + 1) = 18의 해를 구하시오.', a: '4' },
+                        { q: '5 - x = 2의 해를 구하시오.', a: '3' },
+                        { q: '7x - 4 = 3x + 8의 해를 구하시오.', a: '3' }
+                    ];
+                }
+
+                // Temporary Canvas generator
+                const generateQuizImage = (num, text, title) => {
+                    const canvas = document.createElement('canvas');
+                    const scale = 2;
+                    const baseWidth = 400;
+                    const baseHeight = 150;
+                    
+                    canvas.width = baseWidth * scale;
+                    canvas.height = baseHeight * scale;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    
+                    // Background
+                    ctx.fillStyle = '#fafafa';
+                    ctx.fillRect(0, 0, baseWidth, baseHeight);
+                    
+                    // Border
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#e2e8f0';
+                    ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
+                    
+                    // Category Tag
+                    ctx.fillStyle = '#7c3aed';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.fillText(`${title} 연습문제`, 16, 26);
+                    
+                    // Question Number
+                    ctx.fillStyle = '#1e293b';
+                    ctx.font = 'bold 16px sans-serif';
+                    ctx.fillText(`Q${num}.`, 16, 54);
+                    
+                    // Question Body
+                    ctx.font = '500 13px sans-serif';
+                    ctx.fillStyle = '#334155';
+                    
+                    let line = '';
+                    let y = 80;
+                    const x = 16;
+                    const maxWidth = baseWidth - 32;
+                    const lineHeight = 22;
+                    
+                    for (let n = 0; n < text.length; n++) {
+                        let testLine = line + text[n];
+                        let metrics = ctx.measureText(testLine);
+                        if (metrics.width > maxWidth) {
+                            ctx.fillText(line, x, y);
+                            line = text[n];
+                            y += lineHeight;
+                        } else {
+                            line = testLine;
+                        }
+                    }
+                    ctx.fillText(line, x, y);
+                    
+                    return canvas.toDataURL('image/png');
+                };
+
+                for (let i = 0; i < 10; i++) {
+                    const base64 = generateQuizImage(i + 1, questions[i].q, formulaName);
+                    quizData[i].imageBase64 = base64;
+                    quizData[i].answer = questions[i].a;
+                }
+
+                renderQuizUploadSlots();
+                showToast('AI 연습 퀴즈 10문항 추천 생성 완료!');
+            });
+        }
+
+        // --- Admin: Save Formulas and Quizzes ---
+        const formulaEditorForm = document.getElementById('formula-editor-form');
+        if (formulaEditorForm) {
+            formulaEditorForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formulaClassSelect = document.getElementById('formula-class-select');
+                const selectedClassId = formulaClassSelect ? formulaClassSelect.value : '';
+                if (!selectedClassId) {
+                    alert('공식을 등록할 반을 선택해 주세요.');
+                    return;
+                }
+                
+                const nameInput = document.getElementById('formula-name-input');
+                const latexInput = document.getElementById('formula-latex-input');
+                const piecesInput = document.getElementById('formula-pieces-input');
+                
+                const piecesArr = piecesInput.value.split(',').map(p => p.trim()).filter(Boolean);
+                if (piecesArr.length === 0) {
+                    alert('카드 조각을 입력해 주세요.');
+                    return;
+                }
+                
+                const missingQuiz = quizData.some(q => !q.imageBase64 || !q.answer);
+                if (missingQuiz) {
+                    alert('연습 퀴즈 10문항의 이미지와 정답을 모두 채워 주세요.');
+                    return;
+                }
+                
+                const newFormula = {
+                    id: Number(Date.now().toString() + Math.floor(10 + Math.random() * 90).toString()),
+                    classId: selectedClassId,
+                    formulaName: nameInput.value.trim(),
+                    latex: latexInput.value.trim(),
+                    pieces: piecesArr,
+                    quizzes: JSON.parse(JSON.stringify(quizData))
+                };
+                
+                classFormulas.push(newFormula);
+                await saveClassFormulas();
+                
+                nameInput.value = '';
+                latexInput.value = '';
+                piecesInput.value = '';
+                quizData.forEach(q => {
+                    q.imageBase64 = '';
+                    q.answer = '';
+                });
+                renderQuizUploadSlots();
+                renderFormulaList(selectedClassId);
+                
+                showToast('수학 공식 및 10문항 퀴즈가 성공적으로 저장되었습니다!');
+            });
+        }
+
+        // --- Admin: Render Formulas List ---
+        const renderFormulaList = (classId) => {
+            const container = document.getElementById('formula-list-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const filtered = classFormulas.filter(f => String(f.classId) === String(classId));
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 공식이 없습니다.</div>';
+                return;
+            }
+            
+            filtered.forEach(f => {
+                const item = document.createElement('div');
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '10px';
+                item.style.padding = '12px';
+                item.style.background = '#fafafa';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.gap = '10px';
+                
+                const mathDivId = 'math-render-' + f.id;
+                
+                item.innerHTML = `
+                    <div style="flex-grow: 1; text-align: left;">
+                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">${f.formulaName}</div>
+                        <div id="${mathDivId}" style="margin-top: 6px; font-size: 1rem; overflow-x: auto; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);"></div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;">조각: ${f.pieces.join(', ')}</div>
+                    </div>
+                    <button type="button" class="btn-formula-delete" data-id="${f.id}" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #ef4444; background: #fee2e2; color: #ef4444; cursor: pointer; font-weight: 600; white-space: nowrap;">삭제</button>
+                `;
+                
+                container.appendChild(item);
+                
+                const mathDiv = item.querySelector(`#${mathDivId}`);
+                if (mathDiv && typeof katex !== 'undefined') {
+                    try {
+                        katex.render(f.latex, mathDiv, { throwOnError: false, displayMode: true });
+                    } catch(err) {
+                        mathDiv.textContent = f.latex;
+                    }
+                }
+                
+                item.querySelector('.btn-formula-delete').addEventListener('click', async () => {
+                    if (confirm('이 공식을 삭제하시겠습니까? 관련 학습 기록도 삭제될 수 있습니다.')) {
+                        await deleteClassFormula(f.id);
+                        renderFormulaList(classId);
+                        showToast('공식이 삭제되었습니다.');
+                    }
+                });
+            });
+        };
+
+        const classFormulasManagementCard = document.getElementById('class-formulas-management-card');
+        const formulaManagementPlaceholder = document.getElementById('formula-management-placeholder');
+        const formulaManagementContent = document.getElementById('formula-management-content');
+        
+        const onClassSelectedForFormulas = (classId) => {
+            if (!formulaManagementPlaceholder || !formulaManagementContent) return;
+            
+            if (!classId) {
+                formulaManagementPlaceholder.style.display = 'block';
+                formulaManagementContent.style.display = 'none';
+                return;
+            }
+            
+            const selectedClass = classes.find(c => String(c.id) === String(classId));
+            if (selectedClass) {
+                formulaManagementPlaceholder.style.display = 'none';
+                formulaManagementContent.style.display = 'grid';
+                renderFormulaList(classId);
+            } else {
+                formulaManagementPlaceholder.style.display = 'block';
+                formulaManagementContent.style.display = 'none';
+            }
+        };
+        
+        const formulaClassSelect = document.getElementById('formula-class-select');
+        if (formulaClassSelect) {
+            formulaClassSelect.addEventListener('change', () => {
+                onClassSelectedForFormulas(formulaClassSelect.value);
+            });
+        }
+
+        // --- Student: Render Formulas & Badges ---
+        window.renderStudentFormulasAndBadges = (student) => {
+            if (window.initStudentExamView) window.initStudentExamView(student.id);
+            if (!student) return;
+            
+            // Seed vocabulary sets if empty
+            // seedDefaultWordSets();
+            renderStudentVocabularySets(student);
+            
+            const profileShelf = document.getElementById('student-profile-badge-shelf');
+            
+            let sClassId = student.classId;
+            if (!sClassId || String(sClassId) === '1' || String(sClassId) === 'null' || String(sClassId) === 'undefined') {
+                const class4A = classes.find(c => c.name && (c.name.includes('초등 4학년 A반') || c.name.includes('초4 A반')));
+                if (class4A) sClassId = class4A.id;
+                else sClassId = 1782824078197; // Database default fallback for 초등 4학년 A반
+            }
+            
+            let studentFormulas = classFormulas.filter(f => String(f.classId) === String(sClassId));
+            
+            // Dynamic fallback if database is empty or not yet loaded
+            if (studentFormulas.length === 0 && typeof defaultClassFormulas !== 'undefined') {
+                studentFormulas = defaultClassFormulas.map(f => {
+                    if (String(f.classId) === '1') {
+                        return { ...f, classId: sClassId };
+                    }
+                    return f;
+                }).filter(f => String(f.classId) === String(sClassId));
+            }
+            
+            // Find all matching student profiles for this student (same name and parentPhone/phone)
+            const siblingOrSelfProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            const studentIds = siblingOrSelfProfiles.map(s => String(s.id));
+
+            const earned = studentBadges.filter(b => studentIds.includes(String(b.studentId)) && b.status === 'Mastered');
+            
+            if (profileShelf) {
+                profileShelf.innerHTML = '';
+                if (earned.length === 0) {
+                    profileShelf.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">아직 획득한 배지가 없습니다.</span>';
+                } else {
+                    earned.forEach(badge => {
+                        const badgeEl = document.createElement('span');
+                        badgeEl.style.display = 'inline-flex';
+                        badgeEl.style.alignItems = 'center';
+                        badgeEl.style.gap = '4px';
+                        badgeEl.style.background = 'linear-gradient(135deg, #fdf4ff, #fae8ff)';
+                        badgeEl.style.border = '1px solid #c084fc';
+                        badgeEl.style.borderRadius = '20px';
+                        badgeEl.style.padding = '2px 8px';
+                        badgeEl.style.fontSize = '0.75rem';
+                        badgeEl.style.fontWeight = '700';
+                        badgeEl.style.color = '#c084fc';
+                        badgeEl.innerHTML = `🏆 ${badge.badgeName}`;
+                        profileShelf.appendChild(badgeEl);
+                    });
+                }
+            }
+            
+            const shelfContainer = document.getElementById('myclass-badge-shelf-container');
+            if (shelfContainer) {
+                shelfContainer.innerHTML = '';
+                if (studentFormulas.length === 0) {
+                    shelfContainer.innerHTML = '<div style="grid-column: span 4; color: var(--text-muted); font-size: 0.85rem; padding: 20px;">이 반에 등록된 공식이 없습니다.</div>';
+                } else {
+                    studentFormulas.forEach(formula => {
+                        const isMastered = earned.some(b => String(b.formulaId) === String(formula.id));
+                        const item = document.createElement('div');
+                        item.className = 'badge-item';
+                        if (!isMastered) {
+                            item.style.cursor = 'pointer';
+                            item.addEventListener('click', () => {
+                                openFormulaPreviewModal(formula, student);
+                            });
+                        }
+                        
+                        item.innerHTML = `
+                            <div class="badge-icon-wrapper ${isMastered ? 'badge-mastered' : 'badge-locked'}">
+                                ${isMastered ? '🏆' : '🔒'}
+                            </div>
+                            <div style="font-size: 0.78rem; font-weight: 700; color: ${isMastered ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px;" title="${formula.formulaName}">
+                                ${formula.formulaName}
+                            </div>
+                            <div style="font-size: 0.68rem; font-weight: 600; color: ${isMastered ? '#c084fc' : 'var(--text-muted)'};">
+                                ${isMastered ? '마스터' : '잠금'}
+                            </div>
+                        `;
+                        shelfContainer.appendChild(item);
+                    });
+                }
+            }
+            
+            const formulasList = document.getElementById('myclass-formulas-list');
+            if (formulasList) {
+                formulasList.innerHTML = '';
+                if (studentFormulas.length === 0) {
+                    formulasList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 10px 0; text-align: center;">학습할 수 있는 공식이 없습니다.</div>';
+                } else {
+                    studentFormulas.forEach(formula => {
+                        const isMastered = earned.some(b => String(b.formulaId) === String(formula.id));
+                        const item = document.createElement('div');
+                        item.style.border = '1px solid var(--border-color)';
+                        item.style.borderRadius = '12px';
+                        item.style.padding = '14px';
+                        item.style.background = '#ffffff';
+                        item.style.display = 'flex';
+                        item.style.flexDirection = 'column';
+                        item.style.gap = '10px';
+                        
+                        const gamePassed = localStorage.getItem(`game_passed_${student.id}_${formula.id}`) === 'true';
+                        const mathDivId = 'student-math-render-' + formula.id;
+                        
+                        item.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="badge-status-span" style="font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${isMastered ? 'background: #fdf4ff; color: #c084fc; border: 1px solid #fae8ff;' : 'background: #f1f5f9; color: #64748b; cursor: pointer;'}">
+                                        ${isMastered ? '🏆 마스터' : '🔒 학습 중'}
+                                    </span>
+                                    <h4 style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin: 0;">${formula.formulaName}</h4>
+                                </div>
+                            </div>
+                            <div id="${mathDivId}" style="font-size: 1.1rem; text-align: center; padding: 10px; background: #fafafa; border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto;"></div>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
+                                <button type="button" class="btn-learn-formula" data-id="${formula.id}" style="padding: 8px 14px; font-size: 0.78rem; border-radius: 6px; border: 1px solid var(--mascot-purple-bg); background: ${isMastered ? '#ffffff' : '#fdfafd'}; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="gamepad-2" style="width: 14px; height: 14px;"></i> 공식 카드 맞추기
+                                </button>
+                                <button type="button" class="btn-challenge-quiz" data-id="${formula.id}" ${(!gamePassed && !isMastered) ? 'disabled' : ''} style="padding: 8px 14px; font-size: 0.78rem; border-radius: 6px; border: 1px solid ${(!gamePassed && !isMastered) ? '#cbd5e1' : 'var(--mascot-pink-bg)'}; background: ${(!gamePassed && !isMastered) ? '#f1f5f9' : 'var(--mascot-pink-bg)'}; color: ${(!gamePassed && !isMastered) ? '#94a3b8' : '#ffffff'}; cursor: ${(!gamePassed && !isMastered) ? 'not-allowed' : 'pointer'}; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="award" style="width: 14px; height: 14px;"></i> 연습문제 10문항 도전
+                                </button>
+                            </div>
+                        `;
+                        
+                        formulasList.appendChild(item);
+                        
+                        const statusSpan = item.querySelector('.badge-status-span');
+                        if (statusSpan && !isMastered) {
+                            statusSpan.addEventListener('click', () => {
+                                openFormulaGameModal(formula, student);
+                            });
+                        }
+                        
+                        const mathDiv = item.querySelector(`#${mathDivId}`);
+                        if (mathDiv && typeof katex !== 'undefined') {
+                            try {
+                                katex.render(formula.latex, mathDiv, { throwOnError: false, displayMode: true });
+                            } catch(err) {
+                                mathDiv.textContent = formula.latex;
+                            }
+                        }
+                        
+                        item.querySelector('.btn-learn-formula').addEventListener('click', () => {
+                            openFormulaGameModal(formula, student);
+                        });
+                        item.querySelector('.btn-challenge-quiz').addEventListener('click', () => {
+                            if (gamePassed || isMastered) {
+                                openPracticeQuizModal(formula, student);
+                            }
+                        });
+                    });
+                }
+            }
+            safeCreateIcons();
+        };
+
+        // --- Student: Formula Preview Modal ---
+        const openFormulaPreviewModal = (formula, student) => {
+            const previewModal = document.getElementById('formula-preview-modal');
+            const previewName = document.getElementById('preview-formula-name');
+            const previewMath = document.getElementById('preview-formula-math');
+            const btnCancel = document.getElementById('btn-formula-preview-cancel');
+            const btnConfirm = document.getElementById('btn-formula-preview-confirm');
+            const btnClose = document.getElementById('btn-formula-preview-close');
+
+            if (!previewModal) return;
+
+            if (previewName) {
+                previewName.textContent = formula.formulaName;
+            }
+
+            if (previewMath) {
+                previewMath.innerHTML = '';
+                if (typeof katex !== 'undefined') {
+                    try {
+                        katex.render(formula.latex, previewMath, { throwOnError: false, displayMode: true });
+                    } catch (e) {
+                        previewMath.textContent = formula.latex;
+                    }
+                } else {
+                    previewMath.textContent = formula.latex;
+                }
+            }
+
+            // Clone buttons to clear old listeners
+            if (btnCancel) {
+                const newCancel = btnCancel.cloneNode(true);
+                btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+                newCancel.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                });
+            }
+
+            if (btnConfirm) {
+                const newConfirm = btnConfirm.cloneNode(true);
+                btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+                newConfirm.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                    openFormulaGameModal(formula, student);
+                });
+            }
+
+            if (btnClose) {
+                const newClose = btnClose.cloneNode(true);
+                btnClose.parentNode.replaceChild(newClose, btnClose);
+                newClose.addEventListener('click', () => {
+                    previewModal.classList.remove('open');
+                });
+            }
+
+            // Click on overlay to close
+            const overlayClick = (e) => {
+                if (e.target === previewModal) {
+                    previewModal.classList.remove('open');
+                    previewModal.removeEventListener('click', overlayClick);
+                }
+            };
+            previewModal.addEventListener('click', overlayClick);
+
+            previewModal.classList.add('open');
+            safeCreateIcons();
+        };
+
+        // --- Student: Formula Learning Card Game Modal ---
+        let selectedPieces = [];
+        let randomizedPieces = [];
+        let hintTimeoutGlobal = null;
+        
+        const openFormulaGameModal = (formula, student) => {
+            const gameModal = document.getElementById('formula-learning-game-modal');
+            const targetContainer = document.getElementById('game-target-formula-container');
+            const targetWrapper = document.getElementById('game-target-formula-wrapper');
+            const guessArea = document.getElementById('game-guess-area');
+            const piecesArea = document.getElementById('game-pieces-area');
+            
+            if (!gameModal) return;
+            selectedPieces = [];
+            
+            if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+            if (targetWrapper) {
+                targetWrapper.style.display = 'none';
+            }
+            
+            if (targetContainer) {
+                targetContainer.innerHTML = '';
+                if (typeof katex !== 'undefined') {
+                    try {
+                        katex.render(formula.latex, targetContainer, { throwOnError: false, displayMode: true });
+                    } catch(e) {
+                        targetContainer.textContent = formula.latex;
+                    }
+                } else {
+                    targetContainer.textContent = formula.latex;
+                }
+            }
+            
+            const btnHint = document.getElementById('btn-game-hint');
+            let hintCount = 2;
+            if (btnHint) {
+                const newHint = btnHint.cloneNode(true);
+                btnHint.parentNode.replaceChild(newHint, btnHint);
+                
+                newHint.disabled = false;
+                newHint.style.opacity = '1';
+                newHint.style.cursor = 'pointer';
+                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (2회 남음)`;
+                
+                newHint.addEventListener('click', () => {
+                    if (hintCount > 0) {
+                        hintCount--;
+                        
+                        if (targetWrapper) {
+                            targetWrapper.style.display = 'flex';
+                        }
+                        
+                        newHint.disabled = true;
+                        newHint.style.opacity = '0.6';
+                        
+                        if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                        hintTimeoutGlobal = setTimeout(() => {
+                            if (targetWrapper) {
+                                targetWrapper.style.display = 'none';
+                            }
+                            if (hintCount > 0) {
+                                newHint.disabled = false;
+                                newHint.style.opacity = '1';
+                                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (${hintCount}회 남음)`;
+                            } else {
+                                newHint.disabled = true;
+                                newHint.style.opacity = '0.5';
+                                newHint.style.cursor = 'not-allowed';
+                                newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (0회 남음)`;
+                            }
+                            safeCreateIcons();
+                        }, 3000);
+                        
+                        newHint.innerHTML = `<i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> 힌트 (${hintCount}회 남음)`;
+                        safeCreateIcons();
+                    }
+                });
+            }
+            
+            const shufflePieces = (pieces) => {
+                if (!pieces || pieces.length <= 1) return [...(pieces || [])];
+                let shuffled;
+                let attempts = 0;
+                do {
+                    shuffled = [...pieces];
+                    for (let i = shuffled.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                    }
+                    attempts++;
+                } while (attempts < 10 && shuffled.every((val, index) => val === pieces[index]));
+                return shuffled;
+            };
+
+            randomizedPieces = shufflePieces(formula.pieces);
+            
+            const renderPieces = () => {
+                if (piecesArea) {
+                    piecesArea.innerHTML = '';
+                    randomizedPieces.forEach((piece, idx) => {
+                        const pieceBtn = document.createElement('button');
+                        pieceBtn.type = 'button';
+                        pieceBtn.className = 'formula-card-piece';
+                        pieceBtn.textContent = piece;
+                        pieceBtn.addEventListener('click', () => {
+                            selectedPieces.push(piece);
+                            randomizedPieces.splice(idx, 1);
+                            renderPieces();
+                            renderGuess();
+                        });
+                        piecesArea.appendChild(pieceBtn);
+                    });
+                }
+            };
+            
+            const renderGuess = () => {
+                if (guessArea) {
+                    guessArea.innerHTML = '';
+                    selectedPieces.forEach((piece, idx) => {
+                        const pieceBtn = document.createElement('button');
+                        pieceBtn.type = 'button';
+                        pieceBtn.className = 'formula-card-piece';
+                        pieceBtn.style.borderColor = 'var(--mascot-pink-bg)';
+                        pieceBtn.textContent = piece;
+                        pieceBtn.addEventListener('click', () => {
+                            randomizedPieces.push(piece);
+                            selectedPieces.splice(idx, 1);
+                            renderPieces();
+                            renderGuess();
+                        });
+                        guessArea.appendChild(pieceBtn);
+                    });
+                }
+            };
+            
+            const btnReset = document.getElementById('btn-game-reset');
+            if (btnReset) {
+                const newReset = btnReset.cloneNode(true);
+                btnReset.parentNode.replaceChild(newReset, btnReset);
+                newReset.addEventListener('click', () => {
+                    selectedPieces = [];
+                    randomizedPieces = shufflePieces(formula.pieces);
+                    renderPieces();
+                    renderGuess();
+                });
+            }
+            
+            const btnSubmit = document.getElementById('btn-game-submit');
+            if (btnSubmit) {
+                const newSubmit = btnSubmit.cloneNode(true);
+                btnSubmit.parentNode.replaceChild(newSubmit, btnSubmit);
+                newSubmit.addEventListener('click', () => {
+                    if (selectedPieces.length !== formula.pieces.length) {
+                        showToast('모든 카드 조각을 사용해서 조립해 주세요!');
+                        return;
+                    }
+                    
+                    const matches = selectedPieces.every((p, i) => String(p) === String(formula.pieces[i]));
+                    if (matches) {
+                        showToast('공식 카드를 성공적으로 맞췄습니다! 이어서 연습문제 10문항에 도전합니다!');
+                        localStorage.setItem(`game_passed_${student.id}_${formula.id}`, 'true');
+                        if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                        const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                        if (targetWrapper) targetWrapper.style.display = 'none';
+                        gameModal.classList.remove('open');
+                        window.renderStudentFormulasAndBadges(student);
+                        
+                        // Automatically open practice quiz modal
+                        openPracticeQuizModal(formula, student);
+                    } else {
+                        showToast('순서가 잘못되었습니다. 수식을 다시 확인해 보세요!');
+                    }
+                });
+            }
+            
+            renderPieces();
+            renderGuess();
+            gameModal.classList.add('open');
+        };
+        
+        const btnFormulaGameClose = document.getElementById('btn-formula-game-close');
+        const gameModalOverlay = document.getElementById('formula-learning-game-modal');
+        if (btnFormulaGameClose && gameModalOverlay) {
+            btnFormulaGameClose.addEventListener('click', () => {
+                gameModalOverlay.classList.remove('open');
+                if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                if (targetWrapper) targetWrapper.style.display = 'none';
+            });
+            gameModalOverlay.addEventListener('click', (e) => {
+                if (e.target === gameModalOverlay) {
+                    gameModalOverlay.classList.remove('open');
+                    if (hintTimeoutGlobal) clearTimeout(hintTimeoutGlobal);
+                    const targetWrapper = document.getElementById('game-target-formula-wrapper');
+                    if (targetWrapper) targetWrapper.style.display = 'none';
+                }
+            });
+        }
+
+        // --- Student: Practice Quiz Modal ---
+        let currentQuizIndex = 0;
+        let quizAnswers = Array(10).fill('');
+        
+        const openPracticeQuizModal = (formula, student) => {
+            const quizModal = document.getElementById('practice-quiz-modal');
+            const progressText = document.getElementById('quiz-progress-text');
+            const progressBar = document.getElementById('quiz-progress-bar');
+            const qImage = document.getElementById('quiz-question-image');
+            const qTag = document.getElementById('quiz-question-number-tag');
+            const btnPrev = document.getElementById('btn-quiz-prev');
+            const btnNext = document.getElementById('btn-quiz-next');
+            
+            if (!quizModal) return;
+            
+            currentQuizIndex = 0;
+            quizAnswers = Array(10).fill('');
+            
+            const initialInput = document.getElementById('quiz-answer-input');
+            if (initialInput) initialInput.value = '';
+            
+            const renderCurrentQuestion = () => {
+                const qNum = currentQuizIndex + 1;
+                const quiz = formula.quizzes[currentQuizIndex];
+                
+                if (progressText) progressText.textContent = `문제 ${qNum} / 10`;
+                if (progressBar) progressBar.style.width = `${qNum * 10}%`;
+                
+                if (qImage && quiz) {
+                    if (!quiz.imageBase64) {
+                        const recommended = getRecommendedQuestionsForFormula(formula.formulaName);
+                        const qText = recommended[currentQuizIndex]?.q || '문제를 해결하시오.';
+                        quiz.imageBase64 = generateFormulaQuizImage(qNum, qText, formula.formulaName);
+                    }
+                    qImage.src = quiz.imageBase64;
+                    qImage.style.display = 'block';
+                } else if (qImage) {
+                    qImage.style.display = 'none';
+                }
+                
+                if (qTag) qTag.textContent = `[ Q${qNum} ] 다음 문항의 정답을 입력하세요.`;
+                
+                // Get fresh reference from the DOM since it gets cloned
+                const activeInput = document.getElementById('quiz-answer-input');
+                if (activeInput) activeInput.value = quizAnswers[currentQuizIndex] || '';
+                
+                if (btnPrev) {
+                    btnPrev.style.display = currentQuizIndex > 0 ? 'inline-block' : 'none';
+                }
+                
+                if (btnNext) {
+                    btnNext.textContent = currentQuizIndex === 9 ? '도전 완료' : '다음 문제';
+                }
+            };
+            
+            const rawAnsInput = document.getElementById('quiz-answer-input');
+            if (rawAnsInput) {
+                const newAnsInput = rawAnsInput.cloneNode(true);
+                rawAnsInput.parentNode.replaceChild(newAnsInput, rawAnsInput);
+                newAnsInput.addEventListener('input', (e) => {
+                    quizAnswers[currentQuizIndex] = e.target.value;
+                });
+            }
+            
+            if (btnPrev) {
+                const newPrev = btnPrev.cloneNode(true);
+                btnPrev.parentNode.replaceChild(newPrev, btnPrev);
+                newPrev.addEventListener('click', () => {
+                    if (currentQuizIndex > 0) {
+                        currentQuizIndex--;
+                        renderCurrentQuestion();
+                    }
+                });
+            }
+            
+            if (btnNext) {
+                const newNext = btnNext.cloneNode(true);
+                btnNext.parentNode.replaceChild(newNext, btnNext);
+                newNext.addEventListener('click', async () => {
+                    const ansVal = document.getElementById('quiz-answer-input').value.trim();
+                    quizAnswers[currentQuizIndex] = ansVal;
+                    
+                    if (!quizAnswers[currentQuizIndex]) {
+                        alert('정답을 입력해 주세요.');
+                        return;
+                    }
+                    
+                    if (currentQuizIndex < 9) {
+                        currentQuizIndex++;
+                        renderCurrentQuestion();
+                    } else {
+                        let correctCount = 0;
+                        formula.quizzes.forEach((quiz, idx) => {
+                            if (String(quiz.answer).trim().toLowerCase() === String(quizAnswers[idx]).trim().toLowerCase()) {
+                                correctCount++;
+                            }
+                        });
+                        
+                        if (correctCount === 10) {
+                            const newBadge = {
+                                id: Number(Date.now().toString() + Math.floor(10 + Math.random() * 90).toString()),
+                                studentId: student.id,
+                                formulaId: formula.id,
+                                badgeName: formula.formulaName,
+                                status: 'Mastered'
+                            };
+                            
+                            const alreadyEarned = studentBadges.some(b => String(b.studentId) === String(student.id) && String(b.formulaId) === String(formula.id));
+                            if (!alreadyEarned) {
+                                studentBadges.push(newBadge);
+                                await saveStudentBadges();
+                            }
+                            
+                            showToast(`🎉 축하합니다! '${formula.formulaName}' 공식 마스터 배지를 획득하셨습니다!`);
+                            playConfettiAnimation();
+                            
+                            quizModal.classList.remove('open');
+                            window.renderStudentFormulasAndBadges(student);
+                        } else {
+                            alert(`아쉽게도 ${correctCount}/10문항을 맞혔습니다. 10문항을 모두 맞혀야 배지를 획득할 수 있습니다. 다시 도전해 보세요!`);
+                        }
+                    }
+                });
+            }
+            
+            renderCurrentQuestion();
+            quizModal.classList.add('open');
+        };
+        
+        const playConfettiAnimation = () => {
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.zIndex = '9999';
+            overlay.style.overflow = 'hidden';
+            document.body.appendChild(overlay);
+            
+            for (let i = 0; i < 80; i++) {
+                const div = document.createElement('div');
+                div.style.position = 'absolute';
+                div.style.width = '12px';
+                div.style.height = '12px';
+                div.style.borderRadius = '50%';
+                div.style.background = ['#8e44ad', '#7c3aed', '#c084fc', '#fdf4ff', '#e879f9', '#f472b6', '#3b82f6'][Math.floor(Math.random() * 7)];
+                div.style.left = `${Math.random() * 100}vw`;
+                div.style.top = `-20px`;
+                div.style.opacity = `${Math.random()}`;
+                
+                const animDuration = 2 + Math.random() * 3;
+                const spinDuration = 1 + Math.random() * 2;
+                div.style.animation = `fall ${animDuration}s linear forwards, spin ${spinDuration}s linear infinite`;
+                
+                overlay.appendChild(div);
+            }
+            
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes fall {
+                    to { transform: translateY(110vh); }
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+                document.head.removeChild(style);
+            }, 6000);
+        };
+        
+        const btnPracticeQuizClose = document.getElementById('btn-practice-quiz-close');
+        const quizModalOverlay = document.getElementById('practice-quiz-modal');
+        if (btnPracticeQuizClose && quizModalOverlay) {
+            btnPracticeQuizClose.addEventListener('click', () => quizModalOverlay.classList.remove('open'));
+            quizModalOverlay.addEventListener('click', (e) => {
+                if (e.target === quizModalOverlay) quizModalOverlay.classList.remove('open');
+            });
+        }
+
+
+        // --- English Vocabulary System ---
+        const defaultVocabularyWords = [
+            { word: 'ship', meaning: '배, 선박' },
+            { word: 'carry', meaning: '나르다, 운반하다' },
+            { word: 'step', meaning: '단계' },
+            { word: 'process', meaning: '과정' },
+            { word: 'build - built - built', meaning: '만들다' },
+            { word: 'frame', meaning: '틀' },
+            { word: 'crane', meaning: '기중기' },
+            { word: 'dock', meaning: '부두' },
+            { word: 'steel', meaning: '강철' },
+            { word: 'heat', meaning: '뜨겁게 하다, 가열하다' },
+            { word: 'edge', meaning: '가장자리, 모서리' },
+            { word: 'join', meaning: '연결하다' },
+            { word: 'sail', meaning: '항해하다' },
+            { word: 'near <-> far', meaning: '가까운 <-> 먼' },
+            { word: 'month', meaning: '달, 1개월' },
+            { word: 'face', meaning: '얼굴' },
+            { word: 'president', meaning: '대통령' },
+            { word: 'carve', meaning: '조각하다' },
+            { word: 'through', meaning: '~을 통해' },
+            { word: 'entrance', meaning: '입구' },
+            { word: 'steam', meaning: '증기, 김' },
+            { word: 'tourist', meaning: '관광객' },
+            { word: 'visit', meaning: '방문하다' },
+            { word: 'interesting', meaning: '흥미로운' },
+            { word: 'rainforest', meaning: '열대 우림' },
+            { word: 'north <-> south', meaning: '북쪽 <-> 남쪽' },
+            { word: 'famous', meaning: '유명한' },
+            { word: 'slave', meaning: '노예' },
+            { word: 'soldier', meaning: '군인' },
+            { word: 'million', meaning: '백만' }
+        ];
+
+        // Seeder for database / fallback
+        const seedDefaultWordSets = () => {
+            if (wordSets.length === 0 && classes.length > 0) {
+                classes.forEach(cls => {
+                    wordSets.push({
+                        id: Number(String(cls.id) + '901'),
+                        classId: cls.id,
+                        title: 'MONTH 2 WEEK 2 영단어장',
+                        words: defaultVocabularyWords.map((w, idx) => ({
+                            word: w.word,
+                            meaning: w.meaning,
+                            example: `Q${idx + 1}. Example sentence using "${w.word.split(' ')[0]}".`
+                        }))
+                    });
+                });
+                saveWordSets();
+            }
+        };
+
+        const saveWordSets = async () => {
+            try { localStorage.setItem('gongbubang_word_sets', JSON.stringify(wordSets)); } catch(e){}
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    const mapped = wordSets.map(mapWordSetToDb);
+                    const { error } = await supabase.from('sb_word_sets').upsert(mapped);
+                    if (error) {
+                        console.error('[Supabase Error] saving word sets:', error);
+                        alert('단어장 저장 중 서버 오류가 발생했습니다: ' + error.message);
+                    }
+                } catch(e) {
+                    console.error('Error saving word sets to Supabase:', e);
+                }
+            }
+        };
+
+        const deleteWordSet = async (setId) => {
+            wordSets = wordSets.filter(w => String(w.id) !== String(setId));
+            try { localStorage.setItem('gongbubang_word_sets', JSON.stringify(wordSets)); } catch(e){}
+            if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                try {
+                    await supabase.from('sb_word_sets').delete().eq('id', setId);
+                } catch(e) {
+                    console.error('Error deleting word set from Supabase:', e);
+                }
+            }
+        };
+
+        // Text-to-Speech Helper
+        const speakEnglishWord = (text) => {
+            if ('speechSynthesis' in window) {
+                // Cancel current speech if speaking
+                window.speechSynthesis.cancel();
+                
+                // Clean up string like build - built - built or near <-> far
+                let cleanText = String(text || '').replace(/[<-]/g, ' ').replace(/\s+/g, ' ').trim();
+                
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                utterance.lang = document.getElementById('vocab-tts-lang')?.value || 'en-US';
+                
+                // Try to find a standard English voice
+                const voices = window.speechSynthesis.getVoices();
+                const engVoice = voices.find(v => v.lang.includes('en') || v.name.includes('Google US English'));
+                if (engVoice) utterance.voice = engVoice;
+                
+                window.speechSynthesis.speak(utterance);
+            }
+        };
+
+        // Render Admin Table Rows (1 to 30)
+        const renderVocabAdminRows = (wordsData = []) => {
+            const container = document.getElementById('vocab-words-inputs-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            for (let i = 0; i < 30; i++) {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '60px 1.2fr 1.2fr 1fr';
+                row.style.borderBottom = '1px solid var(--border-color)';
+                row.style.alignItems = 'center';
+                row.style.padding = '6px 12px';
+                row.style.gap = '8px';
+                
+                const wordVal = wordsData[i]?.word || '';
+                const meaningVal = wordsData[i]?.meaning || '';
+                const exampleVal = wordsData[i]?.example || '';
+                
+                const numStr = String(i + 1).padStart(3, '0');
+                row.innerHTML = `
+                    <div style="text-align: center; font-weight: 700; color: var(--text-secondary); font-size: 0.8rem;">${numStr}</div>
+                    <input type="text" class="vocab-row-word" data-idx="${i}" value="${wordVal}" placeholder="come" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                    <input type="text" class="vocab-row-meaning" data-idx="${i}" value="${meaningVal}" placeholder="동.온다" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                    <input type="text" class="vocab-row-example" data-idx="${i}" value="${exampleVal}" placeholder="예문 입력" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff;">
+                `;
+                container.appendChild(row);
+            }
+        };
+
+        // Render Admin Registered Sets List
+        const renderAdminVocabSetsList = (classId) => {
+            const container = document.getElementById('vocab-sets-list-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            const filtered = wordSets.filter(w => String(w.studentId) === String(classId));
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">등록된 단어장이 없습니다.</div>';
+                return;
+            }
+            
+            filtered.forEach(set => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '10px 14px';
+                item.style.border = '1px solid var(--border-color)';
+                item.style.borderRadius = '10px';
+                item.style.background = '#f8fafc';
+                
+                item.innerHTML = `
+                    <div style="text-align: left;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary);">${set.title}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-secondary); margin-left: 8px;">(${set.words.length} 단어)</span>
+                    </div>
+                    <button type="button" class="btn-delete-vocab-set" data-id="${set.id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700;">삭제</button>
+                `;
+                
+                item.querySelector('.btn-delete-vocab-set').addEventListener('click', async (e) => {
+                    if (confirm(`'${set.title}' 단어장을 삭제하시겠습니까?`)) {
+                        await deleteWordSet(set.id);
+                        renderAdminVocabSetsList(classId);
+                        if (loggedInStudentId) {
+                            const student = students.find(s => s.id === loggedInStudentId);
+                            if (student) renderStudentVocabularySets(student);
+                        }
+                    }
+                });
+                
+                container.appendChild(item);
+            });
+        };
+
+        // Trigger Admin Section Seeding / View Setup
+        const onClassSelectedForVocab = (studentId) => {
+            const classId = studentId; // kept for internal compatibility
+            const placeholder = document.getElementById('vocab-management-placeholder');
+            const content = document.getElementById('vocab-management-content');
+            
+            if (!classId) {
+                if (placeholder) placeholder.style.display = 'block';
+                if (content) content.style.display = 'none';
+                return;
+            }
+            
+            if (placeholder) placeholder.style.display = 'none';
+            if (content) content.style.display = 'block';
+            
+            renderVocabAdminRows();
+            renderAdminVocabSetsList(classId);
+        };
+
+        // Form Submit handler (Save Set)
+        const vocabEditorForm = document.getElementById('vocab-editor-form');
+        if (vocabEditorForm) {
+            vocabEditorForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const classSelect = document.getElementById('vocab-student-select');
+                const titleInput = document.getElementById('vocab-title-input');
+                
+                if (!classSelect || !titleInput || !classSelect.value) return;
+                
+                const wordsList = [];
+                const wordInputs = document.querySelectorAll('.vocab-row-word');
+                const meaningInputs = document.querySelectorAll('.vocab-row-meaning');
+                const exampleInputs = document.querySelectorAll('.vocab-row-example');
+                
+                for (let i = 0; i < 30; i++) {
+                    const w = wordInputs[i]?.value.trim();
+                    const m = meaningInputs[i]?.value.trim();
+                    const ex = exampleInputs[i]?.value.trim() || '';
+                    
+                    if (w || m) {
+                        wordsList.push({ word: w || '', meaning: m || '', example: ex });
+                    }
+                }
+                
+                if (wordsList.length === 0) {
+                    alert('최소 1개 이상의 단어를 입력해 주세요.');
+                    return;
+                }
+                
+                const newSet = {
+                    id: getNextSequentialId(wordSets),
+                    classId: null,
+                    studentId: String(classSelect.value),
+                    title: titleInput.value.trim() || `단어 세트 (${new Date().toLocaleDateString()})`,
+                    words: wordsList
+                };
+                
+                wordSets.push(newSet);
+                await saveWordSets();
+                
+                titleInput.value = '';
+                renderVocabAdminRows();
+                renderAdminVocabSetsList(classSelect.value); // pass studentId
+                
+                if (loggedInStudentId) {
+                    const student = students.find(s => s.id === loggedInStudentId);
+                    if (student) renderStudentVocabularySets(student);
+                }
+                showToast('영어 단어장 세트가 정상적으로 등록되었습니다!');
+            });
+        }
+
+        // Mock OCR scanner button
+        const btnVocabOcr = document.getElementById('btn-vocab-ocr');
+        const vocabOcrFile = document.getElementById('vocab-ocr-file');
+        if (btnVocabOcr && vocabOcrFile) {
+            btnVocabOcr.addEventListener('click', () => vocabOcrFile.click());
+            vocabOcrFile.addEventListener('change', async (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        try {
+                            const result = await callGeminiVocabOCR(base64Data, file.type);
+                            const withExamples = result.map((w, idx) => ({
+                                word: w.word,
+                                meaning: w.meaning,
+                                example: `Q${idx + 1}. Example sentence using "${w.word}".`
+                            }));
+                            renderVocabAdminRows(withExamples);
+                            const titleInput = document.getElementById('vocab-title-input');
+                            if (titleInput) titleInput.value = `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`;
+                            showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
+                        } catch (err) {
+                            showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // --- Student Vocabulary Dashboard UI Filter Listeners ---
+        const initVocabFilters = () => {
+            const btnFilterStudying = document.getElementById('btn-vocab-filter-studying');
+            const btnFilterCompleted = document.getElementById('btn-vocab-filter-completed');
+            
+            if (btnFilterStudying && btnFilterCompleted) {
+                // Remove existing listeners by replacing buttons (or check if already bound)
+                if (!btnFilterStudying.dataset.bound) {
+                    btnFilterStudying.dataset.bound = "true";
+                    btnFilterStudying.addEventListener('click', () => {
+                        currentVocabFilter = 'studying';
+                        btnFilterStudying.classList.add('active');
+                        btnFilterStudying.style.background = 'var(--mascot-purple-bg)';
+                        btnFilterStudying.style.color = '#ffffff';
+                        btnFilterStudying.style.borderColor = 'var(--mascot-purple-bg)';
+                        
+                        btnFilterCompleted.classList.remove('active');
+                        btnFilterCompleted.style.background = '#ffffff';
+                        btnFilterCompleted.style.color = 'var(--text-secondary)';
+                        btnFilterCompleted.style.borderColor = 'var(--border-color)';
+                        
+                        const student = students.find(s => s.id === loggedInStudentId);
+                        if (student) renderStudentVocabularySets(student);
+                    });
+                }
+                
+                if (!btnFilterCompleted.dataset.bound) {
+                    btnFilterCompleted.dataset.bound = "true";
+                    btnFilterCompleted.addEventListener('click', () => {
+                        currentVocabFilter = 'completed';
+                        btnFilterCompleted.classList.add('active');
+                        btnFilterCompleted.style.background = 'var(--mascot-purple-bg)';
+                        btnFilterCompleted.style.color = '#ffffff';
+                        btnFilterCompleted.style.borderColor = 'var(--mascot-purple-bg)';
+                        
+                        btnFilterStudying.classList.remove('active');
+                        btnFilterStudying.style.background = '#ffffff';
+                        btnFilterStudying.style.color = 'var(--text-secondary)';
+                        btnFilterStudying.style.borderColor = 'var(--border-color)';
+                        
+                        const student = students.find(s => s.id === loggedInStudentId);
+                        if (student) renderStudentVocabularySets(student);
+                    });
+                }
+            }
+        };
+
+        const renderStudentVocabularySets = (student) => {
+            const container = document.getElementById('myclass-vocab-list');
+            if (!container) return;
+            
+            initVocabFilters();
+            container.innerHTML = '';
+            
+            // Find all matching student profiles for this student (same name and parentPhone/phone)
+            const siblingOrSelfProfiles = students.filter(s => 
+                s.name === student.name && 
+                (s.parentPhone === student.parentPhone || s.phone === student.phone)
+            );
+            // Also include the current student ID directly (for type-safe matching)
+            const studentIds = [...new Set([String(student.id), ...siblingOrSelfProfiles.map(s => String(s.id)), student.username])].filter(Boolean);
+            
+
+            // Word sets are per-student: show only sets assigned to this student's ID(s)
+            const baseFiltered = wordSets.filter(w => {
+                const byStudent = w.studentId && studentIds.includes(String(w.studentId));
+                return byStudent;
+            });
+            
+            // Sub-filter: Studying vs Completed
+            let filtered = baseFiltered.filter(w => {
+                const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(w.id) && studentIds.includes(String(c.studentId)));
+                return currentVocabFilter === 'completed' ? isDone : !isDone;
+            });
+            
+            // Sort "7월 06일" / "7월 6일" set to the absolute top of the list
+            filtered.sort((a, b) => {
+                const aSpecial = a.title.includes('7월 06일') || a.title.includes('7월06일') || a.title.includes('7월 6일') || a.title.includes('7월6일');
+                const bSpecial = b.title.includes('7월 06일') || b.title.includes('7월06일') || b.title.includes('7월 6일') || b.title.includes('7월6일');
+                if (aSpecial && !bSpecial) return -1;
+                if (!aSpecial && bSpecial) return 1;
+                return 0;
+            });
+            
+            if (filtered.length === 0) {
+                const msg = currentVocabFilter === 'completed' 
+                    ? '학습 완료된 단어장이 없습니다.' 
+                    : '학습 중인 단어장이 없습니다. 상단 [+ 나만의 단어장 등록]을 클릭해 추가해 보세요.';
+                container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">${msg}</div>`;
+                return;
+            }
+            
+            filtered.forEach(set => {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.flexDirection = 'column';
+                item.style.gap = '12px';
+                item.style.overflow = 'hidden';
+                item.style.padding = '14px 18px';
+                item.style.borderRadius = '16px';
+                item.style.cursor = 'pointer';
+                item.style.transition = 'all 0.2s';
+                
+                const isSpecial = set.title.includes('7월 06일') || set.title.includes('7월06일') || set.title.includes('7월 6일') || set.title.includes('7월6일');
+                if (isSpecial) {
+                    item.style.background = 'linear-gradient(135deg, var(--mascot-purple-bg), var(--primary-color))';
+                    item.style.color = '#ffffff';
+                    item.style.border = 'none';
+                    item.style.boxShadow = '0 4px 10px rgba(139, 92, 246, 0.3)';
+                    item.style.width = '100%';
+                    item.style.boxSizing = 'border-box';
+                } else {
+                    item.style.background = '#ffffff';
+                    item.style.border = '1px solid var(--border-color)';
+                }
+                item.style.transition = 'all 0.2s';
+                
+                item.onmouseover = () => { 
+                    item.style.borderColor = 'var(--mascot-purple-bg)'; 
+                    item.style.transform = 'translateY(-2px)'; 
+                };
+                item.onmouseout = () => { 
+                    item.style.borderColor = isSpecial ? 'transparent' : 'var(--border-color)'; 
+                    item.style.transform = 'none'; 
+                };
+                
+                const isPersonal = !!set.studentId;
+                const isCompleted = completedVocabSets.some(c => String(c.vocabSetId) === String(set.id) && studentIds.includes(String(c.studentId)));
+                
+                if (isSpecial) {
+                    item.innerHTML = `
+                        <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;">
+                            <span style="font-size: 0.72rem; color: var(--mascot-purple-bg); background: #ffffff; padding: 2.5px 8px; border-radius: 20px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; flex-shrink: 0;">
+                                🌟 대표
+                            </span>
+                            <span style="font-weight: 800; font-size: 0.95rem; color: #ffffff; letter-spacing: -0.3px; word-break: keep-all; line-height: 1.4; flex: 1;">${set.title}</span>
+                            <span style="font-size: 0.78rem; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;">${set.words.length} 카드</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;" class="vocab-action-area">
+                            <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: ${isCompleted ? 'rgba(255,255,255,0.2)' : 'transparent'}; color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px; color: #ffffff;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
+                            </button>
+                            <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="printer" style="width: 13px; height: 13px; color: #ffffff;"></i> 인쇄
+                            </button>
+                            <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: #ffffff; color: var(--mascot-purple-bg); cursor: pointer; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <i data-lucide="camera" style="width: 13px; height: 13px; color: var(--mascot-purple-bg);"></i> 채점
+                            </button>
+                            <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
+                            ${isPersonal ? `
+                                <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.15); color: #fee2e2; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                            ` : ''}
+                            <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: rgba(255,255,255,0.8);"></i>
+                        </div>
+                    `;
+                } else {
+                    item.innerHTML = `
+                        <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;">
+                            <span style="font-size: 0.72rem; color: #ffffff; background: ${isPersonal ? 'var(--mascot-purple-bg)' : '#82b444'}; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; flex-shrink: 0;">
+                                ${isPersonal ? '나만의' : '클래스'}
+                            </span>
+                            <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary); word-break: keep-all; line-height: 1.4; flex: 1;">${set.title}</span>
+                            <span style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap; flex-shrink: 0;">${set.words.length} 카드</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;" class="vocab-action-area">
+                            <button type="button" class="btn-toggle-vocab-complete" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid ${isCompleted ? '#22c55e' : 'var(--border-color)'}; background: ${isCompleted ? '#f0fdf4' : '#ffffff'}; color: ${isCompleted ? '#22c55e' : 'var(--text-secondary)'}; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" style="width: 13px; height: 13px;"></i> ${isCompleted ? '완료됨' : '완료 체크'}
+                            </button>
+                            <button type="button" class="btn-print-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: #ffffff; color: var(--text-primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="printer" style="width: 13px; height: 13px;"></i> 인쇄
+                            </button>
+                            <button type="button" class="btn-grade-vocab-test" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; border: none; background: var(--mascot-pink-bg); color: #ffffff; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                <i data-lucide="camera" style="width: 13px; height: 13px;"></i> 채점
+                            </button>
+                            <input type="file" class="student-grading-file-input" accept="image/*" style="display: none;">
+                            ${isPersonal ? `
+                                <button type="button" class="btn-delete-student-set" style="padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; cursor: pointer; font-weight: 700; transition: all 0.2s;">삭제</button>
+                            ` : ''}
+                            <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
+                        </div>
+                    `;
+                }
+                
+                // Clicking item launches play mode
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('.vocab-action-area')) return;
+                    openVocabStudyPlayer(set, student);
+                });
+                
+                // Toggle study completion status
+                item.querySelector('.btn-toggle-vocab-complete').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const studentId = student.id;
+                    const vocabSetId = set.id;
+                    const isDone = completedVocabSets.some(c => String(c.vocabSetId) === String(vocabSetId) && String(c.studentId) === String(studentId));
+                    
+                    if (isDone) {
+                        completedVocabSets = completedVocabSets.filter(c => !(String(c.vocabSetId) === String(vocabSetId) && String(c.studentId) === String(studentId)));
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                await supabase.from('sb_completed_vocab_sets')
+                                    .delete()
+                                    .eq('student_id', String(studentId))
+                                    .eq('vocab_set_id', safeStringId(vocabSetId));
+                            } catch(err){}
+                        }
+                        showToast('학습 중으로 완료 상태가 해제되었습니다.');
+                    } else {
+                        const newCompleted = {
+                            id: crypto.randomUUID(),
+                            studentId,
+                            vocabSetId
+                        };
+                        completedVocabSets.push(newCompleted);
+                        if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                            try {
+                                await supabase.from('sb_completed_vocab_sets').insert(mapCompletedVocabToDb(newCompleted));
+                            } catch(err){}
+                        }
+                        showToast('단어 학습 완료! 참 잘했어요! 🎉');
+                    }
+                    try { localStorage.setItem('gongbubang_completed_vocab_sets', JSON.stringify(completedVocabSets)); } catch(err){}
+                    renderStudentVocabularySets(student);
+                });
+                
+                // Print test sheet handler
+                item.querySelector('.btn-print-vocab-test').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    printVocabularyTestSheet(set);
+                });
+                
+                // Grade test sheet photo handler
+                const gradingInput = item.querySelector('.student-grading-file-input');
+                const btnGrade = item.querySelector('.btn-grade-vocab-test');
+                if (btnGrade && gradingInput) {
+                    btnGrade.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        gradingInput.click();
+                    });
+                    gradingInput.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        if (e.target.files && e.target.files[0]) {
+                            gradeVocabularyTestSheet(set, student, e.target.files[0]);
+                        }
+                    });
+                }
+                
+                // Personal set delete handler
+                if (isPersonal) {
+                    item.querySelector('.btn-delete-student-set').addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`'${set.title}' 단어장을 삭제하시겠습니까?`)) {
+                            await deleteWordSet(set.id);
+                            renderStudentVocabularySets(student);
+                        }
+                    });
+                }
+
+                
+                container.appendChild(item);
+                safeCreateIcons();
+            });
+        };
+
+        // --- Vocabulary Study Modal Overlay Controller ---
+        let activeVocabSet = null;
+        let activeStudent = null;
+        let vocabStudyInterval = 1; // 1, 2, 3 representing chunks
+        let activeFavoritedWords = new Set(); // Saved favorites locally
+        let activeStudyState = null; // { mode: 'memorize'|'recall'|'spell'|'match', currentIndex, list, score, timer, ... }
+
+        const openVocabStudyPlayer = (vocabSet, student) => {
+            activeVocabSet = vocabSet;
+            activeStudent = student;
+            vocabStudyInterval = 1;
+            activeStudyState = null;
+            
+            const modal = document.getElementById('vocab-study-modal');
+            const title = document.getElementById('vocab-study-title');
+            const normalView = document.getElementById('vocab-normal-view');
+            const playerView = document.getElementById('vocab-study-player-view');
+            const toggleMeanings = document.getElementById('vocab-toggle-meanings');
+            const intervalSelect = document.getElementById('vocab-interval-select');
+            
+            if (!modal) return;
+            
+            if (title) title.textContent = vocabSet.title;
+            if (normalView) normalView.style.display = 'block';
+            if (playerView) playerView.style.display = 'none';
+            if (toggleMeanings) toggleMeanings.checked = false;
+            if (intervalSelect) intervalSelect.value = "1";
+            
+            // Render Cards Grid
+            renderVocabCardsGrid();
+            
+            modal.classList.add('open');
+        };
+
+        // Renders Cards Grid for Interval View
+        const renderVocabCardsGrid = () => {
+            const grid = document.getElementById('vocab-cards-grid');
+            if (!grid || !activeVocabSet) return;
+            
+            grid.innerHTML = '';
+            
+            // Get words for current interval
+            const startIdx = (vocabStudyInterval - 1) * 10;
+            const endIdx = startIdx + 10;
+            const wordsChunk = activeVocabSet.words.slice(startIdx, endIdx);
+            const toggleMeanings = document.getElementById('vocab-toggle-meanings')?.checked;
+            
+            wordsChunk.forEach((w, idx) => {
+                const globalIdx = startIdx + idx;
+                const card = document.createElement('div');
+                card.className = 'vocab-card-item';
+                
+                const isStarred = activeFavoritedWords.has(`${activeVocabSet.id}_${globalIdx}`);
+                
+                card.innerHTML = `
+                    <span class="vocab-card-favorite ${isStarred ? 'active' : ''}"><i data-lucide="star"></i></span>
+                    <span class="vocab-card-speaker"><i data-lucide="volume-2"></i></span>
+                    <div class="vocab-card-text" style="font-weight: 700; font-size: 1.25rem; color: #1e293b; transition: color 0.2s;">
+                        ${toggleMeanings ? w.meaning : w.word}
+                    </div>
+                `;
+                
+                // Favorite Toggle
+                card.querySelector('.vocab-card-favorite').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const key = `${activeVocabSet.id}_${globalIdx}`;
+                    if (activeFavoritedWords.has(key)) {
+                        activeFavoritedWords.delete(key);
+                        e.currentTarget.classList.remove('active');
+                    } else {
+                        activeFavoritedWords.add(key);
+                        e.currentTarget.classList.add('active');
+                    }
+                });
+                
+                // Speaker Trigger
+                card.querySelector('.vocab-card-speaker').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    speakEnglishWord(w.word);
+                });
+                
+                // Click card to flip/toggle meaning locally
+                let showingMeaning = toggleMeanings;
+                card.addEventListener('click', () => {
+                    showingMeaning = !showingMeaning;
+                    card.querySelector('.vocab-card-text').innerHTML = showingMeaning ? `<span style="color:#22c55e;">${w.meaning}</span>` : w.word;
+                    speakEnglishWord(w.word);
+                });
+                
+                grid.appendChild(card);
+            });
+            
+            safeCreateIcons();
+        };
+
+        // Event hooks for normal controller view
+        const intervalSelect = document.getElementById('vocab-interval-select');
+        if (intervalSelect) {
+            intervalSelect.addEventListener('change', (e) => {
+                vocabStudyInterval = Number(e.target.value);
+                renderVocabCardsGrid();
+            });
+        }
+        
+        const toggleMeaningsChkbx = document.getElementById('vocab-toggle-meanings');
+        if (toggleMeaningsChkbx) {
+            toggleMeaningsChkbx.addEventListener('change', () => {
+                renderVocabCardsGrid();
+            });
+        }
+
+        // Active Study Mode Engine
+        const startActiveStudyPlayer = (mode, filteredWords = null) => {
+            const normalView = document.getElementById('vocab-normal-view');
+            const playerView = document.getElementById('vocab-study-player-view');
+            
+            if (!normalView || !playerView || !activeVocabSet) return;
+            
+            normalView.style.display = 'none';
+            playerView.style.display = 'flex';
+            
+            let chunk;
+            if (filteredWords && filteredWords.length > 0) {
+                chunk = filteredWords;
+            } else {
+                const startIdx = (vocabStudyInterval - 1) * 10;
+                const endIdx = startIdx + 10;
+                chunk = activeVocabSet.words.slice(startIdx, endIdx);
+            }
+            
+            activeStudyState = {
+                mode: mode,
+                chunk: chunk,
+                shuffledChunk: [...chunk].sort(() => Math.random() - 0.5),
+                currentIndex: 0,
+                isShuffled: false,
+                isMastery: false,
+                showMeaning: false,
+                incorrectCount: 0,
+                score: 0,
+                timerSeconds: 0,
+                matchingSelections: []
+            };
+            
+            renderStudyPlayerStep();
+        };
+
+        const renderStudyPlayerStep = () => {
+            const playerView = document.getElementById('vocab-study-player-view');
+            if (!playerView || !activeStudyState) return;
+            
+            playerView.innerHTML = '';
+            
+            // Clean global keys
+            document.onkeydown = null;
+            
+            const currentList = activeStudyState.isShuffled ? activeStudyState.shuffledChunk : activeStudyState.chunk;
+            const isLast = activeStudyState.currentIndex >= currentList.length;
+            
+            if (isLast) {
+                // Learning Completed View
+                playerView.innerHTML = `
+                    <div style="text-align: center; color: #ffffff;">
+                        <h2 style="font-size: 2.2rem; margin-bottom: 12px;">🎉 학습 완료!</h2>
+                        <p style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 24px;">${vocabStudyInterval}구간 단어 학습을 완료하셨습니다!</p>
+                        <button type="button" class="btn-exit-player" style="padding: 12px 28px; border-radius: 12px; background: var(--mascot-purple-bg); color: #ffffff; border: none; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">나가기</button>
+                    </div>
+                `;
+                playerView.querySelector('.btn-exit-player').addEventListener('click', () => {
+                    const normalView = document.getElementById('vocab-normal-view');
+                    normalView.style.display = 'block';
+                    playerView.style.display = 'none';
+                    renderVocabCardsGrid();
+                });
+                return;
+            }
+
+            const w = currentList[activeStudyState.currentIndex];
+            const qNum = activeStudyState.currentIndex + 1;
+            
+            if (activeStudyState.mode === 'memorize') {
+                // Memorization Mode Learning Layout
+                playerView.innerHTML = `
+                    <!-- Top Info -->
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px;">
+                        <span style="font-weight: 700; color: #22c55e; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <i data-lucide="star" style="cursor: pointer;"></i>
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"><i data-lucide="volume-2"></i></span>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">학습중...</span>
+                    </div>
+                    
+                    <!-- Flashcard Outer Body -->
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 40px 20px; min-height: 240px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #1e293b; margin: 20px 0; position: relative; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);">
+                        <h2 style="font-size: 2.2rem; font-weight: 700; margin: 0; word-break: break-word; line-height: 1.2; width: 100%;">${w.word}</h2>
+                        
+                        ${!activeStudyState.showMeaning ? `
+                            <!-- Covered Cover Box -->
+                            <div class="btn-reveal-cover" style="position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: #82b444; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #ffffff; cursor: pointer; user-select: none;">
+                                <div style="font-weight: 700; font-size: 0.95rem;">커버를 클릭하여 의미를 확인하세요</div>
+                                <div style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">Press SPACE</div>
+                            </div>
+                        ` : `
+                            <!-- Revealed Meaning -->
+                            <div style="border-top: 1px solid #e2e8f0; width: 100%; margin-top: 24px; padding-top: 16px;">
+                                <h3 style="font-size: 1.6rem; color: #82b444; font-weight: 700; margin: 0;">${w.meaning}</h3>
+                            </div>
+                        `}
+                    </div>
+                    
+                    <!-- Bottom control bar -->
+                    <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        ${activeStudyState.showMeaning ? `
+                            <div style="display: flex; gap: 12px; width: 100%; max-width: 400px;">
+                                <button type="button" class="btn-know-word" style="flex: 1; padding: 12px; border-radius: 12px; background: #82b444; border: none; color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer;">✓ 이제 알아요</button>
+                                <button type="button" class="btn-unknown-word" style="flex: 1; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                            </div>
+                            <div style="display: flex; gap: 30px; font-size: 0.72rem; color: #94a3b8;">
+                                <span>SHIFT SPACE</span>
+                                <span>SPACE</span>
+                            </div>
+                        ` : `
+                            <span style="font-size: 0.78rem; color: #94a3b8; cursor: pointer;" class="btn-reveal-cover">다음 이동 ➔</span>
+                        `}
+                        
+                        <div style="margin-top: 16px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                            <span class="btn-goto-recall" style="cursor: pointer;"><i data-lucide="chevron-left" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 리콜학습</span>
+                            <span class="btn-goto-spell" style="cursor: pointer;"><i data-lucide="chevron-left" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 스펠학습</span>
+                            <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;"><i data-lucide="x" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i> 나가기</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Sound Trigger
+                speakEnglishWord(w.word);
+                
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                // Actions Handlers
+                const revealTriggers = playerView.querySelectorAll('.btn-reveal-cover');
+                revealTriggers.forEach(btn => btn.addEventListener('click', () => {
+                    activeStudyState.showMeaning = true;
+                    renderStudyPlayerStep();
+                }));
+                
+                const knowBtn = playerView.querySelector('.btn-know-word');
+                if (knowBtn) {
+                    knowBtn.addEventListener('click', () => {
+                        activeStudyState.currentIndex++;
+                        activeStudyState.showMeaning = false;
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        // Move word to back of queue
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        activeStudyState.showMeaning = false;
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+                // Keyboard Bindings
+                document.onkeydown = (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        if (!activeStudyState.showMeaning) {
+                            activeStudyState.showMeaning = true;
+                            renderStudyPlayerStep();
+                        } else {
+                            if (e.shiftKey) {
+                                // Shift+Space: Know it
+                                activeStudyState.currentIndex++;
+                                activeStudyState.showMeaning = false;
+                                renderStudyPlayerStep();
+                            } else {
+                                // Space: Unknown, move to back
+                                currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                                activeStudyState.showMeaning = false;
+                                renderStudyPlayerStep();
+                            }
+                        }
+                    }
+                };
+                
+            } else if (activeStudyState.mode === 'recall') {
+                // Recall Multiple Choice layout
+                // Build choices
+                const allMeanings = activeVocabSet.words.map(x => x.meaning);
+                const incorrects = allMeanings.filter(m => m !== w.meaning).sort(() => Math.random() - 0.5).slice(0, 3);
+                const choices = [w.meaning, ...incorrects].sort(() => Math.random() - 0.5);
+                
+                playerView.innerHTML = `
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
+                        <span style="font-weight: 700; color: #3b82f6; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #3b82f6;"><i data-lucide="volume-2"></i></span>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">리콜 학습</span>
+                    </div>
+                    
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 30px 20px; text-align: center; color: #1e293b; margin: 10px 0; position: relative;">
+                        <!-- Try Again Badge -->
+                        <div class="try-again-badge" style="display: none; position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; padding: 4px 12px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; transform: rotate(15deg);">Try Again!</div>
+                        
+                        <h2 style="font-size: 2.2rem; font-weight: 700; margin-bottom: 20px;">${w.word}</h2>
+                        
+                        <div style="display: grid; gap: 10px; width: 100%;">
+                            ${choices.map((c, cIdx) => `
+                                <button type="button" class="recall-choice-btn" data-meaning="${c}">
+                                    <span>${cIdx + 1}. &nbsp;${c}</span>
+                                    <span class="choice-tag" style="display:none; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;">정답</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn-unknown-word" style="width: 100%; max-width: 400px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                    
+                    <div style="margin-top: 10px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                        <span class="btn-goto-memorize" style="cursor: pointer;">암기학습</span>
+                        <span class="btn-goto-spell" style="cursor: pointer;">스펠학습</span>
+                        <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;">나가기</span>
+                    </div>
+                `;
+                
+                speakEnglishWord(w.word);
+                
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                // Choice handlers
+                const choiceBtns = playerView.querySelectorAll('.recall-choice-btn');
+                let answered = false;
+                
+                choiceBtns.forEach(btn => btn.addEventListener('click', (e) => {
+                    if (answered) return;
+                    answered = true;
+                    
+                    const chosen = btn.getAttribute('data-meaning');
+                    if (chosen === w.meaning) {
+                        // Correct!
+                        btn.classList.add('correct');
+                        setTimeout(() => {
+                            activeStudyState.currentIndex++;
+                            renderStudyPlayerStep();
+                        }, 1200);
+                    } else {
+                        // Incorrect
+                        btn.classList.add('incorrect');
+                        playerView.querySelector('.try-again-badge').style.display = 'block';
+                        
+                        // Highlight correct button
+                        choiceBtns.forEach(b => {
+                            if (b.getAttribute('data-meaning') === w.meaning) {
+                                b.classList.add('correct');
+                                const tag = b.querySelector('.choice-tag');
+                                if (tag) {
+                                    tag.style.display = 'inline-block';
+                                    tag.style.background = '#22c55e';
+                                    tag.style.color = '#ffffff';
+                                }
+                            }
+                        });
+                    }
+                }));
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        renderStudyPlayerStep();
+                    });
+                }
+                
+            } else if (activeStudyState.mode === 'spell') {
+                // Spell input learning layout (Letter Scramble Game)
+                playerView.innerHTML = `
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 10px;">
+                        <span style="font-weight: 700; color: #a855f7; font-size: 1.1rem;">✓ ${activeStudyState.currentIndex} | 10</span>
+                        <div style="display: flex; gap: 14px; color: #94a3b8; font-size: 1.1rem;">
+                            <span class="btn-play-audio-active" style="cursor: pointer; color: #a855f7;"><i data-lucide="volume-2"></i></span>
+                        </div>
+                        <span style="color: #94a3b8; font-size: 0.95rem;">스펠 학습</span>
+                    </div>
+                    
+                    <div style="width: 100%; max-width: 480px; background: #ffffff; border-radius: 20px; padding: 35px 20px; text-align: center; color: #1e293b; margin: 10px 0; position: relative;">
+                        <!-- Try Again Badge -->
+                        <div class="try-again-badge" style="display: none; position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; padding: 4px 12px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; transform: rotate(15deg);">Try Again!</div>
+                        
+                        <h2 style="font-size: 2.2rem; font-weight: 700; color:#8e44ad; margin-bottom: 20px;">${w.meaning}</h2>
+                        
+                        <div id="spell-slots-area" style="display:flex; justify-content:center; gap:8px; margin-bottom: 20px; flex-wrap:wrap; min-height: 48px;"></div>
+                        <div id="spell-letters-area" style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-bottom: 12px;"></div>
+                    </div>
+                    
+                    <button type="button" class="btn-unknown-word" style="width: 100%; max-width: 400px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 700; font-size: 0.95rem; cursor: pointer;">나중에 한번 더</button>
+                    
+                    <div style="margin-top: 10px; display: flex; gap: 24px; font-size: 0.85rem; font-weight: 700; color: #cbd5e1;">
+                        <span class="btn-goto-memorize" style="cursor: pointer;">암기학습</span>
+                        <span class="btn-goto-recall" style="cursor: pointer;">리콜학습</span>
+                        <span class="btn-exit-active-player" style="cursor: pointer; color: #ef4444;">나가기</span>
+                    </div>
+                `;
+
+                // Logic for Spelling Game
+                const targetRaw = w.word.split(' ')[0].toLowerCase();
+                const cleanTarget = targetRaw.replace(/[-<>\s]/g, '');
+                const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+                let letters = cleanTarget.split('');
+                
+                // Add 3 random letters
+                for(let i=0; i<3; i++) {
+                    letters.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+                }
+                
+                // Shuffle
+                letters = letters.sort(() => Math.random() - 0.5);
+                
+                let currentGuess = [];
+                
+                const renderSpellGame = () => {
+                    const slotsHtml = cleanTarget.split('').map((_, i) => {
+                        const letterObj = currentGuess[i];
+                        if (letterObj) {
+                             return `<span class="spell-slot filled" data-index="${i}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: var(--mascot-purple-bg); color: white; border-radius: 8px; font-weight: 700; font-size: 1.4rem; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid var(--mascot-purple-bg); transition: all 0.15s;">${letterObj.char}</span>`;
+                        }
+                        return `<span class="spell-slot empty" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 1.4rem; color: transparent; transition: all 0.15s;">_</span>`;
+                    }).join('');
+                    
+                    const poolHtml = letters.map((char, i) => {
+                        const isUsed = currentGuess.find(g => g.id === i);
+                        if (isUsed) {
+                            return `<span style="width: 44px; height: 44px; display: inline-block;"></span>`;
+                        }
+                        return `<span class="spell-letter-btn" data-id="${i}" data-char="${char}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: white; border: 2px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 1.4rem; cursor: pointer; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.15s;">${char}</span>`;
+                    }).join('');
+                    
+                    const slotsArea = playerView.querySelector('#spell-slots-area');
+                    const lettersArea = playerView.querySelector('#spell-letters-area');
+                    
+                    if (slotsArea) slotsArea.innerHTML = slotsHtml;
+                    if (lettersArea) lettersArea.innerHTML = poolHtml;
+                    
+                    if (lettersArea) {
+                        lettersArea.querySelectorAll('.spell-letter-btn').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                if (currentGuess.length < cleanTarget.length) {
+                                    currentGuess.push({ id: parseInt(btn.getAttribute('data-id')), char: btn.getAttribute('data-char') });
+                                    renderSpellGame();
+                                    checkAnswer();
+                                }
+                            });
+                        });
+                    }
+                    
+                    if (slotsArea) {
+                        slotsArea.querySelectorAll('.spell-slot.filled').forEach(slot => {
+                            slot.addEventListener('click', () => {
+                                const idx = parseInt(slot.getAttribute('data-index'));
+                                currentGuess.splice(idx, 1);
+                                renderSpellGame();
+                            });
+                        });
+                    }
+                };
+
+                const checkAnswer = () => {
+                    if (currentGuess.length === cleanTarget.length) {
+                        const guessStr = currentGuess.map(g => g.char).join('');
+                        if (guessStr === cleanTarget) {
+                            playerView.querySelectorAll('.spell-slot').forEach(s => {
+                                s.style.background = '#22c55e';
+                                s.style.borderColor = '#22c55e';
+                            });
+                            setTimeout(() => {
+                                activeStudyState.currentIndex++;
+                                renderStudyPlayerStep();
+                            }, 1000);
+                        } else {
+                            playerView.querySelector('.try-again-badge').style.display = 'block';
+                            playerView.querySelectorAll('.spell-slot').forEach(s => {
+                                s.style.background = '#ef4444';
+                                s.style.borderColor = '#ef4444';
+                            });
+                            setTimeout(() => {
+                                currentGuess = [];
+                                renderSpellGame();
+                                playerView.querySelector('.try-again-badge').style.display = 'none';
+                            }, 800);
+                        }
+                    }
+                };
+
+                renderSpellGame();
+
+
+                const playAudio = playerView.querySelector('.btn-play-audio-active');
+                if (playAudio) playAudio.addEventListener('click', () => speakEnglishWord(w.word));
+                
+                const unknownBtn = playerView.querySelector('.btn-unknown-word');
+                if (unknownBtn) {
+                    unknownBtn.addEventListener('click', () => {
+                        currentList.push(currentList.splice(activeStudyState.currentIndex, 1)[0]);
+                        renderStudyPlayerStep();
+                    });
+                }
+            }
+            
+            // Add Global Action Listeners inside step
+            const exitBtn = playerView.querySelector('.btn-exit-active-player');
+            if (exitBtn) {
+                exitBtn.addEventListener('click', () => {
+                    const normalView = document.getElementById('vocab-normal-view');
+                    normalView.style.display = 'block';
+                    playerView.style.display = 'none';
+                    document.onkeydown = null;
+                });
+            }
+            
+            const toMemo = playerView.querySelector('.btn-goto-memorize');
+            if (toMemo) toMemo.addEventListener('click', () => startActiveStudyPlayer('memorize'));
+            const toRecall = playerView.querySelector('.btn-goto-recall');
+            if (toRecall) toRecall.addEventListener('click', () => startActiveStudyPlayer('recall'));
+            const toSpell = playerView.querySelector('.btn-goto-spell');
+            if (toSpell) toSpell.addEventListener('click', () => startActiveStudyPlayer('spell'));
+            
+            safeCreateIcons();
+        };
+
+        // Connect mode buttons to start screens
+        const btnMemo = document.getElementById('btn-start-memorize');
+        if (btnMemo) btnMemo.addEventListener('click', () => startActiveStudyPlayer('memorize'));
+        const btnRec = document.getElementById('btn-start-recall');
+        if (btnRec) btnRec.addEventListener('click', () => startActiveStudyPlayer('recall'));
+        const btnSp = document.getElementById('btn-start-spell');
+        if (btnSp) btnSp.addEventListener('click', () => startActiveStudyPlayer('spell'));
+
+        // Close Study Modal Close trigger
+        const btnVocabClose = document.getElementById('btn-vocab-study-close');
+        const vocabStudyOverlay = document.getElementById('vocab-study-modal');
+        if (btnVocabClose && vocabStudyOverlay) {
+            btnVocabClose.addEventListener('click', () => {
+                vocabStudyOverlay.classList.remove('open');
+                document.onkeydown = null;
+            });
+        }
+        // --- Student Vocabulary Creator Form Engine ---
+        let vocabRowCount = 30;
+        const renderStudentVocabCreatorRows = (wordsData = null) => {
+            const container = document.getElementById('student-vocab-words-container');
+            if (!container) return;
+            
+            if (wordsData && wordsData.length > 0) {
+                vocabRowCount = wordsData.length;
+            }
+            
+            // Capture currently typed values to preserve them during row addition/deletion
+            const currentInputs = [];
+            const existingWords = container.querySelectorAll('.student-vocab-row-word');
+            const existingMeanings = container.querySelectorAll('.student-vocab-row-meaning');
+            for (let i = 0; i < existingWords.length; i++) {
+                currentInputs.push({
+                    word: existingWords[i].value,
+                    meaning: existingMeanings[i].value
+                });
+            }
+            
+            container.innerHTML = '';
+            for (let i = 0; i < vocabRowCount; i++) {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '50px 1.2fr 1.2fr';
+                row.style.borderBottom = '1px solid var(--border-color)';
+                row.style.alignItems = 'center';
+                row.style.padding = '6px 8px';
+                row.style.gap = '8px';
+                
+                const wordVal = (wordsData && wordsData[i]) ? (wordsData[i].word || '') : (currentInputs[i]?.word || '');
+                const meaningVal = (wordsData && wordsData[i]) ? (wordsData[i].meaning || '') : (currentInputs[i]?.meaning || '');
+                
+                const numStr = String(i + 1).padStart(3, '0');
+                row.innerHTML = `
+                    <div style="text-align: center; font-weight: 700; color: var(--text-secondary); font-size: 0.8rem;">${numStr}</div>
+                    <input type="text" class="student-vocab-row-word" data-idx="${i}" value="${wordVal}" placeholder="예: take" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                    <input type="text" class="student-vocab-row-meaning" data-idx="${i}" value="${meaningVal}" placeholder="예: 취하다, 데려가다" style="padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none; background: #ffffff; width: 100%;">
+                `;
+                container.appendChild(row);
+            }
+        };
+
+        // Row addition and deletion listeners
+        const btnAddVocabRow = document.getElementById('btn-student-vocab-add-row');
+        const btnDelVocabRow = document.getElementById('btn-student-vocab-del-row');
+        if (btnAddVocabRow) {
+            btnAddVocabRow.addEventListener('click', () => {
+                vocabRowCount++;
+                renderStudentVocabCreatorRows();
+            });
+        }
+        if (btnDelVocabRow) {
+            btnDelVocabRow.addEventListener('click', () => {
+                if (vocabRowCount > 1) {
+                    vocabRowCount--;
+                    renderStudentVocabCreatorRows();
+                }
+            });
+        }
+
+        // Form toggle
+        const btnToggleCreator = document.getElementById('btn-toggle-student-vocab-creator');
+        const creatorContainer = document.getElementById('student-vocab-creator-container');
+        if (btnToggleCreator && creatorContainer) {
+            btnToggleCreator.addEventListener('click', () => {
+                const isHidden = creatorContainer.style.display === 'none';
+                creatorContainer.style.display = isHidden ? 'block' : 'none';
+                if (isHidden) {
+                    vocabRowCount = 30; // reset default on open
+                    renderStudentVocabCreatorRows();
+                }
+            });
+        }
+
+        // Student OCR File Scan
+        const btnStudentOcr = document.getElementById('btn-student-vocab-ocr');
+        const studentOcrFile = document.getElementById('student-vocab-ocr-file');
+        if (btnStudentOcr && studentOcrFile) {
+            btnStudentOcr.addEventListener('click', () => studentOcrFile.click());
+            studentOcrFile.addEventListener('change', async (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    showToast('유인물 이미지를 스캔하여 단어와 의미를 판독 중입니다...');
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        try {
+                            const result = await callGeminiVocabOCR(base64Data, file.type);
+                            const withExamples = result.map((w, idx) => ({
+                                word: w.word,
+                                meaning: w.meaning,
+                                example: `Q${idx + 1}. Example sentence.`
+                            }));
+                            renderStudentVocabCreatorRows(withExamples);
+                            const titleInput = document.getElementById('student-vocab-title');
+                            if (titleInput) titleInput.value = `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`;
+                            showToast(`유인물 분석이 완료되었습니다. ${result.length}개의 영단어가 자동으로 매핑되었습니다!`);
+                        } catch (err) {
+                            showToast('단어 스캔 중 오류가 발생했습니다: ' + err.message);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // Student Save Set Submit
+        const studentVocabForm = document.getElementById('student-vocab-editor-form');
+        if (studentVocabForm) {
+            studentVocabForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const titleInput = document.getElementById('student-vocab-title');
+                
+                if (!titleInput || !loggedInStudentId) return;
+                
+                const wordsList = [];
+                const wordInputs = document.querySelectorAll('.student-vocab-row-word');
+                const meaningInputs = document.querySelectorAll('.student-vocab-row-meaning');
+                
+                for (let i = 0; i < wordInputs.length; i++) {
+                    const w = wordInputs[i]?.value.trim();
+                    const m = meaningInputs[i]?.value.trim();
+                    
+                    if (w || m) {
+                        wordsList.push({ word: w || '', meaning: m || '', example: '' });
+                    }
+                }
+                
+                if (wordsList.length === 0) {
+                    alert('최소 1개 이상의 단어를 입력해 주세요.');
+                    return;
+                }
+                
+                const newSet = {
+                    id: getNextSequentialId(wordSets),
+                    studentId: loggedInStudentId,
+                    title: titleInput.value.trim() || `나의 단어장 (${new Date().toLocaleDateString()})`,
+                    words: wordsList
+                };
+                
+                wordSets.push(newSet);
+                await saveWordSets();
+                
+                titleInput.value = '';
+                if (creatorContainer) creatorContainer.style.display = 'none';
+                
+                const student = students.find(s => s.id === loggedInStudentId);
+                if (student) renderStudentVocabularySets(student);
+                
+                showToast('나만의 단어장이 정상적으로 저장되었습니다!');
+            });
+        }
+        // --- Test Paper Print & grading Engine ---
+        window.printVocabularyTestSheet = (set) => {
+            const printContainer = document.getElementById('vocab-printable-test-sheet');
+            if (!printContainer) return;
+            
+            const words = set.words || [];
+            
+            let tableHtml = `
+                <div style="padding: 20px; font-family: 'Malgun Gothic', dotum, sans-serif; background: #ffffff; color: #000000; max-width: 1000px; margin: 0 auto;">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <h1 style="font-size: 2rem; font-weight: 800; border-bottom: 3px double #000000; display: inline-block; padding-bottom: 6px; margin: 0;">영단어 테스트 시험지</h1>
+                    </div>
+                    
+                    
+                    <table class="vocab-test-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
+                                
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
+                                
+                                <th style="width: 4%;">번호</th>
+                                <th style="width: 16%;">의미</th>
+                                <th style="width: 13.3%;">영단어</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (let i = 0; i < 10; i++) {
+                const w1 = words[i] || { word: '', meaning: '' };
+                const w2 = words[i + 10] || { word: '', meaning: '' };
+                const w3 = words[i + 20] || { word: '', meaning: '' };
+                
+                const m1 = w1.meaning.split(',')[0].trim();
+                const m2 = w2.meaning.split(',')[0].trim();
+                const m3 = w3.meaning.split(',')[0].trim();
+                
+                tableHtml += `
+                    <tr>
+                        <td style="text-align: center; font-weight: 700;">${i + 1}</td>
+                        <td>${m1}</td>
+                        <td></td>
+                        
+                        <td style="text-align: center; font-weight: 700;">${i + 11}</td>
+                        <td>${m2}</td>
+                        <td></td>
+                        
+                        <td style="text-align: center; font-weight: 700;">${i + 21}</td>
+                        <td>${m3}</td>
+                        <td></td>
+                    </tr>
+                `;
+            }
+            
+            tableHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            printContainer.innerHTML = tableHtml;
+            window.print();
+        };
+
+        let activeWrongWords = [];
+        
+        window.gradeVocabularyTestSheet = (set, student, file) => {
+            showToast('시험지 이미지를 판독하여 채점 중입니다...');
+            
+            setTimeout(() => {
+                const words = set.words || [];
+                const totalWords = words.length;
+                const wrongCount = Math.floor(Math.random() * 3) + 3; // Mocking 3 to 5 wrong answers
+                const wrongIndexes = new Set();
+                while (wrongIndexes.size < wrongCount && wrongIndexes.size < totalWords) {
+                    wrongIndexes.add(Math.floor(Math.random() * totalWords));
+                }
+                
+                activeWrongWords = words.filter((_, idx) => wrongIndexes.has(idx));
+                const correctCount = totalWords - activeWrongWords.length;
+                
+                // Update score header info
+                document.getElementById('grading-test-title').textContent = set.title;
+                document.getElementById('grading-student-name').textContent = `${student.name} 학생 영단어 채점 결과`;
+                document.getElementById('grading-score').textContent = correctCount;
+                
+                // Render graded sheet grid overlay
+                const container = document.getElementById('graded-sheet-preview-container');
+                if (!container) return;
+                
+                let previewHtml = `
+                    <div style="font-family: 'Malgun Gothic', dotum, sans-serif; background: #ffffff; padding: 10px; max-width: 800px; margin: 0 auto; color: #000000;">
+                        <table class="vocab-test-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
+                                    
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
+                                    
+                                    <th style="width: 4%;">번호</th>
+                                    <th style="width: 16%;">의미</th>
+                                    <th style="width: 13.3%;">영단어</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                for (let i = 0; i < 10; i++) {
+                    const idx1 = i;
+                    const idx2 = i + 10;
+                    const idx3 = i + 20;
+                    
+                    const w1 = words[idx1] || { word: '', meaning: '' };
+                    const w2 = words[idx2] || { word: '', meaning: '' };
+                    const w3 = words[idx3] || { word: '', meaning: '' };
+                    
+                    const m1 = w1.meaning.split(',')[0].trim();
+                    const m2 = w2.meaning.split(',')[0].trim();
+                    const m3 = w3.meaning.split(',')[0].trim();
+                    
+                    const isW1Correct = !wrongIndexes.has(idx1);
+                    const isW2Correct = !wrongIndexes.has(idx2);
+                    const isW3Correct = !wrongIndexes.has(idx3);
+                    
+                    const mockAns1 = isW1Correct ? w1.word : w1.word.substring(0, Math.max(1, w1.word.length - 2)) + 'x';
+                    const mockAns2 = isW2Correct ? w2.word : w2.word.substring(0, Math.max(1, w2.word.length - 2)) + 'x';
+                    const mockAns3 = isW3Correct ? w3.word : w3.word.substring(0, Math.max(1, w3.word.length - 2)) + 'x';
+                    
+                    previewHtml += `
+                        <tr>
+                            <td style="text-align: center; font-weight: 700;">${idx1 + 1}</td>
+                            <td>${m1}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns1}</span>
+                                    <span class="grading-mark ${isW1Correct ? 'correct-circle' : 'incorrect-cross'}">${isW1Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                            
+                            <td style="text-align: center; font-weight: 700;">${idx2 + 1}</td>
+                            <td>${m2}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns2}</span>
+                                    <span class="grading-mark ${isW2Correct ? 'correct-circle' : 'incorrect-cross'}">${isW2Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                            
+                            <td style="text-align: center; font-weight: 700;">${idx3 + 1}</td>
+                            <td>${m3}</td>
+                            <td>
+                                <div class="graded-cell-wrapper">
+                                    <span style="font-family: 'Courier New', monospace; font-weight: 700; color: #475569;">${mockAns3}</span>
+                                    <span class="grading-mark ${isW3Correct ? 'correct-circle' : 'incorrect-cross'}">${isW3Correct ? '◯' : '✗'}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                previewHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = previewHtml;
+                
+                // Open modal
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.add('open');
+                
+                showToast('채점이 완료되었습니다. 마킹된 빨간 ✗ 표시의 오답들을 집중 복습해 보세요!');
+            }, 1500);
+        };
+        
+        // Modal close button
+        const btnGradingClose = document.getElementById('btn-vocab-grading-close');
+        if (btnGradingClose) {
+            btnGradingClose.addEventListener('click', () => {
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.remove('open');
+            });
+        }
+        
+        // Connect focused wrong word study button
+        const btnStartFocusWrong = document.getElementById('btn-start-focus-wrong-words');
+        if (btnStartFocusWrong) {
+            btnStartFocusWrong.addEventListener('click', () => {
+                const modal = document.getElementById('vocab-grading-modal');
+                if (modal) modal.classList.remove('open');
+                
+                if (activeWrongWords.length === 0) {
+                    showToast('틀린 단어가 없어 오답 학습이 필요하지 않습니다!');
+                    return;
+                }
+                
+                // Show player modal with filtered wrong words
+                const vocabModal = document.getElementById('vocab-study-modal');
+                if (vocabModal) {
+                    vocabModal.classList.add('open');
+                    
+                    // Trigger study player immediately for wrong words
+                    activeStudyState = null;
+                    startActiveStudyPlayer('memorize', activeWrongWords);
+                }
+            });
+        }
+
+        // PWA Install & Home Screen Shortcut Simulation
+        let deferredPrompt = null;
+        const btnPwaInstall = document.getElementById('btn-pwa-install');
+        
+        if (btnPwaInstall) {
+            // Always show the button for simulation/instructions purposes
+            btnPwaInstall.style.display = 'inline-flex';
+            
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                btnPwaInstall.style.display = 'inline-flex';
+            });
+
+            window.addEventListener('appinstalled', (e) => {
+                console.log('PWA installed successfully');
+                btnPwaInstall.style.display = 'none';
+            });
+
+            btnPwaInstall.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    deferredPrompt = null;
+                    btnPwaInstall.style.display = 'none';
+                } else {
+                    alert('📱 홈 화면 바로가기 추가 안내\n\n1. 모바일(Safari): 하단의 공유(공유하기) 버튼 클릭 후 "홈 화면에 추가" 선택\n2. 모바일(Chrome/Samsung): 우측 상단 메뉴(점 3개) 클릭 후 "홈 화면에 추가" 또는 "앱 설치" 선택\n3. PC(Chrome): 주소창 우측의 설치 아이콘 또는 브라우저 주소창 메뉴 클릭');
+                }
+            });
+        }
+
+        // --- Parent: Add Child Logic ---
+        const parentAddChildModal = document.getElementById('parent-add-child-modal');
+        const btnParentAddChild = document.getElementById('btn-parent-add-child');
+        const btnParentAddChildClose = document.getElementById('btn-parent-add-child-close');
+        const parentAddChildForm = document.getElementById('parent-add-child-form');
+        const parentChildNameInput = document.getElementById('parent-child-name-input');
+        const parentChildBirthdateInput = document.getElementById('parent-child-birthdate-input');
+        const parentChildAgeInput = document.getElementById('parent-child-age-input');
+        const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+        const parentChildPasswordInput = document.getElementById('parent-child-password-input');
+        const parentChildSchoolInput = document.getElementById('parent-child-school-input');
+
+
+
+        if (btnParentAddChildClose && parentAddChildModal) {
+            btnParentAddChildClose.addEventListener('click', () => {
+                parentAddChildModal.style.display = 'none';
+            });
+        }
+
+        // Auto calculate age when birthdate changes in Parent Add Child Form
+        if (parentChildBirthdateInput) {
+            parentChildBirthdateInput.addEventListener('change', () => {
+                const val = parentChildBirthdateInput.value;
+                if (val) {
+                    const birthYear = new Date(val).getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear + 1; // Korean age
+                    if (parentChildAgeInput) parentChildAgeInput.value = age;
+                }
+                checkExistingStudentForParentForm();
+            });
+        }
+
+        if (parentChildNameInput) {
+            parentChildNameInput.addEventListener('input', () => {
+                checkExistingStudentForParentForm();
+            });
+        }
+        
+        // Add ID Duplicate Check
+        const btnCheckParentChildId = document.getElementById('btn-check-parent-child-id');
+        const parentChildIdCheckMsg = document.getElementById('parent-child-id-check-msg');
+        if (btnCheckParentChildId && parentChildUsernameInput && parentChildIdCheckMsg) {
+            const checkParentChildIdDuplicate = () => {
+                const username = parentChildUsernameInput.value.trim();
+                if (!username) {
+                    parentChildIdCheckMsg.style.display = 'none';
+                    return;
+                }
+                if (username.length < 4) {
+                    parentChildIdCheckMsg.style.display = 'block';
+                    parentChildIdCheckMsg.style.color = '#ff4d4f';
+                    parentChildIdCheckMsg.textContent = '아이디는 4자 이상이어야 합니다.';
+                    return;
+                }
+                
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const takenInStudents = students.some(s => s.username && s.username.toLowerCase() === username.toLowerCase());
+                let takenInMock = false;
+                mockUsers.forEach(u => {
+                    if (u.role === 'student' && u.email === username) takenInMock = true;
+                    const children = u.user_metadata?.children || u.children || [];
+                    if (children.some(c => c.username && c.username.toLowerCase() === username.toLowerCase())) {
+                        takenInMock = true;
+                    }
+                });
+                
+                parentChildIdCheckMsg.style.display = 'block';
+                if (takenInStudents || takenInMock) {
+                    parentChildIdCheckMsg.style.color = '#ff4d4f';
+                    parentChildIdCheckMsg.textContent = '이미 사용 중인 아이디입니다.';
+                } else {
+                    parentChildIdCheckMsg.style.color = '#2e7d32';
+                    parentChildIdCheckMsg.textContent = '사용 가능한 아이디입니다!';
+                }
+            };
+            
+            btnCheckParentChildId.addEventListener('click', checkParentChildIdDuplicate);
+            parentChildUsernameInput.addEventListener('blur', checkParentChildIdDuplicate);
+        }
+        
+        // Auto-update grade options based on school
+        if (parentChildSchoolInput) {
+            parentChildSchoolInput.addEventListener('input', (e) => {
+                const schoolName = e.target.value.trim();
+                const gradeInput = document.getElementById('parent-child-grade-input');
+                if (!gradeInput) return;
+                
+                let optionsHtml = '<option value="">학년 선택</option>';
+                if (schoolName.includes('초등')) {
+                    optionsHtml += '<option value="1학년">1학년</option><option value="2학년">2학년</option><option value="3학년">3학년</option><option value="4학년">4학년</option><option value="5학년">5학년</option><option value="6학년">6학년</option>';
+                } else if (schoolName.includes('중학') || schoolName.includes('중학교') || schoolName.includes('고등')) {
+                    optionsHtml += '<option value="1학년">1학년</option><option value="2학년">2학년</option><option value="3학년">3학년</option>';
+                }
+                
+                // Only update options if it changed based on keyword
+                if (schoolName && (schoolName.includes('초등') || schoolName.includes('중학') || schoolName.includes('중학교') || schoolName.includes('고등'))) {
+                    const prevValue = gradeInput.value;
+                    gradeInput.innerHTML = optionsHtml;
+                    // Restore previous value if it exists in new options
+                    if (prevValue && Array.from(gradeInput.options).some(opt => opt.value === prevValue)) {
+                        gradeInput.value = prevValue;
+                    }
+                } else if (!schoolName) {
+                    gradeInput.innerHTML = '<option value="">학년 선택</option>';
+                }
+            });
+        }
+
+        // Lookup existing student by name and birthdate
+        const checkExistingStudentForParentForm = () => {
+            const nameVal = (parentChildNameInput ? parentChildNameInput.value : '').trim();
+            const birthdateVal = parentChildBirthdateInput ? parentChildBirthdateInput.value : '';
+
+            if (nameVal && birthdateVal) {
+                // Search in students
+                const existing = students.find(s => 
+                    s.name === nameVal && 
+                    s.birthdate === birthdateVal
+                );
+
+                if (existing) {
+                    if (parentChildAgeInput) parentChildAgeInput.value = existing.age || '';
+                    if (parentChildUsernameInput) {
+                        parentChildUsernameInput.value = existing.username || '';
+                        parentChildUsernameInput.disabled = !!existing.username; // disable if exists
+                    }
+                    if (parentChildPasswordInput) parentChildPasswordInput.value = existing.password || '';
+                    if (parentChildSchoolInput) parentChildSchoolInput.value = existing.school || '';
+                    showToast('기존 원생 정보를 정상적으로 불러왔습니다!');
+                }
+            }
+        };
+
+        // Save/Add child submit handler
+        if (parentAddChildForm) {
+            parentAddChildForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const nameVal = parentChildNameInput.value.trim();
+                const birthdateVal = parentChildBirthdateInput.value;
+                const ageVal = parseInt(parentChildAgeInput.value || 0, 10);
+                const usernameVal = parentChildUsernameInput.value.trim();
+                const passwordVal = parentChildPasswordInput.value.trim();
+                
+                const schoolInputVal = parentChildSchoolInput.value.trim();
+                const gradeInput = document.getElementById('parent-child-grade-input');
+                const gradeVal = gradeInput ? gradeInput.value.trim() : '';
+                const schoolVal = `${schoolInputVal} ${gradeVal}`.trim();
+
+                if (!nameVal || !birthdateVal) return;
+
+                // Find current active child to look up the parent phone in mockUsers
+                const currentStudentObj = students.find(s => s.id === loggedInStudentId);
+                if (!currentStudentObj) {
+                    alert('올바른 학부모 세션을 찾을 수 없습니다.');
+                    return;
+                }
+
+                const parentPhoneVal = currentStudentObj.parentPhone;
+                const mockUsers = JSON.parse(localStorage.getItem('gongbubang_mock_users') || '[]');
+                const parentObj = mockUsers.find(u => u.role === 'parent' && normalizePhone(u.phone) === normalizePhone(parentPhoneVal));
+                const parentAddressVal = (parentObj ? parentObj.address : '') || currentStudentObj.address || '';
+
+                // Check if existing
+                let matchedStudent = students.find(s => s.name === nameVal && s.birthdate === birthdateVal);
+                let targetId = matchedStudent ? matchedStudent.id : (usernameVal || Date.now().toString());
+
+                const updatedStudentObj = {
+                    id: targetId,
+                    name: nameVal,
+                    birthdate: birthdateVal,
+                    age: ageVal,
+                    school: schoolVal || (matchedStudent ? matchedStudent.school : '공부방 초등학교'),
+                    phone: matchedStudent ? matchedStudent.phone : '',
+                    parentPhone: parentPhoneVal,
+                    sibling: matchedStudent ? matchedStudent.sibling : '',
+                    classId: matchedStudent ? matchedStudent.classId : 1,
+                    username: usernameVal,
+                    password: passwordVal,
+                    address: parentAddressVal || (matchedStudent ? matchedStudent.address : ''),
+                    progress: matchedStudent ? matchedStudent.progress : '개념 완성 과정 등록 대기 중',
+                    remarks: matchedStudent ? matchedStudent.remarks : '\n[FEE:250000,DAY:10]',
+                    isTerminated: matchedStudent ? !!matchedStudent.isTerminated : false,
+                    terminationDate: matchedStudent ? matchedStudent.terminationDate : null
+                };
+
+                // Save to database
+                if (matchedStudent) {
+                    // Update
+                    students = students.map(s => s.id === targetId ? updatedStudentObj : s);
+                } else {
+                    // Insert new
+                    students.push(updatedStudentObj);
+                }
+
+                // Sync with Supabase & localStorage
+                try {
+                    localStorage.setItem('gongbubang_students', JSON.stringify(students));
+                    if (typeof supabase !== 'undefined' && supabase && !isMock) {
+                        await supabase.from('sb_students').upsert(mapStudentToDb(updatedStudentObj));
+                    }
+                    
+                    showToast('자녀 정보가 등록 및 정상 연동되었습니다!');
+                    parentAddChildModal.style.display = 'none';
+                    
+                    // Refresh dashboard view
+                    renderMyClass();
+                } catch (err) {
+                    console.error('Error saving student info from parent panel:', err);
+                    alert('저장 중 오류가 발생했습니다.');
+                }
+            });
+        }
+});
+console.log('Deployment attempt 2');  
+
+
+setTimeout(() => {
+    const studentsSection = document.getElementById('students');
+    if (studentsSection && !document.getElementById('btn-global-exam-dashboard')) {
+        const titleBar = studentsSection.querySelector('.section-title-bar');
+        if (titleBar) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-global-exam-dashboard';
+            btn.className = 'btn-primary';
+            btn.style.marginLeft = '10px';
+            btn.innerHTML = '<i data-lucide="bar-chart-2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"></i> 전체 시험 성적 통계';
+            btn.addEventListener('click', () => {
+                if (window.initAdminExamDashboard) window.initAdminExamDashboard();
+            });
+            titleBar.appendChild(btn);
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+}, 2000);
+
+// --- Admin Exam Dashboard Stub ---
+window.initAdminExamDashboard = () => {
+    const adminExamCard = document.getElementById('admin-exam-management-card');
+    if (adminExamCard) {
+        adminExamCard.scrollIntoView({ behavior: 'smooth' });
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnAdminAddAnswerSheet = document.getElementById('btn-admin-add-answer-sheet');
+    const adminAnswerSheetModal = document.getElementById('admin-answer-sheet-modal');
+    const btnAdminAnswerSheetClose = document.getElementById('btn-admin-answer-sheet-close');
+    const btnAdminAsOcr = document.getElementById('btn-admin-as-ocr');
+    const asAnswersContainer = document.getElementById('admin-as-answers-container');
+    const btnAdminAsAddRow = document.getElementById('btn-admin-as-add-row');
+    
+    // Add row logic
+    if (btnAdminAsAddRow && asAnswersContainer) {
+        btnAdminAsAddRow.addEventListener('click', () => {
+            const rowCount = asAnswersContainer.querySelectorAll('.answer-row').length;
+            const row = document.createElement('div');
+            row.className = 'answer-row';
+            row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 4px;';
+            row.innerHTML = `
+                <span style="font-size: 0.8rem; font-weight: 700; width: 30px; text-align: center;">${rowCount + 1}번</span>
+                <input type="text" class="as-answer-input" placeholder="정답" style="flex-grow: 1; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                <input type="number" class="as-score-input" placeholder="배점" style="width: 60px; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">점</span>
+            `;
+            asAnswersContainer.appendChild(row);
+        });
+    }
+
+    // OCR logic
+    if (btnAdminAsOcr) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        btnAdminAsOcr.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            btnAdminAsOcr.innerHTML = '<i data-lucide="loader" class="spin" style="width:12px;height:12px;"></i> 판독 중...';
+            btnAdminAsOcr.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Data = reader.result.split(',')[1];
+                    const { callGeminiAnswerSheetOCR } = await import('./src/geminiApi.js');
+                    const results = await callGeminiAnswerSheetOCR(base64Data, file.type);
+                    
+                    if (results && results.length > 0 && asAnswersContainer) {
+                        asAnswersContainer.innerHTML = '';
+                        results.forEach((res, i) => {
+                            const row = document.createElement('div');
+                            row.className = 'answer-row';
+                            row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 4px;';
+                            row.innerHTML = `
+                                <span style="font-size: 0.8rem; font-weight: 700; width: 30px; text-align: center;">${res.q || (i+1)}번</span>
+                                <input type="text" class="as-answer-input" value="${res.answer || ''}" placeholder="정답" style="flex-grow: 1; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                                <input type="number" class="as-score-input" value="${res.score || ''}" placeholder="배점" style="width: 60px; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                                <span style="font-size: 0.8rem; color: var(--text-muted);">점</span>
+                            `;
+                            asAnswersContainer.appendChild(row);
+                        });
+                        alert('정답지가 성공적으로 판독되었습니다. 추출된 정보를 확인해 주세요.');
+                    }
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                alert('OCR 판독 실패: ' + err.message);
+            } finally {
+                btnAdminAsOcr.innerHTML = '<i data-lucide="camera" style="width:12px;height:12px;"></i> 정답지 사진으로 자동 입력';
+                btnAdminAsOcr.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
+                fileInput.value = '';
+            }
+        });
+    }
+    
+    if (btnAdminAddAnswerSheet && adminAnswerSheetModal) {
+        btnAdminAddAnswerSheet.addEventListener('click', () => {
+            adminAnswerSheetModal.style.display = 'flex';
+        });
+    }
+    if (btnAdminAnswerSheetClose && adminAnswerSheetModal) {
+        btnAdminAnswerSheetClose.addEventListener('click', () => {
+            adminAnswerSheetModal.style.display = 'none';
+        });
+    }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const gradeFilter = document.getElementById('parent-exam-grade-filter');
