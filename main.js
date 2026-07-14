@@ -5551,6 +5551,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         parentQuickMenu.style.display = 'flex';
+        // Force hide elements for Parent role
+        const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
+        if (badgeWidget) badgeWidget.style.display = 'none';
+        const examSection = document.getElementById('student-exam-section');
+        if (examSection) examSection.style.display = 'none';
+        const chatWidget = document.getElementById('chat-messages-container-anchor');
+        if (chatWidget) chatWidget.style.display = 'none';
+        // Hide parent quick menu links for those items
+        document.querySelectorAll('#parent-quick-menu a[href="#student-exam-section"], #parent-quick-menu a[href="#myclass-badge-shelf-widget"], #parent-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('#student-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
+            el.style.display = 'none';
+        });
 
         // 1. Unread feedbacks badge
         const fbBadge = document.getElementById('parent-menu-feedback-badge');
@@ -6118,6 +6132,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     tuitionContainer.appendChild(itemEl);
                 });
 
+                tuitionContainer.querySelectorAll('.btn-pay-textbook-direct').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const payModal = document.getElementById('textbook-payment-modal');
+                        const payTbName = document.getElementById('pay-textbook-name');
+                        const payTbPrice = document.getElementById('pay-textbook-price');
+                        const payReqId = document.getElementById('pay-request-id');
+                        const linkToss = document.getElementById('link-toss-transfer');
+                        
+                        const reqId = btn.getAttribute('data-req-id');
+                        const cId = btn.getAttribute('data-student-id');
+                        const tbName = btn.getAttribute('data-tb-name');
+                        const feeAmt = btn.getAttribute('data-tb-price');
+                        
+                        if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                            payTbName.textContent = tbName;
+                            payTbPrice.textContent = Number(feeAmt).toLocaleString() + '원';
+                            payReqId.value = reqId || `NEW__${cId}__${tbName}`;
+                            linkToss.href = 'supertoss://send?bank=국민&accountNo=76870201244813&amount=' + feeAmt;
+                            payModal.classList.add('open');
+                        }
+                    });
+                });
+                
                 tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const payModal = document.getElementById('textbook-payment-modal');
