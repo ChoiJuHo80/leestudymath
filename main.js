@@ -6576,6 +6576,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('pending_signup_data', JSON.stringify(pendingData));
                 sessionStorage.setItem('gongbubang_signup_flow', 'true');
 
+                // Send Telegram Notification
+                try {
+                    let childrenInfo = children.map((c, i) => `   ${i+1}. 이름: ${c.name} (아이디: ${c.username})`).join('\n');
+                    const telegramMessage = `🔔 <b>신규 학부모 가입 및 인증 시도</b>\n\n` +
+                        `👤 <b>학부모 이름:</b> ${parentName}\n` +
+                        `📱 <b>연락처:</b> ${phone}\n` +
+                        `🏠 <b>주소:</b> ${address}\n` +
+                        `👶 <b>자녀 정보:</b>\n${childrenInfo}`;
+                    sendTelegramNotification(telegramMessage); // Async, but don't block
+                } catch (e) {
+                    console.error('Failed to send telegram notification for signup:', e);
+                }
+
+
                 // Transition to Step 2 (Social Authentication Option)
                 const stepSocial = document.getElementById('signup-step-social');
                 const stepProfile = document.getElementById('signup-step-profile');
