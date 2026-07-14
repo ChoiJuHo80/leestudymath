@@ -6,6 +6,24 @@ window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
 
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-parent-add-child') || e.target.closest('#btn-parent-add-child-close')) {
+        const parentAddChildModal = document.getElementById('parent-add-child-modal');
+        if (!parentAddChildModal) return;
+        
+        if (e.target.closest('#btn-parent-add-child-close')) {
+            parentAddChildModal.style.display = 'none';
+        } else {
+            const parentAddChildForm = document.getElementById('parent-add-child-form');
+            const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+            if (parentAddChildForm) parentAddChildForm.reset();
+            if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
+            parentAddChildModal.style.display = 'flex';
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // [HOTFIX] 기존 하드코딩된 더미 데이터가 로컬 스토리지에 남아있는 경우 강제 초기화
@@ -12845,16 +12863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const parentChildPasswordInput = document.getElementById('parent-child-password-input');
         const parentChildSchoolInput = document.getElementById('parent-child-school-input');
 
-        if (btnParentAddChild) {
-            btnParentAddChild.addEventListener('click', (e) => {
-                const parentAddChildForm = document.getElementById('parent-add-child-form');
-                const parentChildUsernameInput = document.getElementById('parent-child-username-input');
-                if (parentAddChildForm) parentAddChildForm.reset();
-                if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
-                if (parentAddChildModal) parentAddChildModal.style.display = 'flex';
-                if (window.lucide) window.lucide.createIcons();
-            });
-        }
+
 
         if (btnParentAddChildClose && parentAddChildModal) {
             btnParentAddChildClose.addEventListener('click', () => {
