@@ -13255,17 +13255,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hwId = e.target.dataset.hwId;
                 const isCompleted = e.target.checked;
                 try {
-                    const { error } = await supabase
-                        .from('sb_homework')
-                        .update({ status: isCompleted ? 'completed' : 'pending', submission_date: isCompleted ? new Date().toISOString() : null })
-                        .eq('id', hwId);
-                    if (error) throw error;
-                    
                     const hwIndex = homework.findIndex(h => String(h.id) === String(hwId));
                     if (hwIndex !== -1) {
                         homework[hwIndex].isCompleted = isCompleted;
                         homework[hwIndex].completedAt = isCompleted ? new Date().toISOString() : null;
-                        renderDashboard();
+                        if (typeof saveHomework === 'function') await saveHomework();
+                        if (typeof renderMyClass === 'function') renderMyClass();
+                        else if (typeof renderDashboard === 'function') renderDashboard();
                     }
                 } catch (err) {
                     console.error('HW update error:', err);
@@ -13276,16 +13272,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hwId = e.target.dataset.hwId;
                 const isConfirmed = e.target.checked;
                 try {
-                    const { error } = await supabase
-                        .from('sb_homework')
-                        .update({ parent_confirmed: isConfirmed })
-                        .eq('id', hwId);
-                    if (error) throw error;
-                    
                     const hwIndex = homework.findIndex(h => String(h.id) === String(hwId));
                     if (hwIndex !== -1) {
                         homework[hwIndex].parentConfirmed = isConfirmed;
-                        renderDashboard();
+                        if (typeof saveHomework === 'function') await saveHomework();
+                        if (typeof renderMyClass === 'function') renderMyClass();
+                        else if (typeof renderDashboard === 'function') renderDashboard();
                     }
                 } catch (err) {
                     console.error('Parent confirm error:', err);
