@@ -5947,6 +5947,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     habitSelector.appendChild(btn);
                 });
             }
+        } else {
+            const calSelector = document.getElementById('calendar-child-selector');
+            if (calSelector) calSelector.style.display = 'none';
+            const habitSelector = document.getElementById('habit-child-selector');
+            if (habitSelector) habitSelector.style.display = 'none';
+            window.currentCalStudentId = null;
+            window.currentHabitStudentId = null;
         }
         
         // --- Graded Exams Widget ---
