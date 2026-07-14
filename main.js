@@ -12845,17 +12845,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const parentChildPasswordInput = document.getElementById('parent-child-password-input');
         const parentChildSchoolInput = document.getElementById('parent-child-school-input');
 
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('#btn-parent-add-child')) {
-                const parentAddChildModal = document.getElementById('parent-add-child-modal');
+        if (btnParentAddChild) {
+            btnParentAddChild.addEventListener('click', (e) => {
                 const parentAddChildForm = document.getElementById('parent-add-child-form');
                 const parentChildUsernameInput = document.getElementById('parent-child-username-input');
                 if (parentAddChildForm) parentAddChildForm.reset();
                 if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
                 if (parentAddChildModal) parentAddChildModal.style.display = 'flex';
                 if (window.lucide) window.lucide.createIcons();
-            }
-        });
+            });
+        }
 
         if (btnParentAddChildClose && parentAddChildModal) {
             btnParentAddChildClose.addEventListener('click', () => {
