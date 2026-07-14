@@ -1,5 +1,5 @@
 import { supabase } from '../supabase.js';
-import { callGeminiVision } from './geminiApi.js';
+import { callGeminiVision, callGeminiAnswerSheetOCR } from './geminiApi.js';
 // Removed invalid import
 
 // Inject basic CSS for exams
@@ -240,8 +240,32 @@ export const initTeacherExamView = (studentContainer, student) => {
     btn.className = 'btn-secondary';
     btn.style.marginTop = '10px';
     btn.style.width = '100%';
-    btn.innerHTML = '<i data-lucide="check-square" style="width:14px;height:14px;"></i> 시험지 채점 및 관리';
+    btn.style.position = 'relative';
+    btn.innerHTML = `
+        <i data-lucide="check-square" style="width:14px;height:14px;"></i> 시험지 채점 및 관리
+        <span class="ungraded-badge" style="display:none; position:absolute; top:-6px; right:-6px; background:#ff4444; color:#fff; font-size:11px; padding:2px 6px; border-radius:10px; font-weight:bold;">0건</span>
+    `;
     
+    // Fetch ungraded exams for this student
+    supabase
+        .from('exams')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', student.id)
+        .eq('status', '미채점')
+        .then(({ count, error }) => {
+            if (!error && count > 0) {
+                const badge = btn.querySelector('.ungraded-badge');
+                if (badge) {
+                    badge.textContent = `${count}건`;
+                    badge.style.display = 'inline-block';
+                }
+                btn.style.borderColor = '#ff4444';
+                btn.style.color = '#ff4444';
+                btn.style.animation = 'pulse 2s infinite';
+            }
+        })
+        .catch(console.error);
+
     btn.addEventListener('click', () => {
         openTeacherExamModal(student);
     });
@@ -270,7 +294,13 @@ const openTeacherExamModal = async (student) => {
                 <div id="detail-img-container" style="display:flex; flex-direction:column; gap:10px; max-height: 50vh; overflow-y:auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;"></div>
                 
                 <div id="ai-grading-container" style="display:none; margin-top:15px; padding:15px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
-                    <h4 style="margin-bottom:10px;">가채점 결과 (수정 가능)</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0;">가채점 결과 (수정 가능)</h4>
+                        <div>
+                            <button id="btn-register-answer-sheet" class="btn-secondary" style="font-size:0.8em; padding:4px 8px;">📝 공식 답안지 등록/수정</button>
+                            <input type="file" id="answer-sheet-upload-input" accept="image/*" style="display:none;" />
+                        </div>
+                    </div>
                     <table class="admin-table" style="width:100%; text-align:center;">
                         <thead>
                             <tr>
@@ -413,12 +443,79 @@ const openTeacherExamModal = async (student) => {
             });
         };
 
+        const btnRegAns = document.getElementById('btn-register-answer-sheet');
+        const inpRegAns = document.getElementById('answer-sheet-upload-input');
+        
+        if (btnRegAns && inpRegAns) {
+            btnRegAns.onclick = () => inpRegAns.click();
+            
+            inpRegAns.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                btnRegAns.disabled = true;
+                const originalText = btnRegAns.textContent;
+                btnRegAns.textContent = '답안지 분석/등록 중...';
+                
+                try {
+                    // Read file
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    await new Promise(resolve => reader.onload = resolve);
+                    const base64Data = reader.result.split(',')[1];
+                    
+                    // Call Gemini API
+                    const answersJson = await callGeminiAnswerSheetOCR(base64Data, file.type);
+                    
+                    // Upload image
+                    const fileName = `answer_sheets/${Date.now()}_${file.name}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('gongbubang_assets')
+                        .upload(fileName, file);
+                    
+                    let imageUrl = '';
+                    if (!uploadError) {
+                        const { data: urlData } = supabase.storage
+                            .from('gongbubang_assets')
+                            .getPublicUrl(fileName);
+                        imageUrl = urlData.publicUrl;
+                    }
+
+                    const examName = String(ex.sequence) + '회차';
+                    
+                    // Upsert DB
+                    const { error: dbError } = await supabase
+                        .from('sb_exam_answer_sheets')
+                        .upsert({
+                            school: student.school || '',
+                            grade: student.grade || '',
+                            semester: ex.semester + '학기',
+                            exam_name: examName,
+                            answers: answersJson,
+                            image_url: imageUrl,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'school, grade, semester, exam_name' });
+                        
+                    if (dbError) throw dbError;
+                    
+                    alert('공식 답안지가 성공적으로 등록되었습니다.\n이제 AI 가채점 시 이 답안지가 우선 적용됩니다.');
+                } catch (err) {
+                    alert('답안지 등록 중 오류 발생: ' + err.message);
+                } finally {
+                    btnRegAns.disabled = false;
+                    btnRegAns.textContent = originalText;
+                    inpRegAns.value = '';
+                }
+            };
+        }
+
         document.getElementById('btn-auto-grade').onclick = async () => {
             const btn = document.getElementById('btn-auto-grade');
             btn.disabled = true;
             btn.textContent = 'AI 분석 중... (최대 1분 소요)';
             
             try {
+                const examName = String(ex.sequence) + '회차';
                 // Fetch the answer sheet for this exam if it exists
                 const { data: answerSheets } = await supabase
                     .from('sb_exam_answer_sheets')
@@ -426,7 +523,7 @@ const openTeacherExamModal = async (student) => {
                     .eq('school', student.school || '')
                     .eq('grade', student.grade || '')
                     .eq('semester', ex.semester + '학기')
-                    // We assume sequence is examName for now, or match it closely
+                    .eq('exam_name', examName)
                     .order('created_at', { ascending: false });
 
                 let answerSheet = null;

@@ -502,14 +502,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapCurriculumFromDb = (dbC) => ({
         id: dbC.id,
         title: dbC.title,
-        level: dbC.level,
-        orderNum: dbC.order_num
+        stepNum: dbC.step_num || dbC.level,
+        description: dbC.description || '',
+        targets: dbC.targets || []
     });
     const mapCurriculumToDb = (jsC) => ({
         id: jsC.id,
         title: jsC.title,
-        level: jsC.level,
-        order_num: jsC.orderNum
+        step_num: jsC.stepNum,
+        level: jsC.stepNum,
+        order_num: jsC.stepNum ? parseInt(jsC.stepNum) || 0 : 0,
+        description: jsC.description || '',
+        targets: jsC.targets || []
     });
 
     const mapAiQueryFromDb = (dbQ) => ({
@@ -5555,7 +5559,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
         if (badgeWidget) badgeWidget.style.display = 'none';
         const examSection = document.getElementById('student-exam-section');
-        if (examSection) examSection.style.display = 'none';
+        if (examSection) examSection.remove();
         const chatWidget = document.getElementById('chat-messages-container-anchor');
         if (chatWidget) chatWidget.style.display = 'none';
         // Hide parent quick menu links for those items
@@ -8163,6 +8167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const classProgressBatchForm = document.getElementById('class-progress-batch-form');
         
         const loadBatchProgressContent = () => {
+            const typeSelect = document.getElementById('batch-progress-type-select');
             const classSelect = document.getElementById('batch-progress-class-select');
             const dateInput = document.getElementById('batch-progress-date-input');
             const contentInput = document.getElementById('batch-progress-content-input');
@@ -8172,43 +8177,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
+            const regType = typeSelect ? typeSelect.value : 'progress';
             const classId = parseStudentId(classSelect.value);
             const date = dateInput.value;
             const classStudents = students.filter(s => s.classId === classId);
             
             if (classStudents.length > 0) {
                 const firstStudent = classStudents[0];
-                const existingProg = progressList.find(p => p.studentId === firstStudent.id && p.date === date);
-                if (existingProg) {
-                    contentInput.value = existingProg.content;
-                } else {
-                    contentInput.value = '';
+                if (regType === 'progress') {
+                    const existingProg = progressList.find(p => p.studentId === firstStudent.id && p.date === date);
+                    contentInput.value = existingProg ? existingProg.content : '';
+                } else if (regType === 'homework') {
+                    const existingHw = homework.find(h => h.studentId === firstStudent.id && h.dueDate === date);
+                    contentInput.value = existingHw ? existingHw.title : '';
                 }
             } else {
                 contentInput.value = '';
             }
         };
 
+        const batchProgressTypeSelect = document.getElementById('batch-progress-type-select');
         const batchProgressClassSelect = document.getElementById('batch-progress-class-select');
         const batchProgressDateInput = document.getElementById('batch-progress-date-input');
+        if (batchProgressTypeSelect) batchProgressTypeSelect.addEventListener('change', loadBatchProgressContent);
         if (batchProgressClassSelect) batchProgressClassSelect.addEventListener('change', loadBatchProgressContent);
         if (batchProgressDateInput) batchProgressDateInput.addEventListener('change', loadBatchProgressContent);
 
         if (classProgressBatchForm) {
             classProgressBatchForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                const typeSelect = document.getElementById('batch-progress-type-select');
                 const classSelect = document.getElementById('batch-progress-class-select');
                 const dateInput = document.getElementById('batch-progress-date-input');
                 const contentInput = document.getElementById('batch-progress-content-input');
                 
                 if (!classSelect || !dateInput || !contentInput) return;
 
+                const regType = typeSelect ? typeSelect.value : 'progress';
                 const classId = parseStudentId(classSelect.value);
                 const date = dateInput.value;
                 const content = contentInput.value.trim();
 
                 if (!classId) {
-                    showToast('진도를 등록할 반을 선택해 주세요.');
+                    showToast('등록할 반을 선택해 주세요.');
                     return;
                 }
 
@@ -8219,23 +8230,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Add or update progress for each student
-                classStudents.forEach((student) => {
-                    const existingProg = progressList.find(p => p.studentId === student.id && p.date === date);
-                    if (existingProg) {
-                        existingProg.content = content;
-                    } else {
-                        const newProg = {
+                if (regType === 'progress') {
+                    // Add or update progress for each student
+                    classStudents.forEach((student) => {
+                        const existingProg = progressList.find(p => p.studentId === student.id && p.date === date);
+                        if (existingProg) {
+                            existingProg.content = content;
+                        } else {
+                            const newProg = {
+                                id: crypto.randomUUID(),
+                                studentId: student.id,
+                                date: date,
+                                content: content
+                            };
+                            progressList.unshift(newProg);
+                        }
+                    });
+                    saveProgressList();
+                } else if (regType === 'homework') {
+                    // Add homework for each student
+                    classStudents.forEach((student) => {
+                        const newHw = {
                             id: crypto.randomUUID(),
                             studentId: student.id,
-                            date: date,
-                            content: content
+                            dueDate: date,
+                            title: content,
+                            description: '',
+                            isCompleted: false
                         };
-                        progressList.unshift(newProg);
-                    }
-                });
+                        homework.unshift(newHw);
+                    });
+                    saveHomework();
+                }
 
-                saveProgressList();
                 renderStudents(studentSearchInput ? studentSearchInput.value : '');
 
                 // Re-render myclass if student portal is open
@@ -8250,7 +8277,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 contentInput.value = '';
                 
                 const selectedClass = classes.find(c => c.id === classId);
-                showToast(`[진도 일괄 등록 완료] ${selectedClass ? selectedClass.name : '해당 반'} 원생 ${classStudents.length}명의 진도가 일괄 등록되었습니다.`);
+                const typeName = regType === 'homework' ? '과제' : '진도';
+                showToast(`[${typeName} 일괄 등록 완료] ${selectedClass ? selectedClass.name : '해당 반'} 원생 ${classStudents.length}명의 ${typeName}가 일괄 등록되었습니다.`);
             });
         }
 
@@ -8855,8 +8883,8 @@ document.addEventListener('DOMContentLoaded', () => {
             curriculumListContainer.addEventListener('click', (e) => {
                 const btnEdit = e.target.closest('.btn-edit-curriculum');
                 if (btnEdit) {
-                    const id = Number(btnEdit.getAttribute('data-id'));
-                    const item = curriculums.find(c => c.id === id);
+                    const id = btnEdit.getAttribute('data-id');
+                    const item = curriculums.find(c => String(c.id) === String(id));
                     if (item) {
                         editCurriculumIdInput.value = item.id;
                         curriculumTitleInput.value = item.title;
@@ -8874,9 +8902,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const btnDelete = e.target.closest('.btn-delete-curriculum');
                 if (btnDelete) {
-                    const id = Number(btnDelete.getAttribute('data-id'));
+                    const id = btnDelete.getAttribute('data-id');
                     if (confirm('이 커리큘럼 단계를 정말 삭제하시겠습니까?')) {
-                        curriculums = curriculums.filter(c => c.id !== id);
+                        curriculums = curriculums.filter(c => String(c.id) !== String(id));
                         saveCurriculums();
                         showToast('커리큘럼 단계가 삭제되었습니다.');
                         resetCurriculumForm();
@@ -10925,7 +10953,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.renderStudentFormulasAndBadges = (student) => {
             if (userRole === 'parent') {
                 const examSection = document.getElementById('student-exam-section');
-                if (examSection) examSection.style.display = 'none';
+                if (examSection) examSection.remove();
                 const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
                 if (badgeWidget) badgeWidget.style.display = 'none';
                 const vocabWidget = document.getElementById('myclass-vocab-widget');
