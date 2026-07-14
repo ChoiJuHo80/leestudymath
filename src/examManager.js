@@ -52,6 +52,8 @@ const getSemester = (dateStr) => {
 const getMockImageUrl = () => `https://picsum.photos/seed/${Math.random()}/400/600`;
 
 export const initStudentExamView = async (studentId, containerSelector = '#myclass') => {
+    if (window.userRole === 'parent') return;
+    
     injectStyles();
     const container = document.querySelector(containerSelector);
     if (!container) return;
