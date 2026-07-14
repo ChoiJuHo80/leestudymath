@@ -10923,6 +10923,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Student: Render Formulas & Badges ---
         window.renderStudentFormulasAndBadges = (student) => {
+            if (userRole === 'parent') {
+                const examSection = document.getElementById('student-exam-section');
+                if (examSection) examSection.style.display = 'none';
+                const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
+                if (badgeWidget) badgeWidget.style.display = 'none';
+                const vocabWidget = document.getElementById('myclass-vocab-widget');
+                if (vocabWidget) vocabWidget.style.display = 'none';
+                return;
+            }
             if (window.initStudentExamView) window.initStudentExamView(student.id);
             if (!student) return;
             
