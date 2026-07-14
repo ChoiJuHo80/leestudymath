@@ -14,14 +14,16 @@ window.openParentAddChildModal = function() {
     const parentChildUsernameInput = document.getElementById('parent-child-username-input');
     if (parentAddChildForm) parentAddChildForm.reset();
     if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
-    parentAddChildModal.style.display = 'flex';
+    parentAddChildModal.classList.add('open');
     if (window.lucide) window.lucide.createIcons();
 };
 
 document.addEventListener('click', (e) => {
     if (e.target.closest('#btn-parent-add-child-close')) {
         const parentAddChildModal = document.getElementById('parent-add-child-modal');
-        if (parentAddChildModal) parentAddChildModal.style.display = 'none';
+        if (parentAddChildModal) parentAddChildModal.classList.remove('open');
+    } else if (e.target.id === 'parent-add-child-modal') {
+        e.target.classList.remove('open');
     }
 });
 
