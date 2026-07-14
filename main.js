@@ -6,21 +6,22 @@ window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
 
+window.openParentAddChildModal = function() {
+    const parentAddChildModal = document.getElementById('parent-add-child-modal');
+    if (!parentAddChildModal) return;
+    
+    const parentAddChildForm = document.getElementById('parent-add-child-form');
+    const parentChildUsernameInput = document.getElementById('parent-child-username-input');
+    if (parentAddChildForm) parentAddChildForm.reset();
+    if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
+    parentAddChildModal.style.display = 'flex';
+    if (window.lucide) window.lucide.createIcons();
+};
+
 document.addEventListener('click', (e) => {
-    if (e.target.closest('#btn-parent-add-child') || e.target.closest('#btn-parent-add-child-close')) {
+    if (e.target.closest('#btn-parent-add-child-close')) {
         const parentAddChildModal = document.getElementById('parent-add-child-modal');
-        if (!parentAddChildModal) return;
-        
-        if (e.target.closest('#btn-parent-add-child-close')) {
-            parentAddChildModal.style.display = 'none';
-        } else {
-            const parentAddChildForm = document.getElementById('parent-add-child-form');
-            const parentChildUsernameInput = document.getElementById('parent-child-username-input');
-            if (parentAddChildForm) parentAddChildForm.reset();
-            if (parentChildUsernameInput) parentChildUsernameInput.disabled = false;
-            parentAddChildModal.style.display = 'flex';
-            if (window.lucide) window.lucide.createIcons();
-        }
+        if (parentAddChildModal) parentAddChildModal.style.display = 'none';
     }
 });
 
