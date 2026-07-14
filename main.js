@@ -13097,3 +13097,103 @@ setTimeout(() => {
     }
 }, 2000);
 
+// --- Admin Exam Dashboard Stub ---
+window.initAdminExamDashboard = () => {
+    const adminExamCard = document.getElementById('admin-exam-management-card');
+    if (adminExamCard) {
+        adminExamCard.scrollIntoView({ behavior: 'smooth' });
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnAdminAddAnswerSheet = document.getElementById('btn-admin-add-answer-sheet');
+    const adminAnswerSheetModal = document.getElementById('admin-answer-sheet-modal');
+    const btnAdminAnswerSheetClose = document.getElementById('btn-admin-answer-sheet-close');
+    const btnAdminAsOcr = document.getElementById('btn-admin-as-ocr');
+    const asAnswersContainer = document.getElementById('admin-as-answers-container');
+    const btnAdminAsAddRow = document.getElementById('btn-admin-as-add-row');
+    
+    // Add row logic
+    if (btnAdminAsAddRow && asAnswersContainer) {
+        btnAdminAsAddRow.addEventListener('click', () => {
+            const rowCount = asAnswersContainer.querySelectorAll('.answer-row').length;
+            const row = document.createElement('div');
+            row.className = 'answer-row';
+            row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 4px;';
+            row.innerHTML = `
+                <span style="font-size: 0.8rem; font-weight: 700; width: 30px; text-align: center;">${rowCount + 1}번</span>
+                <input type="text" class="as-answer-input" placeholder="정답" style="flex-grow: 1; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                <input type="number" class="as-score-input" placeholder="배점" style="width: 60px; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">점</span>
+            `;
+            asAnswersContainer.appendChild(row);
+        });
+    }
+
+    // OCR logic
+    if (btnAdminAsOcr) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        btnAdminAsOcr.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            btnAdminAsOcr.innerHTML = '<i data-lucide="loader" class="spin" style="width:12px;height:12px;"></i> 판독 중...';
+            btnAdminAsOcr.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Data = reader.result.split(',')[1];
+                    const { callGeminiAnswerSheetOCR } = await import('./src/geminiApi.js');
+                    const results = await callGeminiAnswerSheetOCR(base64Data, file.type);
+                    
+                    if (results && results.length > 0 && asAnswersContainer) {
+                        asAnswersContainer.innerHTML = '';
+                        results.forEach((res, i) => {
+                            const row = document.createElement('div');
+                            row.className = 'answer-row';
+                            row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 4px;';
+                            row.innerHTML = `
+                                <span style="font-size: 0.8rem; font-weight: 700; width: 30px; text-align: center;">${res.q || (i+1)}번</span>
+                                <input type="text" class="as-answer-input" value="${res.answer || ''}" placeholder="정답" style="flex-grow: 1; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                                <input type="number" class="as-score-input" value="${res.score || ''}" placeholder="배점" style="width: 60px; padding: 6px 10px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; outline: none;">
+                                <span style="font-size: 0.8rem; color: var(--text-muted);">점</span>
+                            `;
+                            asAnswersContainer.appendChild(row);
+                        });
+                        alert('정답지가 성공적으로 판독되었습니다. 추출된 정보를 확인해 주세요.');
+                    }
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                alert('OCR 판독 실패: ' + err.message);
+            } finally {
+                btnAdminAsOcr.innerHTML = '<i data-lucide="camera" style="width:12px;height:12px;"></i> 정답지 사진으로 자동 입력';
+                btnAdminAsOcr.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
+                fileInput.value = '';
+            }
+        });
+    }
+    
+    if (btnAdminAddAnswerSheet && adminAnswerSheetModal) {
+        btnAdminAddAnswerSheet.addEventListener('click', () => {
+            adminAnswerSheetModal.style.display = 'flex';
+        });
+    }
+    if (btnAdminAnswerSheetClose && adminAnswerSheetModal) {
+        btnAdminAnswerSheetClose.addEventListener('click', () => {
+            adminAnswerSheetModal.style.display = 'none';
+        });
+    }
+});

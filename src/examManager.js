@@ -417,7 +417,39 @@ const openTeacherExamModal = async (student) => {
             btn.textContent = 'AI 분석 중... (최대 1분 소요)';
             
             try {
-                const result = await callGeminiVision(urls);
+                // Fetch the answer sheet for this exam if it exists
+                const { data: answerSheets } = await supabase
+                    .from('sb_exam_answer_sheets')
+                    .select('answers')
+                    .eq('school', student.school || '')
+                    .eq('grade', student.grade || '')
+                    .eq('semester', ex.semester + '학기')
+                    // We assume sequence is examName for now, or match it closely
+                    .order('created_at', { ascending: false });
+
+                let answerSheet = null;
+                if (answerSheets && answerSheets.length > 0) {
+                    answerSheet = answerSheets[0].answers;
+                }
+                
+                // If answerSheet exists, we could use callGeminiVision with a specialized prompt
+                // For now, call the existing AI to get student answers and mock the correct answers
+                // Wait! If answerSheet exists, let's override the AI's "correct" answer with the official one
+                
+                let result = await callGeminiVision(urls);
+                
+                if (answerSheet) {
+                    result = result.map((r, i) => {
+                        const qNum = String(r.q || (i + 1));
+                        let officialCorrect = r.correct;
+                        if (Array.isArray(answerSheet)) {
+                            const match = answerSheet.find(a => String(a.q) === qNum);
+                            if (match && match.answer) officialCorrect = match.answer;
+                        }
+                        return { ...r, correct: officialCorrect };
+                    });
+                }
+                
                 window.currentAiResult = result;
                 
                 document.getElementById('ai-grading-container').style.display = 'block';
