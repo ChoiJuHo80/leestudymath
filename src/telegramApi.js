@@ -13,22 +13,29 @@ export async function sendTelegramNotification(message) {
 
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                chat_id: TELEGRAM_CHAT_ID,
-                text: message,
-                parse_mode: 'HTML'
-            })
-        });
+    // Support multiple chat IDs separated by commas
+    const chatIds = TELEGRAM_CHAT_ID.split(',').map(id => id.trim()).filter(id => id);
 
-        if (!response.ok) {
-            console.error('Failed to send Telegram notification:', await response.text());
-        }
+    try {
+        const promises = chatIds.map(chatId => 
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: 'HTML'
+                })
+            }).then(async (response) => {
+                if (!response.ok) {
+                    console.error(`Failed to send Telegram notification to ${chatId}:`, await response.text());
+                }
+            })
+        );
+        
+        await Promise.all(promises);
     } catch (error) {
         console.error('Error sending Telegram notification:', error);
     }
