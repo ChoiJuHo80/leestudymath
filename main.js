@@ -1920,12 +1920,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const idInput = block.querySelector('.child-id-input');
         const checkMsg = block.querySelector('.child-id-check-msg');
         if (btnCheck && idInput && checkMsg) {
-            btnCheck.addEventListener('click', () => {
+            const checkChildIdDuplicate = () => {
                 const username = idInput.value.trim();
                 if (!username) {
-                    checkMsg.style.display = 'block';
-                    checkMsg.style.color = '#ff4d4f';
-                    checkMsg.textContent = '아이디를 입력해 주세요.';
+                    checkMsg.style.display = 'none';
                     return;
                 }
                 if (username.length < 4) {
@@ -1957,7 +1955,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     checkMsg.style.color = '#52c41a';
                     checkMsg.textContent = '사용 가능한 아이디입니다.';
                 }
-            });
+            };
+            
+            btnCheck.addEventListener('click', checkChildIdDuplicate);
+            idInput.addEventListener('blur', checkChildIdDuplicate);
         }
 
         signupChildrenContainer.appendChild(block);
@@ -12903,12 +12904,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnCheckParentChildId = document.getElementById('btn-check-parent-child-id');
         const parentChildIdCheckMsg = document.getElementById('parent-child-id-check-msg');
         if (btnCheckParentChildId && parentChildUsernameInput && parentChildIdCheckMsg) {
-            btnCheckParentChildId.addEventListener('click', () => {
+            const checkParentChildIdDuplicate = () => {
                 const username = parentChildUsernameInput.value.trim();
                 if (!username) {
-                    parentChildIdCheckMsg.style.display = 'block';
-                    parentChildIdCheckMsg.style.color = '#ff4d4f';
-                    parentChildIdCheckMsg.textContent = '아이디를 입력해 주세요.';
+                    parentChildIdCheckMsg.style.display = 'none';
                     return;
                 }
                 if (username.length < 4) {
@@ -12937,7 +12936,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     parentChildIdCheckMsg.style.color = '#2e7d32';
                     parentChildIdCheckMsg.textContent = '사용 가능한 아이디입니다!';
                 }
-            });
+            };
+            
+            btnCheckParentChildId.addEventListener('click', checkParentChildIdDuplicate);
+            parentChildUsernameInput.addEventListener('blur', checkParentChildIdDuplicate);
         }
         
         // Auto-update grade options based on school
