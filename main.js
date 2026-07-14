@@ -5565,6 +5565,20 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#student-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
             el.style.display = 'none';
         });
+        // Force hide elements for Parent role
+        const badgeWidget = document.getElementById('myclass-badge-shelf-widget');
+        if (badgeWidget) badgeWidget.style.display = 'none';
+        const examSection = document.getElementById('student-exam-section');
+        if (examSection) examSection.style.display = 'none';
+        const chatWidget = document.getElementById('chat-messages-container-anchor');
+        if (chatWidget) chatWidget.style.display = 'none';
+        // Hide parent quick menu links for those items
+        document.querySelectorAll('#parent-quick-menu a[href="#student-exam-section"], #parent-quick-menu a[href="#myclass-badge-shelf-widget"], #parent-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('#student-quick-menu a[href="#chat-messages-container-anchor"]').forEach(el => {
+            el.style.display = 'none';
+        });
 
         // 1. Unread feedbacks badge
         const fbBadge = document.getElementById('parent-menu-feedback-badge');
@@ -6112,12 +6126,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 visibleItems.forEach(({ child, req, isPaid, feeAmount, feeDay, itemTitle, isTextbook, tbName }) => {
                     let actionHtml = '';
-                    if (isTextbook && !req) {
-                        actionHtml = '<button type="button" class="btn-request-purchase" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:var(--mascot-purple-bg);color:white;font-weight:700;cursor:pointer;" data-student-id="' + child.id + '" data-tb-name="' + tbName + '" data-tb-price="' + feeAmount + '">구매 요청</button>';
-                    } else if (req && !req.isConfirmed && isTextbook) {
-                        actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">승인 대기</span>';
+                    if (isTextbook && (!req || req.paymentStatus === '미결제')) {
+                        // Allow immediate payment
+                        actionHtml = '<div style="display:flex;gap:6px;align-items:center;"><span style="font-size:0.78rem;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:20px;font-weight:700;">결제 대기</span><button type="button" class="btn-pay-textbook-direct" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:#3b82f6;color:white;font-weight:700;cursor:pointer;" data-student-id="' + child.id + '" data-req-id="' + (req ? req.id : '') + '" data-tb-name="' + tbName + '" data-tb-price="' + feeAmount + '">결제하기</button></div>';
                     } else if (req && req.paymentStatus === '입금확인중') {
                         actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">입금확인중</span>';
+                    } else if (req && !req.isConfirmed && isTextbook) {
+                        actionHtml = '<span style="font-size:0.8rem;color:#f59e0b;background:#fef3c7;padding:4px 10px;border-radius:20px;font-weight:700;">승인 대기</span>';
                     } else if (req && req.paymentStatus === '미결제') {
                         actionHtml = '<div style="display:flex;gap:6px;align-items:center;"><span style="font-size:0.78rem;color:#3b82f6;background:#dbeafe;padding:3px 10px;border-radius:20px;font-weight:700;">결제 대기</span><button type="button" class="btn-pay-tuition-toss" style="padding:6px 14px;font-size:0.8rem;border-radius:20px;border:none;background:#3b82f6;color:white;font-weight:700;cursor:pointer;" data-req-id="' + req.id + '" data-fee-amount="' + feeAmount + '">결제하기</button></div>';
                     } else {
@@ -6155,6 +6170,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 });
                 
+                tuitionContainer.querySelectorAll('.btn-pay-textbook-direct').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const payModal = document.getElementById('textbook-payment-modal');
+                        const payTbName = document.getElementById('pay-textbook-name');
+                        const payTbPrice = document.getElementById('pay-textbook-price');
+                        const payReqId = document.getElementById('pay-request-id');
+                        const linkToss = document.getElementById('link-toss-transfer');
+                        
+                        const reqId = btn.getAttribute('data-req-id');
+                        const cId = btn.getAttribute('data-student-id');
+                        const tbName = btn.getAttribute('data-tb-name');
+                        const feeAmt = btn.getAttribute('data-tb-price');
+                        
+                        if (payModal && payTbName && payTbPrice && payReqId && linkToss) {
+                            payTbName.textContent = tbName;
+                            payTbPrice.textContent = Number(feeAmt).toLocaleString() + '원';
+                            payReqId.value = reqId || `NEW__${cId}__${tbName}`;
+                            linkToss.href = 'supertoss://send?bank=국민&accountNo=76870201244813&amount=' + feeAmt;
+                            payModal.classList.add('open');
+                        }
+                    });
+                });
+
                 tuitionContainer.querySelectorAll('.btn-pay-tuition-toss').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const payModal = document.getElementById('textbook-payment-modal');
@@ -9656,10 +9694,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 let actionBtn = '';
-                if (!r.isConfirmed) {
+                if (r.paymentStatus === '입금확인중') {
+                    actionBtn = `<button type="button" class="btn-approve-payment-combined btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto; background: #10b981; border: 1px solid #10b981;" data-req-id="${r.id}">승인 및 입금확인</button>`;
+                } else if (!r.isConfirmed) {
                     actionBtn = `<button type="button" class="btn-confirm-req btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto;" data-req-id="${r.id}">확인</button>`;
-                } else if (r.paymentStatus === '입금확인중') {
-                    actionBtn = `<button type="button" class="btn-approve-payment btn-admin-write" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; box-shadow: none; height: auto; background: #10b981; border: 1px solid #10b981;" data-req-id="${r.id}">입금승인</button>`;
                 } else if (r.paymentStatus === '결제완료') {
                     actionBtn = `<span style="font-size: 0.78rem; color: var(--text-muted);">결제완료</span>`;
                 } else {
@@ -9694,18 +9732,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                const approveBtn = tr.querySelector('.btn-approve-payment');
+                const approveBtn = tr.querySelector('.btn-approve-payment-combined');
                 if (approveBtn) {
                     approveBtn.addEventListener('click', async () => {
                         textbookRequests = textbookRequests.map(item => {
                             if (String(item.id) === String(r.id)) {
-                                return { ...item, paymentStatus: '결제완료' };
+                                return { ...item, paymentStatus: '결제완료', isConfirmed: true };
                             }
                             return item;
                         });
                         await saveTextbookRequests();
                         renderTextbookRequests();
-                        showToast('교재비 입금 확인 처리가 완료되었습니다.');
+                        showToast('결제 및 승인 처리가 완료되었습니다.');
                     });
                 }
                 
@@ -10253,12 +10291,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 const reqId = document.getElementById('pay-request-id').value;
                 
-                textbookRequests = textbookRequests.map(r => {
-                    if (String(r.id) === String(reqId)) {
-                        return { ...r, paymentStatus: '입금확인중' };
+                if (reqId.startsWith('NEW__')) {
+                    const parts = reqId.split('__');
+                    const cId = parts[1];
+                    const tbName = parts.slice(2).join('__');
+                    const targetChild = students.find(s => String(s.id) === String(cId));
+                    const childClass = classes.find(c => String(c.id) === String(targetChild?.classId));
+                    const tbPriceStr = document.getElementById('pay-textbook-price').textContent.replace(/[^0-9]/g, '');
+                    
+                    if (targetChild) {
+                        const newReq = {
+                            id: crypto.randomUUID(),
+                            studentId: targetChild.id,
+                            studentName: targetChild.name,
+                            classId: childClass ? childClass.id : 1,
+                            className: childClass ? childClass.name : '없음',
+                            textbookName: tbName,
+                            price: parseInt(tbPriceStr) || 15000,
+                            isConfirmed: false,
+                            paymentStatus: '입금확인중',
+                            createdAt: new Date().toISOString()
+                        };
+                        textbookRequests.unshift(newReq);
                     }
-                    return r;
-                });
+                } else {
+                    textbookRequests = textbookRequests.map(r => {
+                        if (String(r.id) === String(reqId)) {
+                            return { ...r, paymentStatus: '입금확인중' };
+                        }
+                        return r;
+                    });
+                }
                 
                 await saveTextbookRequests();
                 payModal.classList.remove('open');
