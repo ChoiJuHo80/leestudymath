@@ -103,3 +103,46 @@ export async function callGeminiVocabOCR(base64Data, mimeType) {
     return JSON.parse(text);
 }
 
+export async function callGeminiMathSolver(question, base64Data, mimeType) {
+    if (!GEMINI_API_KEY) throw new Error('Gemini API 키가 설정되지 않았습니다.');
+    
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    let prompt = `당신은 친절하고 똑똑한 수학 선생님입니다. 
+학생이 질문한 수학 문제나 개념에 대해 단계별로 상세히 풀이와 설명을 제공해주세요.
+수식은 반드시 마크다운 및 LaTeX 형식으로 작성해주세요. (인라인 수식은 \\( ... \\), 블록 수식은 \\[ ... \\] 또는 $$ ... $$ 사용)
+학생이 첨부한 이미지가 있다면 해당 이미지를 분석하여 문제를 풀이해주세요.`;
+
+    if (question) {
+        prompt += `\n\n학생 질문: ${question}`;
+    }
+
+    const parts = [{ text: prompt }];
+    if (base64Data) {
+        parts.push({ inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Data } });
+    }
+
+    const payload = {
+        contents: [{ parts }],
+        generationConfig: {
+            temperature: 0.3
+        }
+    };
+
+    const res = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.error) {
+        if (data.error.message && data.error.message.includes('Quota exceeded') || res.status === 429) {
+            throw new Error('AI 선생님 답변 사용량이 초과되었습니다. (무료 제공 한도 초과) 약 1분 후에 다시 시도해주세요.');
+        }
+        throw new Error(data.error.message);
+    }
+    
+    return data.candidates[0].content.parts[0].text;
+}
+

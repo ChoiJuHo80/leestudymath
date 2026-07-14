@@ -1,6 +1,6 @@
 import { supabase, publicSupabase, isMock } from './supabase.js';
 import { initStudentExamView, initTeacherExamView, initAdminExamDashboard, updateUngradedBadge } from './src/examManager.js';
-import { callGeminiVocabOCR } from './src/geminiApi.js';
+import { callGeminiVocabOCR, callGeminiMathSolver } from './src/geminiApi.js';
 window.initStudentExamView = initStudentExamView;
 window.initTeacherExamView = initTeacherExamView;
 window.initAdminExamDashboard = initAdminExamDashboard;
@@ -8877,7 +8877,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (btnAskAi && aiQueryInput && aiResponseContainer && aiResponseContent) {
-            btnAskAi.addEventListener('click', () => {
+            btnAskAi.addEventListener('click', async () => {
                 const queryText = aiQueryInput.value.trim();
                 if (!queryText && !attachedAiImageBase64) {
                     showToast('질문할 수학 문제나 개념을 입력하거나 문제 사진을 등록해 주세요.');
@@ -8886,12 +8886,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Show loading state
                 btnAskAi.disabled = true;
-                btnAskAi.innerHTML = `AI 선생님 문제 해결 중...`;
+                btnAskAi.innerHTML = `AI 선생님 문제 해결 중... (최대 1분 소요)`;
                 aiResponseContainer.style.display = 'none';
 
-                setTimeout(() => {
+                try {
                     // Generate AI response
-                    const responseText = getMockAiResponse(queryText, !!attachedAiImageBase64);
+                    let base64Data = null;
+                    let mimeType = 'image/jpeg';
+                    if (attachedAiImageBase64) {
+                        const parts = attachedAiImageBase64.split(',');
+                        if (parts.length === 2) {
+                            const match = parts[0].match(/:(.*?);/);
+                            if (match) mimeType = match[1];
+                            base64Data = parts[1];
+                        }
+                    }
+
+                    const responseText = await callGeminiMathSolver(queryText, base64Data, mimeType);
                     
                     // Format response text with optional attached image preview
                     let imageHtml = '';
@@ -8917,11 +8928,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             throwOnError: false
                         });
                     }
-
-                    // Reset button
-                    btnAskAi.disabled = false;
-                    btnAskAi.innerHTML = `<i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기`;
-                    safeCreateIcons();
 
                     // Save query in our localStorage database
                     const currentStudent = students.find(s => s.id === loggedInStudentId);
@@ -8953,7 +8959,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Refresh history and admin panel
                     renderMyClassAiHistory();
                     if (isAdmin) renderAiQueryManagement();
-                }, 1500);
+                } catch (err) {
+                    console.error('AI Math Solver Error:', err);
+                    alert('AI 문제 풀이 중 오류 발생: ' + err.message);
+                } finally {
+                    // Reset button
+                    btnAskAi.disabled = false;
+                    btnAskAi.innerHTML = `<i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> AI에게 풀이 물어보기`;
+                    safeCreateIcons();
+                }
             });
         }
 
