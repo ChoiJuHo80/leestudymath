@@ -1179,10 +1179,13 @@
                         <a href="#myclass-info-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--primary-color)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="graduation-cap" style="width: 14px; height: 14px; color: var(--primary-color);"></i> 학습 현황 및 피드백 <span id="parent-menu-feedback-badge" style="display: none; background: #ef4444; color: white; font-size: 0.72rem; font-weight: 700; border-radius: 50px; padding: 1px 6px; margin-left: 2px;">0</span>
                         </a>
-                        <a href="#student-exam-section" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                        
+                        <a href="#parent-graded-exams-widget" id="parent-menu-graded-exams" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                            <i data-lucide="file-check-2" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 채점완료된 시험지
+                        </a><a href="#student-exam-section" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-pink-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="file-text" style="width: 14px; height: 14px; color: var(--mascot-pink-bg);"></i> 시험지함
                         </a>
-                        <a href="#myclass-badge-shelf-widget" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
+                        <a href="#myclass-badge-shelf-widget" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
                             <i data-lucide="award" style="width: 14px; height: 14px; color: var(--mascot-purple-bg);"></i> 나의 배지 진열대
                         </a>
                         <a href="#myclass-vocab-widget" id="parent-quick-menu-vocab" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-decoration: none; border-radius: 50px; background: #f1f5f9; border: 1px solid var(--border-color); transition: all 0.2s ease;" onmouseover="this.style.background='#ffffff'; this.style.borderColor='var(--mascot-purple-bg)';" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='var(--border-color)';">
@@ -1215,11 +1218,7 @@
                         <!-- Left Panel: Student Profile & Assignments -->
                         <div class="myclass-left" style="display: flex; flex-direction: column; gap: 24px;">
                             <!-- Child Selector Widget (visible if multiple children) -->
-                            <div class="child-selector-widget" id="myclass-child-selector-container" style="display: none; margin-bottom: 8px; width: max-content;">
-                                <div id="myclass-child-select" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                    <!-- Populated dynamically as buttons -->
-                                </div>
-                            </div>
+                            
 
                             <!-- Parent Child Management (Add Child) -->
                             <div id="parent-child-management-widget" style="display: none; justify-content: flex-end; margin-bottom: 8px;">
@@ -1241,6 +1240,36 @@
                                 <p style="font-size: 0.85rem; color: var(--text-secondary);">과제를 완료한 후 체크박스를 선택하면 원장 선생님에게 실시간 공유됩니다.</p>
                                 <div id="myclass-homework-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
                                     <!-- Will be rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Parent Graded Exams Widget -->
+                            <div class="widget parent-only-widget" id="parent-graded-exams-widget" style="display: none; padding: 24px; border: 1px solid var(--border-color); border-radius: 20px; flex-direction: column; gap: 16px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                    <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                        <i data-lucide="file-check-2" style="color: var(--mascot-pink-bg);"></i>채점완료된 시험지
+                                    </h3>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <select id="parent-exam-grade-filter" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); outline: none;">
+                                            <option value="all">전학년</option>
+                                            <option value="1학년">1학년</option>
+                                            <option value="2학년">2학년</option>
+                                            <option value="3학년">3학년</option>
+                                            <option value="4학년">4학년</option>
+                                            <option value="5학년">5학년</option>
+                                            <option value="6학년">6학년</option>
+                                        </select>
+                                        <select id="parent-exam-semester-filter" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); outline: none;">
+                                            <option value="all">전학기</option>
+                                            <option value="1학기">1학기</option>
+                                            <option value="2학기">2학기</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">자녀들의 자동 채점된 시험 결과를 확인하고 향상도를 비교합니다.</p>
+                                
+                                <div id="parent-graded-exams-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                                    <!-- Populated dynamically -->
                                 </div>
                             </div>
 
@@ -1429,6 +1458,7 @@
                             <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                                 <i data-lucide="calendar" style="color: var(--mascot-pink-bg); width: 20px; height: 20px;"></i> 나의 출결 & 보강 달력
                             </h3>
+                                <div class="widget-child-selector" id="calendar-child-selector" style="display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap;"></div>
                             <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">출석, 결석 현황 및 예정된 보강 일정을 달력에서 확인하세요.</p>
                             
                             <div id="myclass-total-classes-banner" style="background: rgba(142, 68, 173, 0.06); border: 1px solid rgba(142, 68, 173, 0.15); border-radius: 12px; padding: 10px 16px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">
@@ -1465,6 +1495,7 @@
                                 <h3 style="font-family: var(--ff-logo); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; margin: 0;">
                                     <i data-lucide="calendar-check-2" style="color: var(--mascot-purple-bg);"></i>일일 생활 습관 체크리스트
                                 </h3>
+                                <div class="widget-child-selector" id="habit-child-selector" style="display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap;"></div>
                                 <!-- Date selector -->
                                 <input type="date" id="habit-record-date" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; color: var(--text-primary);">
                             </div>
