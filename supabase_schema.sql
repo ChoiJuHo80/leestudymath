@@ -67,3 +67,10 @@ CREATE POLICY "Enable all access for admin users"
 ON sb_exam_answer_sheets FOR ALL 
 TO authenticated 
 USING (true); 
+
+-- ==============================================================================
+-- 4. Exams 테이블 수정 (학교 및 학년 추가)
+-- ==============================================================================
+-- 기존 exams 테이블에 학생 소속을 고정하기 위해 학교와 학년 컬럼을 추가합니다.
+-- ALTER TABLE exams ADD COLUMN IF NOT EXISTS school TEXT;
+-- ALTER TABLE exams ADD COLUMN IF NOT EXISTS grade TEXT;

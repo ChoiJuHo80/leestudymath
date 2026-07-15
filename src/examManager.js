@@ -207,6 +207,11 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
             const currentSem = getSemester(new Date().toISOString());
             const semExams = (existingExams || []).filter(ex => ex.semester === currentSem);
             const nextSeq = semExams.length + 1;
+            
+            // Fetch student info for school and grade
+            const { data: stData } = await supabase.from('sb_students').select('school, grade').eq('id', studentId).single();
+            const school = stData ? (stData.school || '') : '';
+            const grade = stData ? (stData.grade || '') : '';
 
             // Insert into exams table
             const { error: dbError } = await supabase.from('exams').insert([{
@@ -214,7 +219,9 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
                 image_url: imageUrlString,
                 semester: currentSem,
                 sequence: nextSeq,
-                status: '미채점'
+                status: '미채점',
+                school: school,
+                grade: grade
             }]);
 
             if (dbError) throw dbError;
@@ -383,8 +390,8 @@ const openTeacherExamModal = async (student) => {
         const { data: answerSheets } = await supabase
             .from('sb_exam_answer_sheets')
             .select('id')
-            .eq('school', student.school || '')
-            .eq('grade', student.grade || '')
+            .eq('school', ex.school !== undefined ? ex.school : (student.school || ''))
+            .eq('grade', ex.grade !== undefined ? ex.grade : (student.grade || ''))
             .eq('semester', ex.semester + '학기')
             .eq('exam_name', examName);
             
@@ -620,8 +627,8 @@ const openTeacherExamModal = async (student) => {
                     const { data: answerSheets, error: fetchError } = await supabase
                         .from('sb_exam_answer_sheets')
                         .select('answer_data')
-                        .eq('school', student.school || '')
-                        .eq('grade', student.grade || '')
+                        .eq('school', ex.school !== undefined ? ex.school : (student.school || ''))
+                        .eq('grade', ex.grade !== undefined ? ex.grade : (student.grade || ''))
                         .eq('semester', ex.semester + '학기')
                         .eq('exam_name', examName);
                         
