@@ -571,16 +571,14 @@ const openTeacherExamModal = async (student) => {
                 
                 let result;
                 if (window.currentAiResult) {
-                    if (confirm('이미 분석된 학생 답안을 그대로 사용하고 공식 정답지만 다시 적용할까요?\n(확인: 즉시 적용, 취소: 이미지 재분석)')) {
-                        result = JSON.parse(JSON.stringify(window.currentAiResult));
-                    } else {
-                        result = await callGeminiVision(urls);
-                    }
+                    result = JSON.parse(JSON.stringify(window.currentAiResult));
                 } else {
                     result = await callGeminiVision(urls);
                 }
                 
+                let isAnswerSheetApplied = false;
                 if (answerSheet) {
+                    isAnswerSheetApplied = true;
                     result = result.map((r, i) => {
                         // Extract number from q (e.g. "1번" -> "1", "1" -> "1")
                         const rqStr = String(r.q || (i + 1));
@@ -609,6 +607,12 @@ const openTeacherExamModal = async (student) => {
                 document.getElementById('btn-manual-score').style.display = 'inline-block';
                 
                 renderAiResult(window.currentAiResult);
+                
+                if (isAnswerSheetApplied) {
+                    setTimeout(() => {
+                        alert('공식 답안지 정보가 즉시 반영되었습니다.');
+                    }, 100);
+                }
             } catch (err) {
                 alert('AI 채점 중 오류 발생: ' + err.message);
             } finally {
