@@ -3424,11 +3424,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<span style="font-size: 0.72rem; font-weight: 700; color: #ff4d4f; background: #fff2f0; border: 1px solid #ffccc7; padding: 2px 6px; border-radius: 6px; margin-top: 4px; display: inline-block;">종결 (${student.terminationDate || '날짜 미지정'})</span>`
                 : '';
 
+            const displaySchool = (student.school && student.grade && !student.school.includes('학년') && !student.school.includes(student.grade))
+                ? `${student.school} ${student.grade}학년`
+                : (student.school || '학교 미상');
+                
             card.innerHTML = `
                 <div class="student-card-header">
                     <div class="student-info-title">
                         <h3>${student.name}</h3>
-                        <span>${student.age}세 &middot; ${student.school}</span>
+                        <span>${student.age}세 &middot; ${displaySchool}</span>
                         ${siblingTag}
                         ${classNameTag}
                         ${terminationTag}
@@ -3826,37 +3830,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     const birthInput = document.getElementById('student-birthdate-input');
                     if (birthInput) birthInput.value = student.birthdate || '';
                     studentAgeInput.value = student.age;
-                    const parsedSchool = (student.school || '').match(/^(.*?)\s*(\d+)(?:학년)?$/);
+                    let schoolName = student.school || '';
+                    let gradeVal = student.grade || '';
+                    
+                    if (!gradeVal) {
+                        const parsedSchool = schoolName.match(/^(.*?)\s*(\d+)(?:학년)?$/);
+                        if (parsedSchool) {
+                            schoolName = parsedSchool[1].trim();
+                            gradeVal = parsedSchool[2];
+                        }
+                    }
+                    
+                    studentSchoolInput.value = schoolName;
                     const gradeSelect = document.getElementById('student-grade-select');
                     const gradeText = document.getElementById('student-grade-text');
                     
-                    if (parsedSchool && (parsedSchool[1].includes('초등') || parsedSchool[1].includes('중') || parsedSchool[1].includes('고등') || parsedSchool[1].includes('중학'))) {
-                        studentSchoolInput.value = parsedSchool[1].trim();
-                        const gradeVal = parsedSchool[2];
-                        const schoolName = parsedSchool[1].trim();
-                        if (schoolName.includes('초등')) {
-                            if (gradeText) gradeText.style.display = 'none';
-                            if (gradeSelect) {
-                                gradeSelect.style.display = 'block';
-                                gradeSelect.innerHTML = '<option value="">선택</option>' + 
-                                    [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
-                                gradeSelect.value = gradeVal;
-                            }
-                        } else if (schoolName.includes('중') || schoolName.includes('고등') || schoolName.includes('중학')) {
-                            if (gradeText) gradeText.style.display = 'none';
-                            if (gradeSelect) {
-                                gradeSelect.style.display = 'block';
-                                gradeSelect.innerHTML = '<option value="">선택</option>' + 
-                                    [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
-                                gradeSelect.value = gradeVal;
-                            }
+                    if (schoolName.includes('초등')) {
+                        if (gradeText) gradeText.style.display = 'none';
+                        if (gradeSelect) {
+                            gradeSelect.style.display = 'block';
+                            gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                                [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
+                            gradeSelect.value = gradeVal;
+                        }
+                    } else if (schoolName.includes('중') || schoolName.includes('고등') || schoolName.includes('중학')) {
+                        if (gradeText) gradeText.style.display = 'none';
+                        if (gradeSelect) {
+                            gradeSelect.style.display = 'block';
+                            gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                                [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
+                            gradeSelect.value = gradeVal;
                         }
                     } else {
-                        studentSchoolInput.value = student.school || '';
                         if (gradeSelect) gradeSelect.style.display = 'none';
                         if (gradeText) {
                             gradeText.style.display = 'block';
-                            gradeText.value = '';
+                            gradeText.value = gradeVal;
                         }
                     }
                     studentPhoneInput.value = student.phone || '';
@@ -4345,7 +4354,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (gradeText && gradeText.style.display !== 'none') {
                 gradeValue = gradeText.value.trim();
             }
-            const school = gradeValue ? `${schoolBase} ${gradeValue}학년` : schoolBase;
+            const school = schoolBase;
+            const grade = gradeValue;
             const phone = studentPhoneInput.value.trim();
             const parentPhone = studentParentPhoneInput.value.trim();
             const sibling = studentSiblingInput.value.trim();
@@ -4385,6 +4395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             birthdate,
                             age,
                             school,
+                            grade,
                             phone,
                             parentPhone,
                             sibling,
@@ -4456,6 +4467,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     birthdate,
                     age,
                     school,
+                    grade,
                     phone,
                     parentPhone,
                     sibling,
