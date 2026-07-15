@@ -319,6 +319,7 @@ const openTeacherExamModal = async (student) => {
 
                 <div style="display:flex; gap:10px; margin-top:15px;">
                     <button id="btn-auto-grade" class="btn-primary" style="flex:1;">AI 가채점 시작</button>
+                    <button id="btn-apply-official-answer" class="btn-primary" style="flex:1; display:none; background-color: #10b981;">최종 답안으로 채점</button>
                     <button id="btn-manual-score" class="btn-secondary" style="flex:1; display:none;">최종 채점 적용 (저장)</button>
                 </div>
             </div>
@@ -354,7 +355,7 @@ const openTeacherExamModal = async (student) => {
         });
     };
 
-    const showExamDetail = (ex) => {
+    const showExamDetail = async (ex) => {
         document.getElementById('teacher-exam-detail').style.display = 'block';
         document.getElementById('detail-title').textContent = `${ex.semester}학기 ${ex.sequence}번째 시험지`;
         const imgContainer = document.getElementById('detail-img-container');
@@ -376,6 +377,18 @@ const openTeacherExamModal = async (student) => {
             img.style.objectFit = 'contain';
             imgContainer.appendChild(img);
         });
+        
+        // Fetch answer sheet to toggle official answer button
+        const examName = String(ex.sequence) + '회차';
+        const { data: answerSheets } = await supabase
+            .from('sb_exam_answer_sheets')
+            .select('id')
+            .eq('school', student.school || '')
+            .eq('grade', student.grade || '')
+            .eq('semester', ex.semester + '학기')
+            .eq('exam_name', examName);
+            
+        const hasOfficialAnswer = answerSheets && answerSheets.length > 0;
 
         // If it was already graded by AI or manual, we could display it here
         if (ex.ai_result) {
@@ -389,6 +402,12 @@ const openTeacherExamModal = async (student) => {
             document.getElementById('btn-manual-score').style.display = 'none';
             document.getElementById('btn-auto-grade').textContent = 'AI 가채점 시작';
             window.currentAiResult = null;
+        }
+        
+        if (hasOfficialAnswer) {
+            document.getElementById('btn-apply-official-answer').style.display = 'inline-block';
+        } else {
+            document.getElementById('btn-apply-official-answer').style.display = 'none';
         }
 
         const renderAiResult = (resultData) => {
@@ -570,17 +589,65 @@ const openTeacherExamModal = async (student) => {
                 // Wait! If answerSheet exists, let's override the AI's "correct" answer with the official one
                 
                 let result;
-                if (window.currentAiResult) {
-                    result = JSON.parse(JSON.stringify(window.currentAiResult));
-                } else {
+                if (!window.currentAiResult) {
                     result = await callGeminiVision(urls);
+                    window.currentAiResult = result;
+                } else {
+                    result = window.currentAiResult;
                 }
                 
-                let isAnswerSheetApplied = false;
-                if (answerSheet) {
-                    isAnswerSheetApplied = true;
+                document.getElementById('ai-grading-container').style.display = 'block';
+                document.getElementById('btn-manual-score').style.display = 'inline-block';
+                
+                renderAiResult(result);
+            } catch (err) {
+                alert('AI 채점 중 오류 발생: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'AI 가채점 재시도';
+            }
+        };
+
+        const btnApplyOfficial = document.getElementById('btn-apply-official-answer');
+        if (btnApplyOfficial) {
+            btnApplyOfficial.onclick = async () => {
+                const btn = btnApplyOfficial;
+                btn.disabled = true;
+                btn.textContent = '반영 중...';
+                
+                try {
+                    const examName = String(ex.sequence) + '회차';
+                    const { data: answerSheets, error: fetchError } = await supabase
+                        .from('sb_exam_answer_sheets')
+                        .select('answer_data')
+                        .eq('school', student.school || '')
+                        .eq('grade', student.grade || '')
+                        .eq('semester', ex.semester + '학기')
+                        .eq('exam_name', examName);
+                        
+                    if (fetchError) {
+                        throw fetchError;
+                    }
+
+                    let answerSheet = null;
+                    if (answerSheets && answerSheets.length > 0) {
+                        answerSheet = answerSheets[0].answer_data;
+                    }
+                    
+                    if (!answerSheet) {
+                        alert('등록된 최종 답안지가 없습니다. 먼저 공식 답안지를 등록해주세요.');
+                        return;
+                    }
+
+                    let result;
+                    if (window.currentAiResult) {
+                        result = JSON.parse(JSON.stringify(window.currentAiResult));
+                    } else {
+                        // 만약 AI 분석이 한 번도 안 돌았다면, 학생 답안을 추출하기 위해 돌려야 합니다.
+                        result = await callGeminiVision(urls);
+                    }
+                    
                     result = result.map((r, i) => {
-                        // Extract number from q (e.g. "1번" -> "1", "1" -> "1")
                         const rqStr = String(r.q || (i + 1));
                         const qNumMatch = rqStr.match(/\d+/);
                         const qNum = qNumMatch ? qNumMatch[0] : rqStr;
@@ -599,27 +666,24 @@ const openTeacherExamModal = async (student) => {
                         }
                         return { ...r, correct: officialCorrect };
                     });
-                }
-                
-                window.currentAiResult = result;
-                
-                document.getElementById('ai-grading-container').style.display = 'block';
-                document.getElementById('btn-manual-score').style.display = 'inline-block';
-                
-                renderAiResult(window.currentAiResult);
-                
-                if (isAnswerSheetApplied) {
+                    
+                    window.currentAiResult = result;
+                    document.getElementById('ai-grading-container').style.display = 'block';
+                    document.getElementById('btn-manual-score').style.display = 'inline-block';
+                    
+                    renderAiResult(window.currentAiResult);
+                    
                     setTimeout(() => {
-                        alert('공식 답안지 정보가 즉시 반영되었습니다.');
+                        alert('최종 답안지 정보가 반영되었습니다.');
                     }, 100);
+                } catch (err) {
+                    alert('최종 답안 반영 중 오류 발생: ' + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '최종 답안으로 채점';
                 }
-            } catch (err) {
-                alert('AI 채점 중 오류 발생: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'AI 가채점 재시도';
-            }
-        };
+            };
+        }
 
         document.getElementById('btn-manual-score').onclick = async () => {
             if (!window.currentAiResult) return;
