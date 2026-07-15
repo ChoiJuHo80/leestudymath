@@ -13449,13 +13449,7 @@ setTimeout(() => {
     }
 }, 2000);
 
-// --- Admin Exam Dashboard Stub ---
-window.initAdminExamDashboard = () => {
-    const adminExamCard = document.getElementById('admin-exam-management-card');
-    if (adminExamCard) {
-        adminExamCard.scrollIntoView({ behavior: 'smooth' });
-    }
-};
+// window.initAdminExamDashboard is already imported from examManager.js
 
 document.addEventListener('DOMContentLoaded', () => {
     const btnAdminAddAnswerSheet = document.getElementById('btn-admin-add-answer-sheet');
