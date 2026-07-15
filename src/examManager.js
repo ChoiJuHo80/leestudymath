@@ -390,8 +390,8 @@ const openTeacherExamModal = async (student) => {
         const { data: answerSheets } = await supabase
             .from('sb_exam_answer_sheets')
             .select('id')
-            .eq('school', ex.school !== undefined ? ex.school : (student.school || ''))
-            .eq('grade', ex.grade !== undefined ? ex.grade : (student.grade || ''))
+            .eq('school', ex.school || student.school || '')
+            .eq('grade', ex.grade || student.grade || '')
             .eq('semester', ex.semester + '학기')
             .eq('exam_name', examName);
             
@@ -627,8 +627,8 @@ const openTeacherExamModal = async (student) => {
                     const { data: answerSheets, error: fetchError } = await supabase
                         .from('sb_exam_answer_sheets')
                         .select('answer_data')
-                        .eq('school', ex.school !== undefined ? ex.school : (student.school || ''))
-                        .eq('grade', ex.grade !== undefined ? ex.grade : (student.grade || ''))
+                        .eq('school', ex.school || student.school || '')
+                        .eq('grade', ex.grade || student.grade || '')
                         .eq('semester', ex.semester + '학기')
                         .eq('exam_name', examName);
                         
