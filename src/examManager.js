@@ -546,14 +546,19 @@ const openTeacherExamModal = async (student) => {
             try {
                 const examName = String(ex.sequence) + '회차';
                 // Fetch the answer sheet for this exam if it exists
-                const { data: answerSheets } = await supabase
+                const { data: answerSheets, error: fetchError } = await supabase
                     .from('sb_exam_answer_sheets')
                     .select('answer_data')
                     .eq('school', student.school || '')
                     .eq('grade', student.grade || '')
                     .eq('semester', ex.semester + '학기')
-                    .eq('exam_name', examName)
-                    .order('created_at', { ascending: false });
+                    .eq('exam_name', examName);
+                    
+                if (fetchError) {
+                    console.error('Failed to fetch answer sheet:', fetchError);
+                    alert('답안지 정보를 불러오는 중 오류가 발생했습니다.');
+                    throw fetchError;
+                }
 
                 let answerSheet = null;
                 if (answerSheets && answerSheets.length > 0) {
