@@ -258,7 +258,7 @@ export const initTeacherExamView = (studentContainer, student) => {
         .from('exams')
         .select('*', { count: 'exact', head: true })
         .eq('student_id', student.id)
-        .eq('status', '미채점')
+        .neq('status', '채점완료')
         .then(({ count, error }) => {
             if (!error && count > 0) {
                 const badge = btn.querySelector('.ungraded-badge');
@@ -730,7 +730,7 @@ export const updateUngradedBadge = async () => {
         const { count, error } = await supabase
             .from('exams')
             .select('*', { count: 'exact', head: true })
-            .eq('status', '미채점');
+            .neq('status', '채점완료');
             
         if (!error && count > 0) {
             badge.textContent = `${count}건`;
