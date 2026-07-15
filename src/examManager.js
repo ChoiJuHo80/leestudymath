@@ -324,10 +324,11 @@ const openTeacherExamModal = async (student) => {
                     <div style="text-align:right; margin-top:10px; font-weight:bold; font-size:1.1em;" id="ai-total-score"></div>
                 </div>
 
-                <div style="display:flex; gap:10px; margin-top:15px;">
-                    <button id="btn-auto-grade" class="btn-primary" style="flex:1;">AI 가채점 시작</button>
-                    <button id="btn-apply-official-answer" class="btn-primary" style="flex:1; display:none; background-color: #10b981;">최종 답안으로 채점</button>
-                    <button id="btn-manual-score" class="btn-secondary" style="flex:1; display:none;">최종 채점 적용 (저장)</button>
+                <div style="display:flex; gap:10px; margin-top:15px; flex-wrap: wrap;">
+                    <button id="btn-auto-grade" class="btn-primary" style="flex:1; min-width:120px;">AI 가채점 시작</button>
+                    <button id="btn-apply-official-answer" class="btn-primary" style="flex:1; min-width:120px; background-color: #10b981;" disabled>최종 답안으로 채점 (답안지 없음)</button>
+                    <button id="btn-temp-save" class="btn-secondary" style="flex:1; min-width:120px; display:none; background-color: #f59e0b; color: white;">가채점 임시저장 (뱃지 유지)</button>
+                    <button id="btn-manual-score" class="btn-secondary" style="flex:1; min-width:120px; display:none;">최종 채점 확정 (뱃지 사라짐)</button>
                 </div>
             </div>
         </div>
@@ -402,20 +403,30 @@ const openTeacherExamModal = async (student) => {
         if (ex.ai_result) {
             document.getElementById('ai-grading-container').style.display = 'block';
             document.getElementById('btn-manual-score').style.display = 'inline-block';
+            document.getElementById('btn-temp-save').style.display = 'inline-block';
             document.getElementById('btn-auto-grade').textContent = 'AI 가채점 재시도';
             window.currentAiResult = ex.ai_result;
             renderAiResult(window.currentAiResult);
         } else {
             document.getElementById('ai-grading-container').style.display = 'none';
             document.getElementById('btn-manual-score').style.display = 'none';
+            document.getElementById('btn-temp-save').style.display = 'none';
             document.getElementById('btn-auto-grade').textContent = 'AI 가채점 시작';
             window.currentAiResult = null;
         }
         
         if (hasOfficialAnswer) {
-            document.getElementById('btn-apply-official-answer').style.display = 'inline-block';
+            const btn = document.getElementById('btn-apply-official-answer');
+            btn.disabled = false;
+            btn.textContent = '최종 답안으로 채점';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
         } else {
-            document.getElementById('btn-apply-official-answer').style.display = 'none';
+            const btn = document.getElementById('btn-apply-official-answer');
+            btn.disabled = true;
+            btn.textContent = '최종 답안으로 채점 (답안지 없음)';
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
         }
 
         const renderAiResult = (resultData) => {
@@ -559,7 +570,10 @@ const openTeacherExamModal = async (student) => {
                     // Show the button immediately
                     const applyBtn = document.getElementById('btn-apply-official-answer');
                     if (applyBtn) {
-                        applyBtn.style.display = 'inline-block';
+                        applyBtn.disabled = false;
+                        applyBtn.textContent = '최종 답안으로 채점';
+                        applyBtn.style.opacity = '1';
+                        applyBtn.style.cursor = 'pointer';
                     }
                 } catch (err) {
                     alert('답안지 등록 중 오류 발생: ' + err.message);
