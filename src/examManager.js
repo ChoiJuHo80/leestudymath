@@ -387,11 +387,12 @@ const openTeacherExamModal = async (student) => {
         
         // Fetch answer sheet to toggle official answer button
         const examName = String(ex.sequence) + '회차';
+        const gradeToMatch = ex.grade || student.grade || '';
         const { data: answerSheets } = await supabase
             .from('sb_exam_answer_sheets')
             .select('id')
             .eq('school', ex.school || student.school || '')
-            .eq('grade', ex.grade || student.grade || '')
+            .in('grade', [gradeToMatch, ''])
             .eq('semester', ex.semester + '학기')
             .eq('exam_name', examName);
             
@@ -624,11 +625,12 @@ const openTeacherExamModal = async (student) => {
                 
                 try {
                     const examName = String(ex.sequence) + '회차';
+                    const gradeToMatch = ex.grade || student.grade || '';
                     const { data: answerSheets, error: fetchError } = await supabase
                         .from('sb_exam_answer_sheets')
                         .select('answer_data')
                         .eq('school', ex.school || student.school || '')
-                        .eq('grade', ex.grade || student.grade || '')
+                        .in('grade', [gradeToMatch, ''])
                         .eq('semester', ex.semester + '학기')
                         .eq('exam_name', examName);
                         
