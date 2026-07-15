@@ -564,15 +564,35 @@ const openTeacherExamModal = async (student) => {
                 // For now, call the existing AI to get student answers and mock the correct answers
                 // Wait! If answerSheet exists, let's override the AI's "correct" answer with the official one
                 
-                let result = await callGeminiVision(urls);
+                let result;
+                if (window.currentAiResult) {
+                    if (confirm('이미 분석된 학생 답안을 그대로 사용하고 공식 정답지만 다시 적용할까요?\n(확인: 즉시 적용, 취소: 이미지 재분석)')) {
+                        result = JSON.parse(JSON.stringify(window.currentAiResult));
+                    } else {
+                        result = await callGeminiVision(urls);
+                    }
+                } else {
+                    result = await callGeminiVision(urls);
+                }
                 
                 if (answerSheet) {
                     result = result.map((r, i) => {
-                        const qNum = String(r.q || (i + 1));
+                        // Extract number from q (e.g. "1번" -> "1", "1" -> "1")
+                        const rqStr = String(r.q || (i + 1));
+                        const qNumMatch = rqStr.match(/\d+/);
+                        const qNum = qNumMatch ? qNumMatch[0] : rqStr;
+
                         let officialCorrect = r.correct;
                         if (Array.isArray(answerSheet)) {
-                            const match = answerSheet.find(a => String(a.q) === qNum);
-                            if (match && match.answer) officialCorrect = match.answer;
+                            const match = answerSheet.find(a => {
+                                const aqStr = String(a.q);
+                                const aqMatch = aqStr.match(/\d+/);
+                                const aqNum = aqMatch ? aqMatch[0] : aqStr;
+                                return aqNum === qNum;
+                            });
+                            if (match && match.answer !== undefined && match.answer !== null && match.answer !== "") {
+                                officialCorrect = match.answer;
+                            }
                         }
                         return { ...r, correct: officialCorrect };
                     });
