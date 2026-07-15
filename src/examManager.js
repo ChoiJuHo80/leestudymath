@@ -554,7 +554,13 @@ const openTeacherExamModal = async (student) => {
                         
                     if (dbError) throw dbError;
                     
-                    alert('공식 답안지가 성공적으로 등록되었습니다.\n이제 AI 가채점 시 이 답안지가 우선 적용됩니다.\n(등록 결과 확인을 위해 AI 가채점을 다시 실행해주세요)');
+                    alert('공식 답안지가 성공적으로 등록되었습니다.\n이제 [최종 답안으로 채점] 버튼을 눌러 즉시 채점하실 수 있습니다.');
+                    
+                    // Show the button immediately
+                    const applyBtn = document.getElementById('btn-apply-official-answer');
+                    if (applyBtn) {
+                        applyBtn.style.display = 'inline-block';
+                    }
                 } catch (err) {
                     alert('답안지 등록 중 오류 발생: ' + err.message);
                 } finally {
