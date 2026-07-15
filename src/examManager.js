@@ -485,18 +485,44 @@ const openTeacherExamModal = async (student) => {
 
                     const examName = String(ex.sequence) + '회차';
                     
-                    // Upsert DB
-                    const { error: dbError } = await supabase
+                    // 수동 Upsert (DB Unique Constraint 오류 방지)
+                    const searchCondition = {
+                        school: student.school || '',
+                        grade: student.grade || '',
+                        semester: ex.semester + '학기',
+                        exam_name: examName
+                    };
+                    
+                    const { data: existingRecords } = await supabase
                         .from('sb_exam_answer_sheets')
-                        .upsert({
-                            school: student.school || '',
-                            grade: student.grade || '',
-                            semester: ex.semester + '학기',
-                            exam_name: examName,
-                            answers: answersJson,
-                            image_url: imageUrl,
-                            updated_at: new Date().toISOString()
-                        }, { onConflict: 'school, grade, semester, exam_name' });
+                        .select('id')
+                        .match(searchCondition);
+
+                    let dbError = null;
+
+                    if (existingRecords && existingRecords.length > 0) {
+                        // 이미 존재하면 업데이트
+                        const { error } = await supabase
+                            .from('sb_exam_answer_sheets')
+                            .update({
+                                answers: answersJson,
+                                image_url: imageUrl,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', existingRecords[0].id);
+                        dbError = error;
+                    } else {
+                        // 존재하지 않으면 새로 삽입
+                        const { error } = await supabase
+                            .from('sb_exam_answer_sheets')
+                            .insert({
+                                ...searchCondition,
+                                answers: answersJson,
+                                image_url: imageUrl,
+                                updated_at: new Date().toISOString()
+                            });
+                        dbError = error;
+                    }
                         
                     if (dbError) throw dbError;
                     
