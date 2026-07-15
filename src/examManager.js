@@ -505,7 +505,7 @@ const openTeacherExamModal = async (student) => {
                         const { error } = await supabase
                             .from('sb_exam_answer_sheets')
                             .update({
-                                answers: answersJson,
+                                answer_data: answersJson,
                                 image_url: imageUrl,
                                 updated_at: new Date().toISOString()
                             })
@@ -516,8 +516,9 @@ const openTeacherExamModal = async (student) => {
                         const { error } = await supabase
                             .from('sb_exam_answer_sheets')
                             .insert({
+                                id: crypto.randomUUID(),
                                 ...searchCondition,
-                                answers: answersJson,
+                                answer_data: answersJson,
                                 image_url: imageUrl,
                                 updated_at: new Date().toISOString()
                             });
@@ -547,7 +548,7 @@ const openTeacherExamModal = async (student) => {
                 // Fetch the answer sheet for this exam if it exists
                 const { data: answerSheets } = await supabase
                     .from('sb_exam_answer_sheets')
-                    .select('answers')
+                    .select('answer_data')
                     .eq('school', student.school || '')
                     .eq('grade', student.grade || '')
                     .eq('semester', ex.semester + '학기')
@@ -556,7 +557,7 @@ const openTeacherExamModal = async (student) => {
 
                 let answerSheet = null;
                 if (answerSheets && answerSheets.length > 0) {
-                    answerSheet = answerSheets[0].answers;
+                    answerSheet = answerSheets[0].answer_data;
                 }
                 
                 // If answerSheet exists, we could use callGeminiVision with a specialized prompt

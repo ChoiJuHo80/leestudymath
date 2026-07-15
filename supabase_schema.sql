@@ -28,7 +28,7 @@ CREATE TABLE sb_exam_answer_sheets (
     grade VARCHAR(20) NOT NULL,        -- 학년
     semester VARCHAR(20) NOT NULL,     -- 학기
     exam_name VARCHAR(100) NOT NULL,   -- 시험명
-    answers JSONB NOT NULL,            -- 답안지 정보 (문항 번호별 정답, 배점 등)
+    answer_data JSONB NOT NULL,        -- 답안지 정보 (문항 번호별 정답, 배점 등)
                                        -- 예: { "1": { "answer": "3", "score": 4 }, "2": { "answer": "주관식답", "score": 5 } }
     image_url TEXT,                    -- (선택) 관리자가 찍어 올린 원본 답안지 이미지
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
