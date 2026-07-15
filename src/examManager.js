@@ -514,8 +514,8 @@ const openTeacherExamModal = async (student) => {
                     
                     // 수동 Upsert (DB Unique Constraint 오류 방지)
                     const searchCondition = {
-                        school: student.school || '',
-                        grade: student.grade || '',
+                        school: ex.school || student.school || '',
+                        grade: ex.grade || student.grade || '',
                         semester: ex.semester + '학기',
                         exam_name: examName
                     };
