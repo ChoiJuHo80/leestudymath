@@ -208,10 +208,24 @@ export const initStudentExamView = async (studentId, containerSelector = '#mycla
             const semExams = (existingExams || []).filter(ex => ex.semester === currentSem);
             const nextSeq = semExams.length + 1;
             
-            // Fetch student info for school and grade
-            const { data: stData } = await supabase.from('sb_students').select('school, grade').eq('id', studentId).single();
-            const school = stData ? (stData.school || '') : '';
-            const grade = stData ? (stData.grade || '') : '';
+            // Fetch student info for school, grade, and class
+            const { data: stData } = await supabase.from('sb_students').select('school, grade, class_id').eq('id', studentId).single();
+            let school = stData ? (stData.school || '') : '';
+            let grade = stData ? (stData.grade || '') : '';
+
+            if (!grade) {
+                const schoolMatch = school.match(/^(.*?)\s*(\d+)(?:학년)?$/);
+                if (schoolMatch) {
+                    school = schoolMatch[1].trim();
+                    grade = schoolMatch[2];
+                } else if (stData && stData.class_id) {
+                    const { data: classData } = await supabase.from('sb_classes').select('name').eq('id', stData.class_id).single();
+                    if (classData && classData.name) {
+                        const match = classData.name.match(/(\d+)학년/);
+                        if (match) grade = match[1];
+                    }
+                }
+            }
 
             // Insert into exams table
             const { error: dbError } = await supabase.from('exams').insert([{

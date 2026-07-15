@@ -74,3 +74,9 @@ USING (true);
 -- 기존 exams 테이블에 학생 소속을 고정하기 위해 학교와 학년 컬럼을 추가합니다.
 -- ALTER TABLE exams ADD COLUMN IF NOT EXISTS school TEXT;
 -- ALTER TABLE exams ADD COLUMN IF NOT EXISTS grade TEXT;
+
+-- ==============================================================================
+-- 5. Students 테이블 수정 (학년 추가)
+-- ==============================================================================
+-- sb_students 테이블에 학년 컬럼을 추가합니다.
+-- ALTER TABLE sb_students ADD COLUMN IF NOT EXISTS grade VARCHAR(20);

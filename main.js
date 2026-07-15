@@ -195,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: dbStudent.name,
             age: dbStudent.age,
             school: dbStudent.school,
+            grade: dbStudent.grade || '',
             phone: dbStudent.phone,
             parentPhone: dbStudent.parent_phone,
             sibling: dbStudent.sibling,
@@ -241,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: jsStudent.name,
             age: jsStudent.age,
             school: jsStudent.school,
+            grade: jsStudent.grade || '',
             phone: jsStudent.phone,
             parent_phone: jsStudent.parentPhone,
             sibling: jsStudent.sibling,
@@ -3824,7 +3826,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     const birthInput = document.getElementById('student-birthdate-input');
                     if (birthInput) birthInput.value = student.birthdate || '';
                     studentAgeInput.value = student.age;
-                    studentSchoolInput.value = student.school;
+                    const parsedSchool = (student.school || '').match(/^(.*?)\s*(\d+)(?:학년)?$/);
+                    const gradeSelect = document.getElementById('student-grade-select');
+                    const gradeText = document.getElementById('student-grade-text');
+                    
+                    if (parsedSchool && (parsedSchool[1].includes('초등') || parsedSchool[1].includes('중') || parsedSchool[1].includes('고등') || parsedSchool[1].includes('중학'))) {
+                        studentSchoolInput.value = parsedSchool[1].trim();
+                        const gradeVal = parsedSchool[2];
+                        const schoolName = parsedSchool[1].trim();
+                        if (schoolName.includes('초등')) {
+                            if (gradeText) gradeText.style.display = 'none';
+                            if (gradeSelect) {
+                                gradeSelect.style.display = 'block';
+                                gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                                    [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
+                                gradeSelect.value = gradeVal;
+                            }
+                        } else if (schoolName.includes('중') || schoolName.includes('고등') || schoolName.includes('중학')) {
+                            if (gradeText) gradeText.style.display = 'none';
+                            if (gradeSelect) {
+                                gradeSelect.style.display = 'block';
+                                gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                                    [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
+                                gradeSelect.value = gradeVal;
+                            }
+                        }
+                    } else {
+                        studentSchoolInput.value = student.school || '';
+                        if (gradeSelect) gradeSelect.style.display = 'none';
+                        if (gradeText) {
+                            gradeText.style.display = 'block';
+                            gradeText.value = '';
+                        }
+                    }
                     studentPhoneInput.value = student.phone || '';
                     studentParentPhoneInput.value = student.parentPhone;
                     studentSiblingInput.value = student.sibling || '';
@@ -4206,6 +4240,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnStudentWrite.addEventListener('click', () => {
             editStudentIdInput.value = '';
             studentEditorForm.reset();
+            const gradeSelect = document.getElementById('student-grade-select');
+            const gradeText = document.getElementById('student-grade-text');
+            if (gradeSelect) {
+                gradeSelect.style.display = 'none';
+                gradeSelect.value = '';
+            }
+            if (gradeText) {
+                gradeText.style.display = 'block';
+                gradeText.value = '';
+            }
             const birthInput = document.getElementById('student-birthdate-input');
             if (birthInput) birthInput.value = '';
             if (studentClassDurationInput) {
@@ -4252,6 +4296,37 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        if (studentSchoolInput) {
+            studentSchoolInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                const gradeSelect = document.getElementById('student-grade-select');
+                const gradeText = document.getElementById('student-grade-text');
+                
+                if (!gradeSelect || !gradeText) return;
+
+                if (val.includes('초등')) {
+                    gradeText.style.display = 'none';
+                    gradeSelect.style.display = 'block';
+                    gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                        [1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('');
+                } else if (val.includes('중') || val.includes('고등') || val.includes('중학')) {
+                    gradeText.style.display = 'none';
+                    gradeSelect.style.display = 'block';
+                    gradeSelect.innerHTML = '<option value="">선택</option>' + 
+                        [1,2,3].map(n => `<option value="${n}">${n}</option>`).join('');
+                } else {
+                    gradeSelect.style.display = 'none';
+                    gradeText.style.display = 'block';
+                }
+            });
+        }
+        
+        if (document.getElementById('student-grade-text')) {
+            document.getElementById('student-grade-text').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+            });
+        }
+
 
 
         // Add / Edit form submit
@@ -4261,7 +4336,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = studentNameInput.value.trim();
             const birthdate = document.getElementById('student-birthdate-input') ? document.getElementById('student-birthdate-input').value : '';
             const age = parseInt(studentAgeInput.value);
-            const school = studentSchoolInput.value.trim();
+            const schoolBase = studentSchoolInput.value.trim();
+            const gradeSelect = document.getElementById('student-grade-select');
+            const gradeText = document.getElementById('student-grade-text');
+            let gradeValue = '';
+            if (gradeSelect && gradeSelect.style.display !== 'none') {
+                gradeValue = gradeSelect.value;
+            } else if (gradeText && gradeText.style.display !== 'none') {
+                gradeValue = gradeText.value.trim();
+            }
+            const school = gradeValue ? `${schoolBase} ${gradeValue}학년` : schoolBase;
             const phone = studentPhoneInput.value.trim();
             const parentPhone = studentParentPhoneInput.value.trim();
             const sibling = studentSiblingInput.value.trim();
@@ -9570,6 +9654,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         age,
                                         birthdate: c.birthdate || '',
                                         school: c.school || '',
+                                        grade: c.grade || '',
                                         phone: c.phone || '',
                                         parentPhone: u.phone,
                                         parentEmail: parentEmail,
@@ -9587,6 +9672,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     exist.address = u.address;
                                     exist.birthdate = exist.birthdate || c.birthdate || '';
                                     exist.school = exist.school || c.school || '';
+                                    exist.grade = exist.grade || c.grade || '';
                                     exist.parentEmail = exist.parentEmail || parentEmail;
                                     exist.id = studentId;
                                 }
@@ -13250,7 +13336,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     name: nameVal,
                     birthdate: birthdateVal,
                     age: ageVal,
-                    school: schoolVal || (matchedStudent ? matchedStudent.school : '공부방 초등학교'),
+                    school: schoolInputVal || (matchedStudent ? matchedStudent.school : '공부방 초등학교'),
+                    grade: gradeVal || (matchedStudent ? (matchedStudent.grade || '') : ''),
                     phone: matchedStudent ? matchedStudent.phone : '',
                     parentPhone: parentPhoneVal,
                     sibling: matchedStudent ? matchedStudent.sibling : '',
