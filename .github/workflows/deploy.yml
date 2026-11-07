@@ -1,4 +1,4 @@
-name: Deploy to Google Cloud Storage
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -7,35 +7,14 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Verify Storefront Build
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Build TACE Storefront Static Output
+    - name: Verify TACE Storefront Static Output
       run: |
-        mkdir -p dist/assets
-        cp index.html dist/index.html
-        cp -r public/* dist/ 2>/dev/null || true
-        echo "keep" > dist/assets/keep.txt
-
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-
-    - name: Deploy files to GCS Bucket
-      run: |
-        # Sync build output (dist/) with the GCS bucket recursively, deleting deleted files from the bucket
-        gcloud storage rsync dist gs://www.leestudymath.co.kr --recursive --delete-unmatched-destination-objects
-        
-        # Set cache-control on index.html so browser/CDN never caches it (guarantees instant updates)
-        gcloud storage objects update gs://www.leestudymath.co.kr/index.html --cache-control="no-cache, no-store, must-revalidate"
-        
-        # Set long-term cache-control on assets
-        gcloud storage objects update gs://www.leestudymath.co.kr/assets/** --recursive --cache-control="public, max-age=31536000, immutable" || true
+        test -f index.html
+        echo "Deployed via GitHub Pages (https://choijuho80.github.io/leestudymath/)"
